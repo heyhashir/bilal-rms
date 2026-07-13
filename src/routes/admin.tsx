@@ -1,9 +1,9 @@
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { useAuth } from "@/store/auth";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { useProtectedUser } from "@/hooks/use-protected-user";
 import {
-  LayoutDashboard, Package, Tag, ShoppingBag, Users, Ruler, ArrowLeft, Hash, Settings as SettingsIcon,
-  Award, Boxes, Truck, ClipboardList, Undo2, BadgePercent, Ticket, UserCog, ShieldCheck, BarChart3, Image as ImageIcon, Bell, Activity, RotateCcw,
+  LayoutDashboard, Package, Tag, ShoppingBag, Users, ArrowLeft, Settings as SettingsIcon,
+  Award, Boxes, Undo2, RotateCcw, ScanLine, ReceiptText, HandCoins, Upload,
+  BarChart3,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
@@ -16,8 +16,7 @@ const groups = [
     label: "Overview",
     items: [
       { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
-      { to: "/admin/activity", label: "Activity", icon: Activity },
-      { to: "/admin/notifications", label: "Notifications", icon: Bell },
+      { to: "/admin/reports", label: "Reports", icon: BarChart3 },
     ],
   },
   {
@@ -26,63 +25,46 @@ const groups = [
       { to: "/admin/products", label: "Products", icon: Package },
       { to: "/admin/categories", label: "Categories", icon: Tag },
       { to: "/admin/brands", label: "Brands", icon: Award },
-      { to: "/admin/size-charts", label: "Size charts", icon: Ruler },
     ],
   },
   {
     label: "Inventory",
     items: [
       { to: "/admin/inventory", label: "Inventory", icon: Boxes },
-      { to: "/admin/suppliers", label: "Suppliers", icon: Truck },
-      { to: "/admin/purchase-orders", label: "Purchase orders", icon: ClipboardList },
     ],
   },
   {
     label: "Sales",
     items: [
-      { to: "/admin/orders", label: "Orders", icon: ShoppingBag },
+      { to: "/admin/orders", label: "Online orders", icon: ShoppingBag },
+      { to: "/pos", label: "POS terminal", icon: ScanLine },
+      { to: "/admin/pos-sales", label: "POS sales", icon: ReceiptText },
       { to: "/admin/returns", label: "Returns", icon: Undo2 },
       { to: "/admin/refunds", label: "Refunds", icon: RotateCcw },
-      { to: "/admin/discounts", label: "Discounts", icon: BadgePercent },
-      { to: "/admin/coupons", label: "Coupons", icon: Ticket },
     ],
   },
   {
     label: "People",
     items: [
       { to: "/admin/customers", label: "Customers", icon: Users },
-      { to: "/admin/employees", label: "Employees", icon: UserCog },
-      { to: "/admin/roles", label: "Roles", icon: ShieldCheck },
+      { to: "/admin/employees", label: "Employees", icon: Users },
+      { to: "/admin/commissions", label: "Commissions", icon: HandCoins },
     ],
   },
   {
-    label: "Insights",
+    label: "Store",
     items: [
-      { to: "/admin/reports", label: "Reports", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "Website",
-    items: [
-      { to: "/admin/cms", label: "CMS", icon: ImageIcon },
-      { to: "/admin/seo", label: "SEO / Tags", icon: Hash },
       { to: "/admin/settings", label: "Settings", icon: SettingsIcon },
+      { to: "/admin/imports", label: "Imports", icon: Upload },
     ],
   },
 ] as const;
 
 function AdminLayout() {
-  const auth = useAuth();
-  const user = auth.users.find((u) => u.id === auth.currentId) ?? null;
-  const nav = useNavigate();
+  const { user, isPending } = useProtectedUser({ role: "admin" });
   const path = useRouterState({ select: (r) => r.location.pathname });
 
-  useEffect(() => {
-    if (!user) nav({ to: "/login" });
-    else if (user.role !== "admin") nav({ to: "/" });
-  }, [user, nav]);
-
-  if (!user || user.role !== "admin") return null;
+  if (isPending || !user || user.role !== "admin") return null;
 
   return (
     <div className="container-bg py-8 md:py-12">

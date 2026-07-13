@@ -1,13 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
-import type { Product } from "@/data/seed";
-import { formatPrice } from "@/lib/format";
+import type { Product } from "@/lib/catalog-types";
+import { formatPrice, getEffectiveAmount, isDiscountedProduct } from "@/lib/format";
 import { useWishlist } from "@/store/cart";
 
 export function ProductCard({ product, variant = "grid" }: { product: Product; variant?: "grid" | "list" }) {
   const wish = useWishlist();
   const fav = wish.ids.includes(product.id);
-  const onSale = !!product.salePrice && product.salePrice < product.price;
+  const onSale = isDiscountedProduct(product);
 
   if (variant === "list") {
     return (
@@ -91,10 +91,11 @@ export function Price({
   salePrice?: number;
   className?: string;
 }) {
-  if (salePrice && salePrice < price) {
+  const effectivePrice = getEffectiveAmount(price, salePrice);
+  if (effectivePrice < price) {
     return (
       <div className={`flex items-baseline gap-2 text-sm ${className}`}>
-        <span className="font-semibold text-sale">{formatPrice(salePrice)}</span>
+        <span className="font-semibold text-sale">{formatPrice(effectivePrice)}</span>
         <span className="text-muted-foreground line-through">{formatPrice(price)}</span>
       </div>
     );

@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 export type CartLine = {
   id: string; // composite: productId|size|color
   productId: string;
+  variantId?: string | null;
   name: string;
   image: string;
   size: string;
@@ -27,7 +28,7 @@ export const useCart = create<CartState>()(
     (set, get) => ({
       lines: [],
       add: (line) => {
-        const id = `${line.productId}|${line.size}|${line.color}`;
+        const id = `${line.productId}|${line.variantId ?? ""}|${line.size}|${line.color}`;
         set((s) => {
           const existing = s.lines.find((l) => l.id === id);
           if (existing) {

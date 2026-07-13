@@ -1,8 +1,12 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ShoppingBag, Heart, User, Menu, Search, X } from "lucide-react";
 import { useState } from "react";
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { catalogApi } from "@/lib/catalog-api";
+import type { StorefrontSettings } from "@/lib/catalog-types";
+import { queryKeys } from "@/lib/query-keys";
 import { useCart, useWishlist } from "@/store/cart";
-import { useAuth } from "@/store/auth";
 import { site, categories } from "@/config/site";
 
 const nav = [
@@ -15,51 +19,98 @@ const nav = [
   { to: "/contact", label: "Contact" },
 ] as const;
 
+const fallbackSettings: StorefrontSettings = {
+  id: "fallback",
+  name: site.name,
+  logoPrimaryText: "BALI",
+  logoSecondaryText: "By Bilal Garments",
+  logoTertiaryText: "EST 2001",
+  promoRibbonText: `Free shipping over Rs. ${site.shipping.freeAbove.toLocaleString()}\nNew drop\nAW26 collection live now\nCOD available across Pakistan\nEasy 7-day returns`,
+  promoRibbonItems: [
+    `Free shipping over Rs. ${site.shipping.freeAbove.toLocaleString()}`,
+    "New drop",
+    "AW26 collection live now",
+    "COD available across Pakistan",
+    "Easy 7-day returns",
+  ],
+  tagline: site.tagline,
+  description: site.description,
+  email: site.email,
+  phone: site.phone,
+  address: site.address,
+  currency: site.currency,
+  currencySymbol: site.currencySymbol,
+  invoicePrefix: "BALI",
+  receiptPrefix: "BALI",
+  thermalHeader: "",
+  thermalFooter: "",
+  barcodePrefix: "BALI",
+  qrPrefix: "BALIQ",
+  instagram: site.social.instagram,
+  facebook: site.social.facebook,
+  tiktok: site.social.tiktok,
+  metaTitle: site.name,
+  metaDescription: site.description,
+};
+
 export function Header() {
   const [open, setOpen] = useState(false);
   const cartCount = useCart((s) => s.lines.reduce((a, l) => a + l.qty, 0));
   const wishCount = useWishlist((s) => s.ids.length);
-  const user = useAuth((s) => s.users.find((u) => u.id === s.currentId) ?? null);
+  const { data: user } = useCurrentUser();
   const path = useRouterState({ select: (r) => r.location.pathname });
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.catalog.settings,
+    queryFn: catalogApi.settings,
+  });
+  const settings = settingsQuery.data?.settings ?? fallbackSettings;
+  const promoItems = settings.promoRibbonItems.length > 0 ? settings.promoRibbonItems : fallbackSettings.promoRibbonItems;
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 transition-colors">
-      <div className="bg-primary text-primary-foreground text-[11px] tracking-[0.2em] uppercase">
+      <div className="bg-primary text-[11px] uppercase tracking-[0.2em] text-primary-foreground">
         <div className="container-bg overflow-hidden py-2">
           <div className="marquee">
             {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="flex gap-12">
-                <span>Free shipping over Rs. {site.shipping.freeAbove.toLocaleString()}</span>
-                <span>· New drop · AW26 collection live now ·</span>
-                <span>COD available across Pakistan</span>
-                <span>· Easy 7-day returns ·</span>
+              <div
+                key={i}
+                className={`marquee-copy ${i === 1 ? "marquee-copy--duplicate" : ""}`}
+                aria-hidden={i === 1}
+              >
+                {promoItems.map((item, index) => (
+                  <span key={`${i}-${index}-${item}`}>
+                    {index > 0 ? "· " : ""}
+                    {item}
+                    {index < promoItems.length - 1 ? " ·" : ""}
+                  </span>
+                ))}
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="container-bg flex h-16 items-center justify-between gap-6">
+      <div className="container-bg flex min-h-[84px] items-center justify-between gap-4 py-3">
         <button
-          className="md:hidden -ml-2 p-2"
+          className="-ml-2 p-2 md:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Open menu"
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
 
-        <Link to="/" className="display text-xl tracking-tight">
-          BILAL<span className="text-accent">.</span>
+        <Link to="/" className="shrink-0 text-foreground">
+          <BrandMark settings={settings} variant="header" />
         </Link>
 
-        <nav className="hidden md:flex items-center gap-7 text-sm">
+        <nav className="hidden items-center gap-7 text-sm md:flex">
           {nav.map((n) => {
             const active = path.startsWith(n.to);
             return (
               <Link
                 key={n.to}
                 to={n.to}
-                className={`relative uppercase tracking-[0.14em] text-[11.5px] font-medium transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:bg-current after:origin-left after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
                   active
                     ? "text-foreground after:scale-x-100"
                     : "text-muted-foreground hover:text-foreground after:scale-x-0 hover:after:scale-x-100"
@@ -72,7 +123,11 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-0.5">
-          <Link to="/search" className="p-2.5 transition-colors duration-300 hover:text-accent" aria-label="Search">
+          <Link
+            to="/search"
+            className="p-2.5 transition-colors duration-300 hover:text-accent"
+            aria-label="Search"
+          >
             <Search className="h-[17px] w-[17px]" />
           </Link>
           <Link
@@ -82,11 +137,19 @@ export function Header() {
           >
             <User className="h-[17px] w-[17px]" />
           </Link>
-          <Link to="/wishlist" className="relative p-2.5 transition-colors duration-300 hover:text-accent" aria-label="Wishlist">
+          <Link
+            to="/wishlist"
+            className="relative p-2.5 transition-colors duration-300 hover:text-accent"
+            aria-label="Wishlist"
+          >
             <Heart className="h-[17px] w-[17px]" />
             {wishCount > 0 && <Badge n={wishCount} />}
           </Link>
-          <Link to="/cart" className="relative p-2.5 transition-colors duration-300 hover:text-accent" aria-label="Cart">
+          <Link
+            to="/cart"
+            className="relative p-2.5 transition-colors duration-300 hover:text-accent"
+            aria-label="Cart"
+          >
             <ShoppingBag className="h-[17px] w-[17px]" />
             {cartCount > 0 && <Badge n={cartCount} />}
           </Link>
@@ -94,7 +157,7 @@ export function Header() {
       </div>
 
       <div
-        className={`md:hidden overflow-hidden border-t border-border transition-[max-height,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`overflow-hidden border-t border-border transition-[max-height,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
           open ? "max-h-[420px] opacity-100" : "max-h-0 opacity-0"
         }`}
       >
@@ -104,7 +167,7 @@ export function Header() {
               key={n.to}
               to={n.to}
               onClick={() => setOpen(false)}
-              className="py-3 text-sm uppercase tracking-[0.16em] border-b border-border/50 last:border-0 transition-colors hover:text-accent"
+              className="border-b border-border/50 py-3 text-sm uppercase tracking-[0.16em] transition-colors last:border-0 hover:text-accent"
             >
               {n.label}
             </Link>
@@ -112,6 +175,43 @@ export function Header() {
         </nav>
       </div>
     </header>
+  );
+}
+
+function BrandMark({ settings, variant }: { settings: StorefrontSettings; variant: "header" | "footer" }) {
+  const isHeader = variant === "header";
+
+  return (
+    <span className={`inline-flex flex-col ${isHeader ? "leading-none" : "leading-[1.05]"}`}>
+      <span className="flex items-end gap-2">
+        <span
+          className={`font-black uppercase tracking-[0.28em] text-primary ${
+            isHeader ? "text-[1.6rem] sm:text-[1.8rem]" : "text-[1.55rem]"
+          }`}
+        >
+          {settings.logoPrimaryText}
+        </span>
+        <span
+          className={`mb-1 inline-block bg-accent ${
+            isHeader ? "h-2.5 w-2.5 sm:h-3 sm:w-3" : "h-2.5 w-2.5"
+          }`}
+        />
+      </span>
+      <span
+        className={`mt-1 font-semibold uppercase text-foreground/78 ${
+          isHeader ? "text-[0.5rem] tracking-[0.34em] sm:text-[0.58rem]" : "text-[0.58rem] tracking-[0.34em]"
+        }`}
+      >
+        {settings.logoSecondaryText}
+      </span>
+      <span
+        className={`mt-1 font-medium uppercase text-accent ${
+          isHeader ? "text-[0.46rem] tracking-[0.42em] sm:text-[0.52rem]" : "text-[0.52rem] tracking-[0.42em]"
+        }`}
+      >
+        {settings.logoTertiaryText}
+      </span>
+    </span>
   );
 }
 
@@ -124,16 +224,18 @@ function Badge({ n }: { n: number }) {
 }
 
 export function Footer() {
+  const settingsQuery = useQuery({
+    queryKey: queryKeys.catalog.settings,
+    queryFn: catalogApi.settings,
+  });
+  const settings = settingsQuery.data?.settings ?? fallbackSettings;
+
   return (
     <footer className="mt-24 border-t border-border bg-secondary">
-      <div className="container-bg py-16 grid gap-12 md:grid-cols-4">
+      <div className="container-bg grid gap-12 py-16 md:grid-cols-4">
         <div>
-          <div className="display text-2xl mb-3">
-            BILAL<span className="text-accent">.</span>
-          </div>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            {site.description}
-          </p>
+          <BrandMark settings={settings} variant="footer" />
+          <p className="mt-4 max-w-xs text-sm text-muted-foreground">{settings.description}</p>
         </div>
         <FooterCol
           title="Shop"
@@ -152,10 +254,8 @@ export function Footer() {
           ]}
         />
         <div>
-          <h4 className="text-xs uppercase tracking-widest mb-3 font-semibold">Newsletter</h4>
-          <p className="text-sm text-muted-foreground mb-3">
-            Get 10% off your first order.
-          </p>
+          <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest">Newsletter</h4>
+          <p className="mb-3 text-sm text-muted-foreground">Get 10% off your first order.</p>
           <form
             className="flex border border-border bg-background"
             onSubmit={(e) => {
@@ -170,16 +270,16 @@ export function Footer() {
               placeholder="Email address"
               className="flex-1 bg-transparent px-3 py-2 text-sm outline-none"
             />
-            <button className="bg-primary text-primary-foreground px-4 text-xs uppercase tracking-widest">
+            <button className="bg-primary px-4 text-xs uppercase tracking-widest text-primary-foreground">
               Join
             </button>
           </form>
         </div>
       </div>
       <div className="border-t border-border">
-        <div className="container-bg py-5 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>© {new Date().getFullYear()} {site.name}. All rights reserved.</span>
-          <span>{site.address} · {site.email}</span>
+        <div className="container-bg flex flex-col items-center justify-between gap-2 py-5 text-xs text-muted-foreground md:flex-row">
+          <span>© {new Date().getFullYear()} {settings.name}. All rights reserved.</span>
+          <span>{settings.address} · {settings.email}</span>
         </div>
       </div>
     </footer>
@@ -189,11 +289,13 @@ export function Footer() {
 function FooterCol({ title, items }: { title: string; items: { to: string; label: string }[] }) {
   return (
     <div>
-      <h4 className="text-xs uppercase tracking-widest mb-3 font-semibold">{title}</h4>
+      <h4 className="mb-3 text-xs font-semibold uppercase tracking-widest">{title}</h4>
       <ul className="space-y-2 text-sm text-muted-foreground">
         {items.map((i) => (
           <li key={i.to}>
-            <Link to={i.to} className="hover:text-foreground">{i.label}</Link>
+            <Link to={i.to} className="hover:text-foreground">
+              {i.label}
+            </Link>
           </li>
         ))}
       </ul>

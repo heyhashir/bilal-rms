@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { CheckCircle2, Circle, Package, Truck, Home } from "lucide-react";
-import { useOrders, type Order } from "@/store/auth";
+import { orderApi } from "@/lib/order-api";
+import type { Order } from "@/lib/account-types";
 import { formatPrice } from "@/lib/format";
 
 export const Route = createFileRoute("/track-order")({
@@ -17,18 +18,21 @@ const STAGES: { key: Order["status"]; label: string; icon: typeof Package }[] = 
 ];
 
 function Track() {
-  const orders = useOrders((s) => s.orders);
   const [id, setId] = useState("");
   const [email, setEmail] = useState("");
   const [order, setOrder] = useState<Order | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const find = (e: React.FormEvent) => {
+  const find = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    const o = orders.find((x) => x.id.toLowerCase() === id.trim().toLowerCase() && x.email.toLowerCase() === email.trim().toLowerCase());
-    if (!o) { setOrder(null); return setErr("No matching order. Double-check your order ID and email."); }
-    setOrder(o);
+    try {
+      const payload = await orderApi.track({ orderNumber: id.trim(), email: email.trim() });
+      setOrder(payload.order);
+    } catch {
+      setOrder(null);
+      setErr("No matching order. Double-check your order ID and email.");
+    }
   };
 
   const idx = order ? Math.max(0, STAGES.findIndex((s) => s.key === order.status)) : -1;
@@ -82,6 +86,16 @@ function Track() {
             <div className="flex justify-between"><span className="text-muted-foreground">Placed</span><span>{new Date(order.createdAt).toLocaleString()}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{formatPrice(order.total)}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Ship to</span><span>{order.shipping.address}, {order.shipping.city}</span></div>
+          </div>
+          <div className="mt-4">
+            <Link
+              to="/invoice/$orderNumber"
+              params={{ orderNumber: order.id }}
+              search={{ token: order.token }}
+              className="text-xs uppercase tracking-widest underline underline-offset-4"
+            >
+              Print invoice
+            </Link>
           </div>
         </>
       )}

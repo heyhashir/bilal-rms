@@ -1,11 +1,11 @@
 export const site = {
-  name: "Bilal Garments",
-  tagline: "Wear bold. Live louder.",
+  name: "BALI by Bilal Garments EST 2001.",
+  tagline: "Crafted since 2001. Worn every day.",
   description:
-    "Premium contemporary clothing for Men, Women, Kids, and Accessories.",
-  email: "hello@bilalgarments.pk",
+    "Contemporary ready-to-wear, in-store retail, and tailored essentials for Men, Women, Kids, and Accessories.",
+  email: "hello@balibybilalgarments.pk",
   phone: "+92 300 0000000",
-  address: "Lahore, Pakistan",
+  address: "Attock, Punjab, Pakistan",
   currency: "PKR",
   currencySymbol: "Rs.",
   social: {

@@ -1,8 +1,10 @@
+import fs from 'fs';
 import path from 'path';
 import winston from 'winston';
 import { env } from '../config/env';
 
 const logsDir = path.join(process.cwd(), 'logs');
+fs.mkdirSync(logsDir, { recursive: true });
 
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
@@ -12,7 +14,7 @@ const logFormat = winston.format.combine(
 );
 
 const consoleFormat = winston.format.combine(
-  winston.format.colorize(),
+  ...(env.isProduction ? [] : [winston.format.colorize()]),
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.printf(({ timestamp, level, message, requestId, ...meta }) => {
     const reqIdPart = requestId ? ` [${requestId}]` : '';
@@ -28,6 +30,9 @@ const logger = winston.createLogger({
   format: logFormat,
   defaultMeta: { service: 'bilal-rms-backend' },
   transports: [
+    new winston.transports.Console({
+      format: consoleFormat,
+    }),
     new winston.transports.File({
       filename: path.join(logsDir, 'error.log'),
       level: 'error',
@@ -47,13 +52,5 @@ const logger = winston.createLogger({
     new winston.transports.File({ filename: path.join(logsDir, 'rejections.log') }),
   ],
 });
-
-if (!env.isProduction) {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
-    }),
-  );
-}
 
 export default logger;

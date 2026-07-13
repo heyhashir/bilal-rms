@@ -1,22 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRetail } from "@/store/retail";
-import { PageHeader, StatCard, EmptyState, StatusPill } from "@/components/admin/primitives";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { adminOrdersApi } from "@/lib/admin-orders-api";
+import type { ReturnRequest } from "@/lib/admin-types";
+import { EmptyState, PageHeader, StatCard, StatusPill } from "@/components/admin/primitives";
 import { formatPrice } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/admin/refunds")({
   component: AdminRefunds,
 });
 
 function AdminRefunds() {
-  const returns = useRetail((s) => s.returns);
-  const refunded = returns.filter((r) => r.status === "refunded");
-  const total = refunded.reduce((a, r) => a + r.refundAmount, 0);
-  const pending = returns.filter((r) => r.status === "approved").reduce((a, r) => a + r.refundAmount, 0);
+  const { data: returns = [] } = useQuery<ReturnRequest[]>({
+    queryKey: queryKeys.admin.returns,
+    queryFn: async () => (await adminOrdersApi.returns()).returns,
+  });
+
+  const refunded = useMemo(() => returns.filter((request) => request.status === "refunded"), [returns]);
+  const total = refunded.reduce((sum, request) => sum + request.refundAmount, 0);
+  const pending = returns.filter((request) => request.status === "approved").reduce((sum, request) => sum + request.refundAmount, 0);
 
   return (
     <div>
-      <PageHeader eyebrow="Sales" title="Refunds" description="Financial view of all returns pushed to refund." />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <PageHeader eyebrow="Sales" title="Refunds" description="Financial view of all refunded return requests." />
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Refunded" value={formatPrice(total)} />
         <StatCard label="Pending" value={formatPrice(pending)} tone={pending > 0 ? "down" : "flat"} />
         <StatCard label="Count" value={refunded.length} />
@@ -26,25 +34,25 @@ function AdminRefunds() {
       {refunded.length === 0 ? (
         <EmptyState title="No refunds issued" />
       ) : (
-        <div className="border border-border overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
+        <div className="overflow-x-auto border border-border">
+          <table className="min-w-[600px] w-full text-sm">
             <thead className="bg-secondary text-xs uppercase tracking-widest">
               <tr>
-                <th className="text-left p-3">Date</th>
-                <th className="text-left p-3">Return</th>
-                <th className="text-left p-3">Order</th>
-                <th className="text-left p-3">Amount</th>
-                <th className="text-left p-3">Status</th>
+                <th className="p-3 text-left">Date</th>
+                <th className="p-3 text-left">Return</th>
+                <th className="p-3 text-left">Order</th>
+                <th className="p-3 text-left">Amount</th>
+                <th className="p-3 text-left">Status</th>
               </tr>
             </thead>
             <tbody>
-              {refunded.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <td className="p-3 text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3 font-semibold">{r.id}</td>
-                  <td className="p-3 font-mono text-xs">{r.orderId}</td>
-                  <td className="p-3 font-semibold">{formatPrice(r.refundAmount)}</td>
-                  <td className="p-3"><StatusPill status={r.status} /></td>
+              {refunded.map((request) => (
+                <tr key={request.id} className="border-t border-border">
+                  <td className="p-3 text-xs text-muted-foreground">{new Date(request.createdAt).toLocaleDateString()}</td>
+                  <td className="p-3 font-semibold">{request.id}</td>
+                  <td className="p-3 font-mono text-xs">{request.orderId}</td>
+                  <td className="p-3 font-semibold">{formatPrice(request.refundAmount)}</td>
+                  <td className="p-3"><StatusPill status={request.status} /></td>
                 </tr>
               ))}
             </tbody>

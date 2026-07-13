@@ -16,6 +16,7 @@ import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PosRouteImport } from './routes/pos'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FaqRouteImport } from './routes/faq'
@@ -29,6 +30,7 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
+import { Route as InvoiceOrderNumberRouteImport } from './routes/invoice.$orderNumber'
 import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 import { Route as AdminSuppliersRouteImport } from './routes/admin.suppliers'
 import { Route as AdminSizeChartsRouteImport } from './routes/admin.size-charts'
@@ -40,13 +42,16 @@ import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminRefundsRouteImport } from './routes/admin.refunds'
 import { Route as AdminPurchaseOrdersRouteImport } from './routes/admin.purchase-orders'
 import { Route as AdminProductsRouteImport } from './routes/admin.products'
+import { Route as AdminPosSalesRouteImport } from './routes/admin.pos-sales'
 import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminInventoryRouteImport } from './routes/admin.inventory'
+import { Route as AdminImportsRouteImport } from './routes/admin.imports'
 import { Route as AdminEmployeesRouteImport } from './routes/admin.employees'
 import { Route as AdminDiscountsRouteImport } from './routes/admin.discounts'
 import { Route as AdminCustomersRouteImport } from './routes/admin.customers'
 import { Route as AdminCouponsRouteImport } from './routes/admin.coupons'
+import { Route as AdminCommissionsRouteImport } from './routes/admin.commissions'
 import { Route as AdminCmsRouteImport } from './routes/admin.cms'
 import { Route as AdminCategoriesRouteImport } from './routes/admin.categories'
 import { Route as AdminBrandsRouteImport } from './routes/admin.brands'
@@ -85,6 +90,11 @@ const RefundPolicyRoute = RefundPolicyRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosRoute = PosRouteImport.update({
+  id: '/pos',
+  path: '/pos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -152,6 +162,11 @@ const ProductSlugRoute = ProductSlugRouteImport.update({
   path: '/product/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvoiceOrderNumberRoute = InvoiceOrderNumberRouteImport.update({
+  id: '/invoice/$orderNumber',
+  path: '/invoice/$orderNumber',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CategorySlugRoute = CategorySlugRouteImport.update({
   id: '/category/$slug',
   path: '/category/$slug',
@@ -207,6 +222,11 @@ const AdminProductsRoute = AdminProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPosSalesRoute = AdminPosSalesRouteImport.update({
+  id: '/pos-sales',
+  path: '/pos-sales',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -220,6 +240,11 @@ const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
 const AdminInventoryRoute = AdminInventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminImportsRoute = AdminImportsRouteImport.update({
+  id: '/imports',
+  path: '/imports',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminEmployeesRoute = AdminEmployeesRouteImport.update({
@@ -240,6 +265,11 @@ const AdminCustomersRoute = AdminCustomersRouteImport.update({
 const AdminCouponsRoute = AdminCouponsRouteImport.update({
   id: '/coupons',
   path: '/coupons',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCommissionsRoute = AdminCommissionsRouteImport.update({
+  id: '/commissions',
+  path: '/commissions',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCmsRoute = AdminCmsRouteImport.update({
@@ -275,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/faq': typeof FaqRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/pos': typeof PosRoute
   '/privacy': typeof PrivacyRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/search': typeof SearchRoute
@@ -286,13 +317,16 @@ export interface FileRoutesByFullPath {
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/cms': typeof AdminCmsRoute
+  '/admin/commissions': typeof AdminCommissionsRoute
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/imports': typeof AdminImportsRoute
   '/admin/inventory': typeof AdminInventoryRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/admin/pos-sales': typeof AdminPosSalesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/purchase-orders': typeof AdminPurchaseOrdersRoute
   '/admin/refunds': typeof AdminRefundsRoute
@@ -304,6 +338,7 @@ export interface FileRoutesByFullPath {
   '/admin/size-charts': typeof AdminSizeChartsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/invoice/$orderNumber': typeof InvoiceOrderNumberRoute
   '/product/$slug': typeof ProductSlugRoute
   '/admin/': typeof AdminIndexRoute
 }
@@ -318,6 +353,7 @@ export interface FileRoutesByTo {
   '/faq': typeof FaqRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/pos': typeof PosRoute
   '/privacy': typeof PrivacyRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/search': typeof SearchRoute
@@ -329,13 +365,16 @@ export interface FileRoutesByTo {
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/cms': typeof AdminCmsRoute
+  '/admin/commissions': typeof AdminCommissionsRoute
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/imports': typeof AdminImportsRoute
   '/admin/inventory': typeof AdminInventoryRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/admin/pos-sales': typeof AdminPosSalesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/purchase-orders': typeof AdminPurchaseOrdersRoute
   '/admin/refunds': typeof AdminRefundsRoute
@@ -347,6 +386,7 @@ export interface FileRoutesByTo {
   '/admin/size-charts': typeof AdminSizeChartsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/invoice/$orderNumber': typeof InvoiceOrderNumberRoute
   '/product/$slug': typeof ProductSlugRoute
   '/admin': typeof AdminIndexRoute
 }
@@ -363,6 +403,7 @@ export interface FileRoutesById {
   '/faq': typeof FaqRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
+  '/pos': typeof PosRoute
   '/privacy': typeof PrivacyRoute
   '/refund-policy': typeof RefundPolicyRoute
   '/search': typeof SearchRoute
@@ -374,13 +415,16 @@ export interface FileRoutesById {
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/cms': typeof AdminCmsRoute
+  '/admin/commissions': typeof AdminCommissionsRoute
   '/admin/coupons': typeof AdminCouponsRoute
   '/admin/customers': typeof AdminCustomersRoute
   '/admin/discounts': typeof AdminDiscountsRoute
   '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/imports': typeof AdminImportsRoute
   '/admin/inventory': typeof AdminInventoryRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
+  '/admin/pos-sales': typeof AdminPosSalesRoute
   '/admin/products': typeof AdminProductsRoute
   '/admin/purchase-orders': typeof AdminPurchaseOrdersRoute
   '/admin/refunds': typeof AdminRefundsRoute
@@ -392,6 +436,7 @@ export interface FileRoutesById {
   '/admin/size-charts': typeof AdminSizeChartsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/invoice/$orderNumber': typeof InvoiceOrderNumberRoute
   '/product/$slug': typeof ProductSlugRoute
   '/admin/': typeof AdminIndexRoute
 }
@@ -409,6 +454,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/forgot-password'
     | '/login'
+    | '/pos'
     | '/privacy'
     | '/refund-policy'
     | '/search'
@@ -420,13 +466,16 @@ export interface FileRouteTypes {
     | '/admin/brands'
     | '/admin/categories'
     | '/admin/cms'
+    | '/admin/commissions'
     | '/admin/coupons'
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/employees'
+    | '/admin/imports'
     | '/admin/inventory'
     | '/admin/notifications'
     | '/admin/orders'
+    | '/admin/pos-sales'
     | '/admin/products'
     | '/admin/purchase-orders'
     | '/admin/refunds'
@@ -438,6 +487,7 @@ export interface FileRouteTypes {
     | '/admin/size-charts'
     | '/admin/suppliers'
     | '/category/$slug'
+    | '/invoice/$orderNumber'
     | '/product/$slug'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
@@ -452,6 +502,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/forgot-password'
     | '/login'
+    | '/pos'
     | '/privacy'
     | '/refund-policy'
     | '/search'
@@ -463,13 +514,16 @@ export interface FileRouteTypes {
     | '/admin/brands'
     | '/admin/categories'
     | '/admin/cms'
+    | '/admin/commissions'
     | '/admin/coupons'
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/employees'
+    | '/admin/imports'
     | '/admin/inventory'
     | '/admin/notifications'
     | '/admin/orders'
+    | '/admin/pos-sales'
     | '/admin/products'
     | '/admin/purchase-orders'
     | '/admin/refunds'
@@ -481,6 +535,7 @@ export interface FileRouteTypes {
     | '/admin/size-charts'
     | '/admin/suppliers'
     | '/category/$slug'
+    | '/invoice/$orderNumber'
     | '/product/$slug'
     | '/admin'
   id:
@@ -496,6 +551,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/forgot-password'
     | '/login'
+    | '/pos'
     | '/privacy'
     | '/refund-policy'
     | '/search'
@@ -507,13 +563,16 @@ export interface FileRouteTypes {
     | '/admin/brands'
     | '/admin/categories'
     | '/admin/cms'
+    | '/admin/commissions'
     | '/admin/coupons'
     | '/admin/customers'
     | '/admin/discounts'
     | '/admin/employees'
+    | '/admin/imports'
     | '/admin/inventory'
     | '/admin/notifications'
     | '/admin/orders'
+    | '/admin/pos-sales'
     | '/admin/products'
     | '/admin/purchase-orders'
     | '/admin/refunds'
@@ -525,6 +584,7 @@ export interface FileRouteTypes {
     | '/admin/size-charts'
     | '/admin/suppliers'
     | '/category/$slug'
+    | '/invoice/$orderNumber'
     | '/product/$slug'
     | '/admin/'
   fileRoutesById: FileRoutesById
@@ -541,6 +601,7 @@ export interface RootRouteChildren {
   FaqRoute: typeof FaqRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
+  PosRoute: typeof PosRoute
   PrivacyRoute: typeof PrivacyRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
   SearchRoute: typeof SearchRoute
@@ -549,6 +610,7 @@ export interface RootRouteChildren {
   TrackOrderRoute: typeof TrackOrderRoute
   WishlistRoute: typeof WishlistRoute
   CategorySlugRoute: typeof CategorySlugRoute
+  InvoiceOrderNumberRoute: typeof InvoiceOrderNumberRoute
   ProductSlugRoute: typeof ProductSlugRoute
 }
 
@@ -601,6 +663,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos': {
+      id: '/pos'
+      path: '/pos'
+      fullPath: '/pos'
+      preLoaderRoute: typeof PosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -694,6 +763,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invoice/$orderNumber': {
+      id: '/invoice/$orderNumber'
+      path: '/invoice/$orderNumber'
+      fullPath: '/invoice/$orderNumber'
+      preLoaderRoute: typeof InvoiceOrderNumberRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/category/$slug': {
       id: '/category/$slug'
       path: '/category/$slug'
@@ -771,6 +847,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/pos-sales': {
+      id: '/admin/pos-sales'
+      path: '/pos-sales'
+      fullPath: '/admin/pos-sales'
+      preLoaderRoute: typeof AdminPosSalesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/orders': {
       id: '/admin/orders'
       path: '/orders'
@@ -790,6 +873,13 @@ declare module '@tanstack/react-router' {
       path: '/inventory'
       fullPath: '/admin/inventory'
       preLoaderRoute: typeof AdminInventoryRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/imports': {
+      id: '/admin/imports'
+      path: '/imports'
+      fullPath: '/admin/imports'
+      preLoaderRoute: typeof AdminImportsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/employees': {
@@ -818,6 +908,13 @@ declare module '@tanstack/react-router' {
       path: '/coupons'
       fullPath: '/admin/coupons'
       preLoaderRoute: typeof AdminCouponsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/commissions': {
+      id: '/admin/commissions'
+      path: '/commissions'
+      fullPath: '/admin/commissions'
+      preLoaderRoute: typeof AdminCommissionsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/cms': {
@@ -856,13 +953,16 @@ interface AdminRouteChildren {
   AdminBrandsRoute: typeof AdminBrandsRoute
   AdminCategoriesRoute: typeof AdminCategoriesRoute
   AdminCmsRoute: typeof AdminCmsRoute
+  AdminCommissionsRoute: typeof AdminCommissionsRoute
   AdminCouponsRoute: typeof AdminCouponsRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDiscountsRoute: typeof AdminDiscountsRoute
   AdminEmployeesRoute: typeof AdminEmployeesRoute
+  AdminImportsRoute: typeof AdminImportsRoute
   AdminInventoryRoute: typeof AdminInventoryRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
+  AdminPosSalesRoute: typeof AdminPosSalesRoute
   AdminProductsRoute: typeof AdminProductsRoute
   AdminPurchaseOrdersRoute: typeof AdminPurchaseOrdersRoute
   AdminRefundsRoute: typeof AdminRefundsRoute
@@ -881,13 +981,16 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminBrandsRoute: AdminBrandsRoute,
   AdminCategoriesRoute: AdminCategoriesRoute,
   AdminCmsRoute: AdminCmsRoute,
+  AdminCommissionsRoute: AdminCommissionsRoute,
   AdminCouponsRoute: AdminCouponsRoute,
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDiscountsRoute: AdminDiscountsRoute,
   AdminEmployeesRoute: AdminEmployeesRoute,
+  AdminImportsRoute: AdminImportsRoute,
   AdminInventoryRoute: AdminInventoryRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrdersRoute: AdminOrdersRoute,
+  AdminPosSalesRoute: AdminPosSalesRoute,
   AdminProductsRoute: AdminProductsRoute,
   AdminPurchaseOrdersRoute: AdminPurchaseOrdersRoute,
   AdminRefundsRoute: AdminRefundsRoute,
@@ -915,6 +1018,7 @@ const rootRouteChildren: RootRouteChildren = {
   FaqRoute: FaqRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  PosRoute: PosRoute,
   PrivacyRoute: PrivacyRoute,
   RefundPolicyRoute: RefundPolicyRoute,
   SearchRoute: SearchRoute,
@@ -923,17 +1027,9 @@ const rootRouteChildren: RootRouteChildren = {
   TrackOrderRoute: TrackOrderRoute,
   WishlistRoute: WishlistRoute,
   CategorySlugRoute: CategorySlugRoute,
+  InvoiceOrderNumberRoute: InvoiceOrderNumberRoute,
   ProductSlugRoute: ProductSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

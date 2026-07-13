@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCatalog } from "@/store/catalog";
+import { useQuery } from "@tanstack/react-query";
+import { catalogApi } from "@/lib/catalog-api";
+import { queryKeys } from "@/lib/query-keys";
 import { useWishlist } from "@/store/cart";
 import { ProductCard } from "@/components/shop/ProductCard";
 
@@ -9,7 +11,11 @@ export const Route = createFileRoute("/wishlist")({
 });
 
 function Wishlist() {
-  const products = useCatalog((s) => s.products);
+  const { data } = useQuery({
+    queryKey: queryKeys.catalog.bootstrap,
+    queryFn: catalogApi.bootstrap,
+  });
+  const products = data?.products ?? [];
   const ids = useWishlist((s) => s.ids);
   const list = products.filter((p) => ids.includes(p.id));
 

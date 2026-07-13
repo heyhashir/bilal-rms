@@ -4,7 +4,7 @@ import { useAuth } from "@/store/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in — Bilal Garments" }] }),
+  head: () => ({ meta: [{ title: "Sign in - BALI by Bilal Garments EST 2001." }] }),
   component: Login,
 });
 
@@ -16,22 +16,22 @@ function Login() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     let err: string | null = null;
-    if (mode === "login") err = auth.login(email, password);
-    else err = auth.register({ email, name, password });
+    if (mode === "login") err = await auth.login(email, password);
+    else err = await auth.register({ email, name, password });
     if (err) return toast.error(err);
     toast.success(mode === "login" ? "Welcome back" : "Account created");
-    const u = auth.users.find((x) => x.email.toLowerCase() === email.toLowerCase());
+    const u = useAuth.getState().user;
     nav({ to: u?.role === "admin" ? "/admin" : "/account" });
   };
 
   return (
-    <div className="container-bg py-16 md:py-24 max-w-md">
-      <h1 className="display text-4xl md:text-5xl mb-2">{mode === "login" ? "Sign in." : "Create account."}</h1>
-      <p className="text-sm text-muted-foreground mb-8">
-        {mode === "login" ? "Welcome back to Bilal Garments." : "Join the inside circle."}
+    <div className="container-bg max-w-md py-16 md:py-24">
+      <h1 className="display mb-2 text-4xl md:text-5xl">{mode === "login" ? "Sign in." : "Create account."}</h1>
+      <p className="mb-8 text-sm text-muted-foreground">
+        {mode === "login" ? "Welcome back to BALI by Bilal Garments EST 2001." : "Join the inside circle."}
       </p>
       <form onSubmit={submit} className="space-y-4">
         {mode === "register" && (
@@ -39,12 +39,12 @@ function Login() {
         )}
         <Field label="Email" type="email" value={email} onChange={setEmail} />
         <Field label="Password" type="password" value={password} onChange={setPassword} />
-        <button className="w-full bg-primary text-primary-foreground py-4 text-xs uppercase tracking-[0.2em]">
+        <button className="w-full bg-primary py-4 text-xs uppercase tracking-[0.2em] text-primary-foreground">
           {mode === "login" ? "Sign in" : "Create account"}
         </button>
       </form>
 
-      <div className="mt-6 text-sm text-center text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-muted-foreground">
         {mode === "login" ? (
           <>New here? <button onClick={() => setMode("register")} className="text-foreground underline underline-offset-4">Create an account</button></>
         ) : (
@@ -52,12 +52,12 @@ function Login() {
         )}
       </div>
 
-      <div className="mt-10 p-4 bg-secondary text-xs text-muted-foreground">
-        <div className="font-semibold text-foreground mb-1">Demo admin</div>
+      <div className="mt-10 bg-secondary p-4 text-xs text-muted-foreground">
+        <div className="mb-1 font-semibold text-foreground">Demo admin</div>
         admin@bilalgarments.pk · admin123
       </div>
 
-      <div className="mt-6 text-xs text-center">
+      <div className="mt-6 text-center text-xs">
         <Link to="/" className="underline underline-offset-4 text-muted-foreground">Back to home</Link>
       </div>
     </div>
@@ -67,7 +67,7 @@ function Login() {
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
     <label className="block">
-      <span className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5">{label}</span>
+      <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">{label}</span>
       <input
         required
         type={type}
