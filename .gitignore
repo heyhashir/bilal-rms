@@ -35,3 +35,14 @@ test-results
 *.njsproj
 *.sln
 *.sw?
+
+# Local planning / architecture docs
+API_CONTRACTS.md
+ARCHITECTURE.md
+CONTRIBUTING.md
+HOSTINGER_DEPLOYMENT.md
+OPERATIONS.md
+REFACTOR_PROGRESS.md
+RELEASE_CHECKLIST.md
+improvements.md
+desktop/README.md
