@@ -12,6 +12,31 @@ The project is structured as a single deployable Node.js application:
 
 Production is designed around Hostinger Business with a managed MySQL/MariaDB database. Local development is standardized on Docker-based MariaDB.
 
+## Client Review From A Clean Windows PC
+
+Docker Desktop is the only software required. Git, Node.js, npm, and a separately installed database are not required. Install Docker Desktop, start it, open PowerShell, and run this command:
+
+```powershell
+$script = "$env:TEMP\bilal-rms-review.ps1"; Invoke-WebRequest "https://raw.githubusercontent.com/heyhashir/bilal-rms/docs/professional-readme/scripts/client-review.ps1" -OutFile $script; powershell -ExecutionPolicy Bypass -File $script
+```
+
+The script downloads the review branch using a temporary Docker Git container, builds the website, starts MariaDB and the app, applies migrations, creates the default owner account, waits for the health check, and opens the browser automatically. The website will be available at [http://localhost:5000](http://localhost:5000).
+
+If the repository has already been downloaded, run this from its folder instead:
+
+```powershell
+docker compose up --build
+```
+
+Use these review credentials:
+
+```text
+Email: admin@bilalgarments.pk
+Password: admin123
+```
+
+Uploaded product media and the local database are stored in Docker named volumes and survive normal container restarts. To stop the review copy, run `docker compose down` from the installed folder. To remove all review data and start fresh, run `docker compose down --volumes`. The downloaded review folder is normally created at `%USERPROFILE%\BilalRmsReview`.
+
 ## Core Capabilities
 
 - Ecommerce storefront with catalog browsing, product detail, cart, checkout, and order tracking
