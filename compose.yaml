@@ -3,7 +3,6 @@ name: bilal-rms
 services:
   mariadb:
     image: mariadb:11.4
-    container_name: bilal-rms-mariadb
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: bilal_rms
@@ -11,7 +10,7 @@ services:
       MARIADB_PASSWORD: bilal_rms
       MARIADB_ROOT_PASSWORD: bilal_rms_root
     ports:
-      - "3307:3306"
+      - "${LOCAL_DB_PORT:-3307}:3306"
     volumes:
       - bilal-rms-mariadb-data:/var/lib/mysql
     healthcheck:
@@ -25,7 +24,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: bilal-rms-app
     restart: unless-stopped
     depends_on:
       mariadb:
