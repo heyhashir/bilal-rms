@@ -20,7 +20,7 @@ Docker Desktop is the only software required. Git, Node.js, npm, and a separatel
 $script = "$env:TEMP\bilal-rms-review.ps1"; Invoke-WebRequest "https://raw.githubusercontent.com/heyhashir/bilal-rms/docs/professional-readme/scripts/client-review.ps1" -OutFile $script; powershell -ExecutionPolicy Bypass -File $script
 ```
 
-The script downloads the review branch using a temporary Docker Git container, builds the website, starts MariaDB and the app, applies migrations, creates the default owner account, waits for the health check, and opens the browser automatically. The website will be available at [http://localhost:5000](http://localhost:5000).
+The script downloads the review branch using a temporary Docker Git container, builds the website, starts MariaDB and the app, applies migrations, seeds sample products and POS data, creates the default owner account, waits for the health check, and opens the browser automatically. The website will be available at [http://localhost:5000](http://localhost:5000).
 
 If the repository has already been downloaded, run this from its folder instead:
 
