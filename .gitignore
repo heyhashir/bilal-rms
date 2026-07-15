@@ -15,6 +15,11 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+backend/public
+backend/uploads/*
+!backend/uploads/.gitkeep
+playwright-report
+test-results
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -30,3 +35,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local planning / architecture docs
+API_CONTRACTS.md
+ARCHITECTURE.md
+CONTRIBUTING.md
+HOSTINGER_DEPLOYMENT.md
+OPERATIONS.md
+REFACTOR_PROGRESS.md
+RELEASE_CHECKLIST.md
+improvements.md
+desktop/README.md

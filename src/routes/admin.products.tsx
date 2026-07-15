@@ -1,94 +1,146 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
-import { useCatalog } from "@/store/catalog";
-import { useSizeCharts } from "@/store/settings";
-import type { Product } from "@/data/seed";
-import { formatPrice } from "@/lib/format";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
+import { adminCatalogApi } from "@/lib/admin-catalog-api";
+import { getErrorMessage } from "@/lib/api";
+import { queryClient } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-keys";
+import type { Brand, Category, Product } from "@/lib/catalog-types";
+import { ActionButton, Field, Modal, PageHeader, SelectField } from "@/components/admin/primitives";
+import { formatPrice } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
 });
 
-type Draft = Omit<Product, "id" | "createdAt">;
+type Draft = {
+  id?: string;
+  slug: string;
+  name: string;
+  description: string;
+  categorySlug: string;
+  brandSlug: string;
+  stockMode: "simple" | "variant";
+  price: number;
+  salePrice?: number;
+  stock: number;
+  sizeChart: "apparel" | "kids" | "none";
+  sizes: string[];
+  colors: { name: string; hex: string }[];
+  tags: string[];
+  seoTitle: string;
+  seoDescription: string;
+  featured: boolean;
+  trending: boolean;
+  isActive: boolean;
+  images: string[];
+  video: string;
+  barcode: string;
+  qrCode: string;
+  supplierBarcode: string;
+  variantsJson: string;
+};
 
-const empty = (): Draft => ({
-  slug: "",
-  name: "",
-  description: "",
-  category: "men",
-  price: 0,
-  salePrice: undefined,
-  images: [],
-  sizes: [],
-  colors: [],
-  stock: 0,
-  sizeChart: "apparel",
-  tags: [],
-  seoTitle: "",
-  seoDescription: "",
-  trending: false,
-  featured: false,
+const makeDraft = (product?: Product): Draft => ({
+  id: product?.id,
+  slug: product?.slug ?? "",
+  name: product?.name ?? "",
+  description: product?.description ?? "",
+  categorySlug: product?.category ?? "men",
+  brandSlug: product?.brandSlug ?? "",
+  stockMode: product?.stockMode ?? "simple",
+  price: product?.price ?? 0,
+  salePrice: product?.salePrice,
+  stock: product?.stock ?? 0,
+  sizeChart: (product?.sizeChart as Draft["sizeChart"]) ?? "apparel",
+  sizes: product?.sizes ?? [],
+  colors: product?.colors ?? [],
+  tags: product?.tags ?? [],
+  seoTitle: product?.seoTitle ?? "",
+  seoDescription: product?.seoDescription ?? "",
+  featured: product?.featured ?? false,
+  trending: product?.trending ?? false,
+  isActive: true,
+  images: product?.images ?? [],
+  video: product?.video ?? "",
+  barcode: product?.barcode ?? "",
+  qrCode: product?.qrCode ?? "",
+  supplierBarcode: product?.supplierBarcode ?? "",
+  variantsJson: product ? JSON.stringify(product.variants, null, 2) : "[]",
 });
 
 function AdminProducts() {
-  const { products, categories, addProduct, updateProduct, deleteProduct } = useCatalog();
-  const [editing, setEditing] = useState<Product | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Draft | null>(null);
+  const { data: products = [] } = useQuery({
+    queryKey: queryKeys.admin.products,
+    queryFn: async () => (await adminCatalogApi.products()).products,
+  });
+  const { data: categories = [] } = useQuery({
+    queryKey: queryKeys.admin.categories,
+    queryFn: async () => (await adminCatalogApi.categories()).categories,
+  });
+  const { data: brands = [] } = useQuery({
+    queryKey: queryKeys.admin.brands,
+    queryFn: async () => (await adminCatalogApi.brands()).brands,
+  });
+  const deleteProduct = useMutation({
+    mutationFn: adminCatalogApi.deleteProduct,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.products });
+      toast.success("Product archived");
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Unable to archive product"));
+    },
+  });
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="display text-2xl">Products ({products.length})</h2>
-        <button
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 text-xs uppercase tracking-widest"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add product
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Catalog"
+        title={`Products (${products.length})`}
+        action={<ActionButton onClick={() => setEditing(makeDraft())}><Plus className="h-3.5 w-3.5" /> Add product</ActionButton>}
+      />
 
-      <div className="border border-border overflow-x-auto">
-        <table className="w-full text-sm min-w-[700px]">
+      <div className="overflow-x-auto border border-border">
+        <table className="min-w-[760px] w-full text-sm">
           <thead className="bg-secondary text-xs uppercase tracking-widest">
             <tr>
-              <th className="text-left p-3">Product</th>
-              <th className="text-left p-3">Category</th>
-              <th className="text-left p-3">Price</th>
-              <th className="text-left p-3">Stock</th>
+              <th className="p-3 text-left">Product</th>
+              <th className="p-3 text-left">Category</th>
+              <th className="p-3 text-left">Price</th>
+              <th className="p-3 text-left">Stock</th>
+              <th className="p-3 text-left">Mode</th>
               <th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
-            {products.map((p) => (
-              <tr key={p.id} className="border-t border-border">
+            {products.map((product) => (
+              <tr key={product.id} className="border-t border-border">
                 <td className="p-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-12 bg-secondary overflow-hidden">
-                      <img src={p.images[0]} alt="" className="h-full w-full object-cover" />
+                    <div className="h-12 w-10 overflow-hidden bg-secondary">
+                      <img src={product.images[0]} alt="" className="h-full w-full object-cover" />
                     </div>
                     <div className="min-w-0">
-                      <div className="font-medium truncate">{p.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">/{p.slug}</div>
+                      <div className="truncate font-medium">{product.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">/{product.slug}</div>
                     </div>
                   </div>
                 </td>
-                <td className="p-3 capitalize">{p.category}</td>
+                <td className="p-3 capitalize">{product.category}</td>
+                <td className="p-3">{product.salePrice ? <span><span className="text-muted-foreground line-through">{formatPrice(product.price)}</span> {formatPrice(product.salePrice)}</span> : formatPrice(product.price)}</td>
+                <td className="p-3">{product.stock}</td>
+                <td className="p-3 uppercase">{product.stockMode ?? "simple"}</td>
                 <td className="p-3">
-                  {p.salePrice ? (
-                    <span><span className="line-through text-muted-foreground">{formatPrice(p.price)}</span> {formatPrice(p.salePrice)}</span>
-                  ) : formatPrice(p.price)}
-                </td>
-                <td className="p-3">{p.stock === 0 ? <span className="text-sale">Out</span> : p.stock}</td>
-                <td className="p-3">
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => setEditing(p)} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setEditing(makeDraft(product))} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
                     <button
-                      onClick={() => {
-                        if (confirm(`Delete "${p.name}"?`)) {
-                          deleteProduct(p.id);
-                          toast.success("Product deleted");
+                      onClick={async () => {
+                        if (confirm(`Archive "${product.name}"?`)) {
+                          deleteProduct.mutate(product.id);
                         }
                       }}
                       className="p-2 hover:bg-sale hover:text-primary-foreground"
@@ -103,194 +155,224 @@ function AdminProducts() {
         </table>
       </div>
 
-      {(creating || editing) && (
-        <ProductDrawer
-          initial={editing ?? empty()}
-          categories={categories.map((c) => c.slug)}
-          onClose={() => { setEditing(null); setCreating(false); }}
-          onSave={(d) => {
-            if (editing) {
-              updateProduct(editing.id, d);
-              toast.success("Product updated");
-            } else {
-              addProduct(d);
-              toast.success("Product created");
-            }
-            setEditing(null); setCreating(false);
-          }}
+      {editing && (
+        <ProductModal
+          draft={editing}
+          categories={categories}
+          brands={brands}
+          onClose={() => setEditing(null)}
+          onSave={() => setEditing(null)}
         />
       )}
     </div>
   );
 }
 
-function ProductDrawer({
-  initial, categories, onClose, onSave,
+function ProductModal({
+  draft,
+  categories,
+  brands,
+  onClose,
+  onSave,
 }: {
-  initial: Draft | Product;
-  categories: string[];
+  draft: Draft;
+  categories: Category[];
+  brands: Brand[];
   onClose: () => void;
-  onSave: (d: Draft) => void;
+  onSave: () => void;
 }) {
-  const charts = useSizeCharts((s) => s.charts);
-  const chartOptions = ["none", ...charts.map((c) => c.key)];
-  const [d, setD] = useState<Draft>({ ...initial });
-  const [imgUrl, setImgUrl] = useState("");
-  const [sizeStr, setSizeStr] = useState(d.sizes.join(", "));
-  const [tagStr, setTagStr] = useState(d.tags.join(", "));
+  const [form, setForm] = useState(draft);
+  const [sizeText, setSizeText] = useState(draft.sizes.join(", "));
+  const [tagText, setTagText] = useState(draft.tags.join(", "));
   const [colorName, setColorName] = useState("");
   const [colorHex, setColorHex] = useState("#111111");
+  const isAccessory = form.categorySlug === "accessories";
 
-  const onFiles = (files: FileList | null) => {
+  const uploadFiles = async (files: FileList | null) => {
     if (!files) return;
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => setD((x) => ({ ...x, images: [...x.images, reader.result as string] }));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const sizes = sizeStr.split(",").map((s) => s.trim()).filter(Boolean);
-    const tags = tagStr.split(",").map((s) => s.trim()).filter(Boolean);
-    if (!d.name || !d.slug || d.images.length === 0) {
-      return toast.error("Name, slug and at least one image are required");
+    const uploaded: string[] = [];
+    for (const file of Array.from(files)) {
+      const payload = await adminCatalogApi.uploadProductImage(file);
+      uploaded.push(payload.path);
     }
-    onSave({ ...d, sizes, tags });
+    setForm((current) => ({ ...current, images: [...current.images, ...uploaded] }));
+  };
+
+  const uploadVideo = async (file: File | null) => {
+    if (!file) return;
+    const payload = await adminCatalogApi.uploadProductVideo(file);
+    setForm((current) => ({ ...current, video: payload.path }));
+  };
+
+  const submit = async () => {
+    try {
+      await adminCatalogApi.saveProduct({
+        slug: form.slug,
+        name: form.name,
+        description: form.description,
+        categorySlug: form.categorySlug,
+        brandSlug: form.brandSlug,
+        stockMode: form.stockMode,
+        price: form.price,
+        salePrice: form.salePrice ?? null,
+        stock: form.stock,
+        sizeChart: form.sizeChart,
+        sizes: isAccessory ? [] : sizeText.split(",").map((value) => value.trim()).filter(Boolean),
+        colors: form.colors,
+        tags: tagText.split(",").map((value) => value.trim()).filter(Boolean),
+        seoTitle: form.seoTitle,
+        seoDescription: form.seoDescription,
+        featured: form.featured,
+        trending: form.trending,
+        isActive: form.isActive,
+        barcode: form.barcode,
+        qrCode: form.qrCode,
+        supplierBarcode: form.supplierBarcode,
+        video: form.video,
+        images: form.images,
+        variants: JSON.parse(form.variantsJson || "[]"),
+      }, form.id);
+      toast.success(form.id ? "Product updated" : "Product created");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.products });
+      onSave();
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to save product"));
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 grid place-items-end md:place-items-center p-0 md:p-6" onClick={onClose}>
-      <form
-        onSubmit={submit}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-background w-full md:max-w-2xl max-h-[95vh] overflow-y-auto"
-      >
-        <div className="flex justify-between items-center p-5 border-b border-border sticky top-0 bg-background">
-          <h3 className="display text-xl">{("id" in initial) ? "Edit product" : "New product"}</h3>
-          <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
+    <Modal
+      title={form.id ? "Edit product" : "New product"}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+          <ActionButton onClick={() => void submit()}>Save</ActionButton>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v, slug: form.slug || slugify(v) })} />
+          <Field label="Slug" value={form.slug} onChange={(v) => setForm({ ...form, slug: slugify(v) })} />
         </div>
-        <div className="p-5 space-y-5">
-          <div className="grid md:grid-cols-2 gap-3">
-            <Field label="Name" value={d.name} onChange={(v) => setD({ ...d, name: v, slug: d.slug || slugify(v) })} />
-            <Field label="Slug" value={d.slug} onChange={(v) => setD({ ...d, slug: slugify(v) })} />
+        <Field label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} textarea />
+        <div className="grid gap-3 md:grid-cols-4">
+          <SelectField
+            label="Category"
+            value={form.categorySlug}
+            onChange={(v) =>
+              setForm((current) => ({
+                ...current,
+                categorySlug: v,
+                sizeChart: v === "accessories" ? "none" : current.sizeChart === "none" ? "apparel" : current.sizeChart,
+              }))
+            }
+            options={categories.map((category) => ({ value: category.slug, label: category.name }))}
+          />
+          <SelectField label="Brand" value={form.brandSlug} onChange={(v) => setForm({ ...form, brandSlug: v })} options={[{ value: "", label: "No brand" }, ...brands.map((brand) => ({ value: brand.slug, label: brand.name }))]} />
+          <Field label="Price" type="number" value={String(form.price)} onChange={(v) => setForm({ ...form, price: Number(v) })} />
+          <Field label="Sale price" type="number" value={String(form.salePrice ?? "")} onChange={(v) => setForm({ ...form, salePrice: v ? Number(v) : undefined })} />
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <Field label="Barcode" value={form.barcode} onChange={(v) => setForm({ ...form, barcode: v })} />
+          <Field label="QR code" value={form.qrCode} onChange={(v) => setForm({ ...form, qrCode: v })} />
+          <Field label="Supplier barcode" value={form.supplierBarcode} onChange={(v) => setForm({ ...form, supplierBarcode: v })} />
+        </div>
+        <div className="flex gap-2">
+          <ActionButton
+            variant="ghost"
+            onClick={async () => {
+              try {
+                const payload = await adminCatalogApi.generateCodes({ seed: form.slug || form.name });
+                setForm((current) => ({ ...current, barcode: current.barcode || payload.barcode, qrCode: current.qrCode || payload.qrCode }));
+              } catch (error) {
+                toast.error(getErrorMessage(error, "Unable to generate codes"));
+              }
+            }}
+          >
+            Generate barcode + QR
+          </ActionButton>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <SelectField label="Stock mode" value={form.stockMode} onChange={(v) => setForm({ ...form, stockMode: v as Draft["stockMode"] })} options={[{ value: "simple", label: "Simple" }, { value: "variant", label: "Variant" }]} />
+          <Field label="Stock" type="number" value={String(form.stock)} onChange={(v) => setForm({ ...form, stock: Number(v) })} />
+          <SelectField
+            label="Size chart"
+            value={form.sizeChart}
+            onChange={(v) => setForm({ ...form, sizeChart: v as Draft["sizeChart"] })}
+            options={[
+              { value: "apparel", label: "Apparel" },
+              { value: "kids", label: "Kids" },
+              { value: "none", label: "No size chart" },
+            ]}
+          />
+        </div>
+        {!isAccessory && <Field label="Sizes (comma separated)" value={sizeText} onChange={setSizeText} />}
+        <Field label="Tags (comma separated)" value={tagText} onChange={setTagText} />
+        <div>
+          <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Colors</span>
+          <div className="mb-2 flex flex-wrap gap-2">
+            {form.colors.map((color, index) => (
+              <span key={`${color.name}-${index}`} className="inline-flex items-center gap-2 border border-border px-2 py-1 text-xs">
+                <span className="h-3 w-3 rounded-full" style={{ background: color.hex }} />
+                {color.name}
+                <button type="button" onClick={() => setForm({ ...form, colors: form.colors.filter((_, colorIndex) => colorIndex !== index) })}><X className="h-3 w-3" /></button>
+              </span>
+            ))}
           </div>
-          <Field label="Description" value={d.description} onChange={(v) => setD({ ...d, description: v })} textarea />
-          <div className="grid md:grid-cols-3 gap-3">
-            <Select label="Category" value={d.category} onChange={(v) => setD({ ...d, category: v as Draft["category"] })} options={categories} />
-            <Field label="Price (Rs.)" type="number" value={String(d.price)} onChange={(v) => setD({ ...d, price: Number(v) })} />
-            <Field label="Sale price (Rs.)" type="number" value={String(d.salePrice ?? "")} onChange={(v) => setD({ ...d, salePrice: v ? Number(v) : undefined })} />
-          </div>
-          <div className="grid md:grid-cols-3 gap-3">
-            <Field label="Stock" type="number" value={String(d.stock)} onChange={(v) => setD({ ...d, stock: Number(v) })} />
-            <Select label="Size chart" value={d.sizeChart} onChange={(v) => setD({ ...d, sizeChart: v as Draft["sizeChart"] })} options={chartOptions} />
-            <div className="flex items-end gap-4">
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest">
-                <input type="checkbox" checked={!!d.trending} onChange={(e) => setD({ ...d, trending: e.target.checked })} /> Trending
-              </label>
-              <label className="flex items-center gap-2 text-xs uppercase tracking-widest">
-                <input type="checkbox" checked={!!d.featured} onChange={(e) => setD({ ...d, featured: e.target.checked })} /> Featured
-              </label>
-            </div>
-          </div>
-
-          <Field label="Sizes (comma separated)" value={sizeStr} onChange={setSizeStr} />
-          <Field label="Tags (e.g. #basics, #tee)" value={tagStr} onChange={setTagStr} />
-          <div className="grid md:grid-cols-2 gap-3">
-            <Field label="SEO title" value={d.seoTitle ?? ""} onChange={(v) => setD({ ...d, seoTitle: v })} />
-            <Field label="SEO description" value={d.seoDescription ?? ""} onChange={(v) => setD({ ...d, seoDescription: v })} />
-          </div>
-
-          {/* Colors */}
-          <div>
-            <span className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5">Colors</span>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {d.colors.map((c, i) => (
-                <span key={i} className="inline-flex items-center gap-2 border border-border px-2 py-1 text-xs">
-                  <span className="h-3 w-3 rounded-full" style={{ background: c.hex }} />
-                  {c.name}
-                  <button type="button" onClick={() => setD({ ...d, colors: d.colors.filter((_, j) => j !== i) })}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Color name" className="flex-1 border border-border px-3 py-2 text-sm bg-background" />
-              <input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} className="h-10 w-12 border border-border bg-background" />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!colorName) return;
-                  setD({ ...d, colors: [...d.colors, { name: colorName, hex: colorHex }] });
-                  setColorName("");
-                }}
-                className="bg-secondary px-4 text-xs uppercase tracking-widest"
-              >Add</button>
-            </div>
-          </div>
-
-          {/* Images */}
-          <div>
-            <span className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5">Images</span>
-            <div className="grid grid-cols-4 gap-2 mb-2">
-              {d.images.map((src, i) => (
-                <div key={i} className="relative aspect-[4/5] bg-secondary overflow-hidden">
-                  <img src={src} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setD({ ...d, images: d.images.filter((_, j) => j !== i) })}
-                    className="absolute top-1 right-1 bg-background/90 p-1"
-                  ><X className="h-3 w-3" /></button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} placeholder="Image URL" className="flex-1 border border-border px-3 py-2 text-sm bg-background" />
-              <button
-                type="button"
-                onClick={() => { if (imgUrl) { setD({ ...d, images: [...d.images, imgUrl] }); setImgUrl(""); } }}
-                className="bg-secondary px-4 text-xs uppercase tracking-widest"
-              >Add URL</button>
-              <label className="bg-secondary px-4 text-xs uppercase tracking-widest grid place-items-center cursor-pointer">
-                Upload
-                <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => onFiles(e.target.files)} />
-              </label>
-            </div>
+          <div className="flex gap-2">
+            <input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Color name" className="flex-1 border border-border bg-background px-3 py-2 text-sm" />
+            <input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} className="h-10 w-12 border border-border bg-background" />
+            <button type="button" onClick={() => { if (!colorName) return; setForm({ ...form, colors: [...form.colors, { name: colorName, hex: colorHex }] }); setColorName(""); }} className="bg-secondary px-4 text-xs uppercase tracking-widest">Add</button>
           </div>
         </div>
-
-        <div className="p-5 border-t border-border sticky bottom-0 bg-background flex gap-3 justify-end">
-          <button type="button" onClick={onClose} className="px-5 py-3 text-xs uppercase tracking-widest border border-border">Cancel</button>
-          <button className="bg-primary text-primary-foreground px-6 py-3 text-xs uppercase tracking-widest">Save</button>
+        <div>
+          <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Images</span>
+          <div className="mb-2 grid grid-cols-4 gap-2">
+            {form.images.map((src, index) => (
+              <div key={`${src}-${index}`} className="relative aspect-[4/5] overflow-hidden bg-secondary">
+                <img src={src} alt="" className="h-full w-full object-cover" />
+                <button type="button" onClick={() => setForm({ ...form, images: form.images.filter((_, imageIndex) => imageIndex !== index) })} className="absolute right-1 top-1 bg-background/90 p-1"><X className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 bg-secondary px-4 py-2 text-xs uppercase tracking-widest">
+              <Upload className="h-3.5 w-3.5" /> Upload
+              <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => void uploadFiles(e.target.files)} />
+            </label>
+          </div>
         </div>
-      </form>
-    </div>
+        <div>
+          <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Product video</span>
+          {form.video ? (
+            <div className="space-y-2">
+              <video src={form.video} controls className="max-h-64 w-full bg-secondary object-contain" />
+              <ActionButton variant="ghost" onClick={() => setForm({ ...form, video: "" })}>
+                <X className="h-3.5 w-3.5" /> Remove video
+              </ActionButton>
+            </div>
+          ) : (
+            <label className="inline-flex cursor-pointer items-center gap-2 bg-secondary px-4 py-2 text-xs uppercase tracking-widest">
+              <Upload className="h-3.5 w-3.5" /> Upload video
+              <input type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void uploadVideo(e.target.files?.[0] ?? null)} />
+            </label>
+          )}
+        </div>
+        <Field label="SEO title" value={form.seoTitle} onChange={(v) => setForm({ ...form, seoTitle: v })} />
+        <Field label="SEO description" value={form.seoDescription} onChange={(v) => setForm({ ...form, seoDescription: v })} textarea />
+        <label className="flex items-center gap-2 text-xs uppercase tracking-widest">
+          <input type="checkbox" checked={form.featured} onChange={(e) => setForm({ ...form, featured: e.target.checked })} /> Featured
+        </label>
+        <label className="flex items-center gap-2 text-xs uppercase tracking-widest">
+          <input type="checkbox" checked={form.trending} onChange={(e) => setForm({ ...form, trending: e.target.checked })} /> Trending
+        </label>
+        <Field label="Variants JSON" value={form.variantsJson} onChange={(v) => setForm({ ...form, variantsJson: v })} textarea />
+      </div>
+    </Modal>
   );
 }
 
-const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-function Field({ label, value, onChange, type = "text", textarea }: { label: string; value: string; onChange: (v: string) => void; type?: string; textarea?: boolean }) {
-  return (
-    <label className="block">
-      <span className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5">{label}</span>
-      {textarea ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={3} className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground" />
-      ) : (
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground" />
-      )}
-    </label>
-  );
-}
-function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
-  return (
-    <label className="block">
-      <span className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm">
-        {options.map((o) => <option key={o} value={o} className="capitalize">{o}</option>)}
-      </select>
-    </label>
-  );
-}
+const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

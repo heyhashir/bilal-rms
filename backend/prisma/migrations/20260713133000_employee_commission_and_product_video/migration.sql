@@ -1,0 +1,5 @@
+ALTER TABLE `products`
+  ADD COLUMN `videoPath` VARCHAR(191) NULL;
+
+ALTER TABLE `employees`
+  ADD COLUMN `commissionRate` DECIMAL(5, 2) NOT NULL DEFAULT 0.00;

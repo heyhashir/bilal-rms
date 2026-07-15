@@ -1,244 +1,244 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useCatalog } from "@/store/catalog";
-import { useRetail, type Movement, type MovementReason, newId } from "@/store/retail";
-import { PageHeader, Tabs, Toolbar, StatCard, ActionButton, Modal, Field, SelectField, EmptyState, StatusPill } from "@/components/admin/primitives";
-import { toast } from "sonner";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/api";
+import { adminInventoryApi } from "@/lib/admin-inventory-api";
+import { queryClient } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-keys";
+import { ActionButton, EmptyState, Field, Modal, PageHeader, Pagination, SelectField, StatCard, Tabs, Toolbar } from "@/components/admin/primitives";
 
 export const Route = createFileRoute("/admin/inventory")({
   component: AdminInventory,
 });
 
-const TABS = [
+const tabs = [
   { key: "current", label: "Current stock" },
-  { key: "adjustments", label: "Stock adjustments" },
-  { key: "history", label: "Inventory history" },
   { key: "low", label: "Low stock" },
-  { key: "damaged", label: "Damaged" },
-  { key: "returned", label: "Returned items" },
-  { key: "transfers", label: "Stock transfers" },
-  { key: "timeline", label: "Timeline" },
+  { key: "ledger", label: "Movement ledger" },
 ];
 
 function AdminInventory() {
-  const products = useCatalog((s) => s.products);
-  const updateProduct = useCatalog((s) => s.updateProduct);
-  const { movements, logMovement } = useRetail();
   const [tab, setTab] = useState("current");
-  const [q, setQ] = useState("");
-  const [adjust, setAdjust] = useState<{ productId: string; qty: number; note: string; reason: MovementReason } | null>(null);
+  const [query, setQuery] = useState("");
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [adjustment, setAdjustment] = useState<{ productId: string; variantId?: string; delta: number; note: string } | null>(null);
 
-  const inStock = products.reduce((a, p) => a + p.stock, 0);
-  const lowCount = products.filter((p) => p.stock > 0 && p.stock <= 5).length;
-  const outCount = products.filter((p) => p.stock === 0).length;
+  const { data: products = [] } = useQuery({
+    queryKey: queryKeys.admin.inventorySnapshot,
+    queryFn: async () => (await adminInventoryApi.inventorySnapshot()).products,
+  });
+  const { data: ledgerResponse } = useQuery({
+    queryKey: queryKeys.admin.inventoryLedgerList({ page: ledgerPage, query }),
+    queryFn: async () => adminInventoryApi.inventoryLedger({ page: ledgerPage, pageSize: 50, query }),
+  });
+  const movements = ledgerResponse?.movements ?? [];
+  const ledgerMeta = ledgerResponse?.meta;
+
+  const selectedProduct = adjustment
+    ? products.find((product) => product.id === adjustment.productId) ?? null
+    : null;
+
+  const adjustStock = useMutation({
+    mutationFn: adminInventoryApi.adjustInventory,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
+      ]);
+      toast.success("Stock updated");
+      setAdjustment(null);
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Unable to adjust stock"));
+    },
+  });
+
+  const inStock = products.reduce((sum, product) => sum + product.stock, 0);
+  const lowCount = products.filter((product) => product.stock > 0 && product.stock <= 5).length;
+  const outCount = products.filter((product) => product.stock === 0).length;
+  const rows = useMemo(
+    () =>
+      products.filter((product) => {
+        if (tab === "low" && !product.lowStock) return false;
+        if (tab === "ledger") return false;
+        return `${product.name} ${product.slug} ${product.categoryName}`.toLowerCase().includes(query.toLowerCase());
+      }),
+    [products, query, tab],
+  );
 
   return (
     <div>
       <PageHeader
         eyebrow="Inventory"
         title="Stock & movements."
-        description="Every quantity change is tracked and auditable."
-        action={<ActionButton onClick={() => setAdjust({ productId: products[0]?.id ?? "", qty: 0, note: "", reason: "adjustment" })}><Plus className="h-3.5 w-3.5" /> Adjust stock</ActionButton>}
+        description="Use the live stock snapshot for on-hand quantities and the ledger for an auditable movement trail."
+        action={
+          <>
+            {tab === "ledger" && (
+              <ActionButton variant="ghost" onClick={() => window.open(adminInventoryApi.exportLedgerUrl({ query }), "_blank")}>Export CSV</ActionButton>
+            )}
+            <ActionButton onClick={() => setAdjustment({ productId: products[0]?.id ?? "", delta: 0, note: "" })}><Plus className="h-3.5 w-3.5" /> Adjust stock</ActionButton>
+          </>
+        }
       />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Units in stock" value={inStock} />
         <StatCard label="SKUs tracked" value={products.length} />
         <StatCard label="Low stock" value={lowCount} tone={lowCount > 0 ? "down" : "flat"} />
         <StatCard label="Out of stock" value={outCount} tone={outCount > 0 ? "down" : "flat"} />
       </div>
 
-      <Tabs items={TABS} active={tab} onChange={setTab} />
-
-      {(tab === "current" || tab === "low") && (
-        <>
-          <Toolbar search={q} onSearch={setQ} />
-          <StockTable
-            rows={products.filter((p) => (tab === "low" ? p.stock <= 5 : true) && p.name.toLowerCase().includes(q.toLowerCase()))}
-            onAdjust={(id) => setAdjust({ productId: id, qty: 0, note: "", reason: "adjustment" })}
-          />
-        </>
+      <Tabs items={tabs} active={tab} onChange={setTab} />
+      <Toolbar
+        search={query}
+        onSearch={(value) => {
+          setQuery(value);
+          setLedgerPage(1);
+        }}
+      />
+      {tab === "ledger" ? (
+        movements.length === 0 ? (
+          <EmptyState title="No inventory movements found" hint="Try changing the search term or create a stock-changing action first." />
+        ) : (
+          <>
+            <div className="overflow-x-auto border border-border">
+              <table className="min-w-[980px] w-full text-sm">
+                <thead className="bg-secondary text-xs uppercase tracking-widest">
+                  <tr>
+                    <th className="p-3 text-left">Date</th>
+                    <th className="p-3 text-left">Product</th>
+                    <th className="p-3 text-left">Variant</th>
+                    <th className="p-3 text-left">Reason</th>
+                    <th className="p-3 text-left">Source</th>
+                    <th className="p-3 text-left">Delta</th>
+                    <th className="p-3 text-left">Reference</th>
+                    <th className="p-3 text-left">Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((movement) => (
+                    <tr key={movement.id} className="border-t border-border">
+                      <td className="p-3 text-xs text-muted-foreground">{new Date(movement.createdAt).toLocaleString()}</td>
+                      <td className="p-3">
+                        <div className="font-medium">{movement.productName}</div>
+                        <div className="text-xs text-muted-foreground">{movement.categoryName}</div>
+                      </td>
+                      <td className="p-3">{movement.variantSku || "Base product"}</td>
+                      <td className="p-3 uppercase">{movement.reason.replaceAll("_", " ")}</td>
+                      <td className="p-3 uppercase">{movement.source || "manual"}</td>
+                      <td className={`p-3 font-semibold ${movement.delta < 0 ? "text-sale" : "text-accent-foreground"}`}>
+                        {movement.delta > 0 ? `+${movement.delta}` : movement.delta}
+                      </td>
+                      <td className="p-3 text-xs">{movement.reference || movement.orderNumber || movement.posSaleNumber || "—"}</td>
+                      <td className="p-3 text-muted-foreground">{movement.note || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination page={ledgerMeta?.page ?? ledgerPage} pages={ledgerMeta?.pages ?? 1} onChange={setLedgerPage} />
+          </>
+        )
+      ) : rows.length === 0 ? (
+        <EmptyState title="Nothing here" hint="Try adjusting your filters." />
+      ) : (
+        <div className="overflow-x-auto border border-border">
+          <table className="min-w-[860px] w-full text-sm">
+            <thead className="bg-secondary text-xs uppercase tracking-widest">
+              <tr>
+                <th className="p-3 text-left">Product</th>
+                <th className="p-3 text-left">Category</th>
+                <th className="p-3 text-left">Stock mode</th>
+                <th className="p-3 text-left">On hand</th>
+                <th className="p-3 text-left">Variant summary</th>
+                <th className="p-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((product) => (
+                <tr key={product.id} className="border-t border-border">
+                  <td className="p-3">
+                    <div className="font-medium">{product.name}</div>
+                    <div className="text-xs text-muted-foreground">/{product.slug}</div>
+                  </td>
+                  <td className="p-3">{product.categoryName}</td>
+                  <td className="p-3 uppercase">{product.stockMode}</td>
+                  <td className="p-3 font-semibold">{product.stock}</td>
+                  <td className="p-3 text-xs text-muted-foreground">
+                    {product.variants.length === 0
+                      ? "Base product only"
+                      : product.variants
+                          .filter((variant) => variant.isActive)
+                          .slice(0, 3)
+                          .map((variant) => `${variant.sku} (${variant.stock})`)
+                          .join(", ")}
+                  </td>
+                  <td className="p-3 text-right">
+                    <button onClick={() => setAdjustment({ productId: product.id, variantId: product.variants[0]?.id, delta: 0, note: "" })} className="text-xs uppercase tracking-widest underline">Adjust</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {tab === "adjustments" && (
-        <MovementTable rows={movements.filter((m) => m.reason === "adjustment")} />
-      )}
-      {tab === "history" && (
-        <MovementTable rows={movements} />
-      )}
-      {tab === "damaged" && (
-        <MovementTable rows={movements.filter((m) => m.reason === "damage")} />
-      )}
-      {tab === "returned" && (
-        <MovementTable rows={movements.filter((m) => m.reason === "return")} />
-      )}
-      {tab === "transfers" && (
-        <EmptyState title="Stock transfers" hint="Multi-store transfers will unlock when additional locations are added." />
-      )}
-      {tab === "timeline" && <Timeline movements={movements} />}
-
-      {adjust && (
+      {adjustment && (
         <Modal
           title="Stock adjustment"
-          onClose={() => setAdjust(null)}
+          onClose={() => setAdjustment(null)}
           footer={
             <>
-              <ActionButton variant="ghost" onClick={() => setAdjust(null)}>Cancel</ActionButton>
-              <ActionButton onClick={() => {
-                const p = products.find((x) => x.id === adjust.productId);
-                if (!p) return toast.error("Pick a product");
-                if (!adjust.qty) return toast.error("Enter a quantity (+/-)");
-                updateProduct(p.id, { stock: Math.max(0, p.stock + adjust.qty) });
-                logMovement({ productId: p.id, productName: p.name, qty: adjust.qty, reason: adjust.reason, reference: "-", note: adjust.note, createdBy: "Bilal (Admin)" });
-                toast.success("Stock updated");
-                setAdjust(null);
-              }}>Apply</ActionButton>
+              <ActionButton variant="ghost" onClick={() => setAdjustment(null)}>Cancel</ActionButton>
+              <ActionButton
+                onClick={async () => {
+                  if (!adjustment.delta) return toast.error("Enter a quantity (+/-)");
+                  adjustStock.mutate({
+                    productId: adjustment.productId,
+                    variantId: selectedProduct?.variants.length ? adjustment.variantId ?? null : null,
+                    delta: adjustment.delta,
+                    note: adjustment.note,
+                  });
+                }}
+              >
+                Apply
+              </ActionButton>
             </>
           }
         >
           <div className="space-y-3">
             <SelectField
               label="Product"
-              value={adjust.productId}
-              onChange={(v) => setAdjust({ ...adjust, productId: v })}
-              options={products.map((p) => ({ value: p.id, label: `${p.name} · ${p.stock} in stock` }))}
+              value={adjustment.productId}
+              onChange={(v) => {
+                const product = products.find((entry) => entry.id === v);
+                setAdjustment({
+                  ...adjustment,
+                  productId: v,
+                  variantId: product?.variants[0]?.id,
+                });
+              }}
+              options={products.map((product) => ({ value: product.id, label: `${product.name} · ${product.stock} on hand` }))}
             />
-            <div className="grid md:grid-cols-2 gap-3">
-              <Field label="Quantity change (±)" type="number" value={String(adjust.qty)} onChange={(v) => setAdjust({ ...adjust, qty: Number(v) })} />
+            {selectedProduct && selectedProduct.variants.length > 0 && (
               <SelectField
-                label="Reason"
-                value={adjust.reason}
-                onChange={(v) => setAdjust({ ...adjust, reason: v as MovementReason })}
-                options={[
-                  { value: "adjustment", label: "Adjustment" },
-                  { value: "damage", label: "Damage" },
-                  { value: "return", label: "Return" },
-                  { value: "transfer", label: "Transfer" },
-                  { value: "purchase", label: "Purchase" },
-                ]}
+                label="Variant"
+                value={adjustment.variantId ?? selectedProduct.variants[0]?.id ?? ""}
+                onChange={(v) => setAdjustment({ ...adjustment, variantId: v })}
+                options={selectedProduct.variants.map((variant) => ({
+                  value: variant.id,
+                  label: `${variant.sku} · ${variant.size || "One size"} · ${variant.colorName || "Default"} · ${variant.stock} in stock`,
+                }))}
               />
-            </div>
-            <Field label="Note" value={adjust.note} onChange={(v) => setAdjust({ ...adjust, note: v })} textarea />
+            )}
+            <Field label="Quantity change (±)" type="number" value={String(adjustment.delta)} onChange={(v) => setAdjustment({ ...adjustment, delta: Number(v) })} />
+            <Field label="Note" value={adjustment.note} onChange={(v) => setAdjustment({ ...adjustment, note: v })} textarea />
           </div>
         </Modal>
       )}
     </div>
   );
 }
-
-function StockTable({ rows, onAdjust }: { rows: ReturnType<typeof useCatalog.getState>["products"]; onAdjust: (id: string) => void }) {
-  if (rows.length === 0) return <EmptyState title="Nothing here" hint="Try adjusting your filters." />;
-  return (
-    <div className="border border-border overflow-x-auto">
-      <table className="w-full text-sm min-w-[700px]">
-        <thead className="bg-secondary text-xs uppercase tracking-widest">
-          <tr>
-            <th className="text-left p-3">Product</th>
-            <th className="text-left p-3">SKU</th>
-            <th className="text-left p-3">Category</th>
-            <th className="text-left p-3">On hand</th>
-            <th className="text-left p-3">Status</th>
-            <th className="p-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((p) => {
-            const status = p.stock === 0 ? "out" : p.stock <= 5 ? "low" : "ok";
-            return (
-              <tr key={p.id} className="border-t border-border">
-                <td className="p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-12 bg-secondary overflow-hidden"><img src={p.images[0]} alt="" className="h-full w-full object-cover" /></div>
-                    <div className="min-w-0"><div className="font-medium truncate">{p.name}</div><div className="text-xs text-muted-foreground">/{p.slug}</div></div>
-                  </div>
-                </td>
-                <td className="p-3 font-mono text-xs">{p.id.slice(0, 8).toUpperCase()}</td>
-                <td className="p-3 capitalize">{p.category}</td>
-                <td className="p-3 font-semibold">{p.stock}</td>
-                <td className="p-3">
-                  <span className={`text-[10px] uppercase tracking-widest px-2 py-1 ${status === "out" ? "bg-sale text-primary-foreground" : status === "low" ? "bg-accent text-accent-foreground" : "bg-secondary"}`}>
-                    {status === "out" ? "Out" : status === "low" ? "Low" : "In stock"}
-                  </span>
-                </td>
-                <td className="p-3 text-right">
-                  <button onClick={() => onAdjust(p.id)} className="text-xs uppercase tracking-widest underline">Adjust</button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function MovementTable({ rows }: { rows: Movement[] }) {
-  if (rows.length === 0) return <EmptyState title="No movements" hint="Stock movements you log will appear here." />;
-  return (
-    <div className="border border-border overflow-x-auto">
-      <table className="w-full text-sm min-w-[700px]">
-        <thead className="bg-secondary text-xs uppercase tracking-widest">
-          <tr>
-            <th className="text-left p-3">Date</th>
-            <th className="text-left p-3">Product</th>
-            <th className="text-left p-3">Reason</th>
-            <th className="text-left p-3">Reference</th>
-            <th className="text-left p-3">Qty</th>
-            <th className="text-left p-3">By</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((m) => (
-            <tr key={m.id} className="border-t border-border">
-              <td className="p-3 text-xs text-muted-foreground">{new Date(m.createdAt).toLocaleString()}</td>
-              <td className="p-3">{m.productName}<div className="text-xs text-muted-foreground truncate max-w-[240px]">{m.note}</div></td>
-              <td className="p-3"><StatusPill status={m.reason} /></td>
-              <td className="p-3 font-mono text-xs">{m.reference}</td>
-              <td className={`p-3 font-semibold ${m.qty < 0 ? "text-sale" : ""}`}>{m.qty > 0 ? `+${m.qty}` : m.qty}</td>
-              <td className="p-3 text-xs text-muted-foreground">{m.createdBy}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Timeline({ movements }: { movements: Movement[] }) {
-  const grouped = useMemo(() => {
-    const map = new Map<string, Movement[]>();
-    movements.forEach((m) => {
-      const key = new Date(m.createdAt).toLocaleDateString();
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(m);
-    });
-    return Array.from(map.entries());
-  }, [movements]);
-
-  if (grouped.length === 0) return <EmptyState title="No timeline events" />;
-
-  return (
-    <div className="space-y-6">
-      {grouped.map(([date, items]) => (
-        <div key={date}>
-          <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground mb-3">{date}</div>
-          <div className="border-l border-border pl-5 space-y-4">
-            {items.map((m) => (
-              <div key={m.id} className="relative">
-                <span className="absolute -left-[26px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary" />
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">{m.productName}</span>
-                  <StatusPill status={m.reason} />
-                  <span className={`font-semibold ${m.qty < 0 ? "text-sale" : ""}`}>{m.qty > 0 ? `+${m.qty}` : m.qty}</span>
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">{m.createdBy} · {new Date(m.createdAt).toLocaleTimeString()} · {m.note}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-// helper to satisfy `newId` import unused warning
-void newId;

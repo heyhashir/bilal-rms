@@ -1,7 +1,13 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, Star } from "lucide-react";
-import { useAuth, type Address } from "@/store/auth";
+import { useProtectedUser } from "@/hooks/use-protected-user";
+import { accountApi } from "@/lib/account-api";
+import { getErrorMessage } from "@/lib/api";
+import { queryClient } from "@/lib/query-client";
+import { queryKeys } from "@/lib/query-keys";
+import type { Address } from "@/lib/account-types";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/addresses")({
@@ -13,22 +19,69 @@ const uid = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.r
 const empty = (): Address => ({ id: uid(), label: "Home", fullName: "", phone: "", line1: "", city: "", postal: "", country: "Pakistan", isDefault: false });
 
 function Addresses() {
-  const auth = useAuth();
-  const user = auth.users.find((u) => u.id === auth.currentId) ?? null;
-  const nav = useNavigate();
+  const { user, isPending } = useProtectedUser();
   const [editing, setEditing] = useState<Address | null>(null);
+  const { data: addresses = [] } = useQuery({
+    queryKey: queryKeys.account.addresses,
+    queryFn: async () => (await accountApi.addresses()).addresses,
+    enabled: Boolean(user),
+  });
+  const invalidateAddresses = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.account.addresses });
+  };
+  const saveAddress = useMutation({
+    mutationFn: async (draft: Address) => {
+      const payload = {
+        label: draft.label,
+        fullName: draft.fullName,
+        phone: draft.phone,
+        line1: draft.line1,
+        line2: draft.line2,
+        city: draft.city,
+        postal: draft.postal,
+        country: draft.country,
+        isDefault: draft.isDefault || addresses.length === 0,
+      };
+      return addresses.find((entry) => entry.id === draft.id)
+        ? accountApi.updateAddress(draft.id, payload)
+        : accountApi.createAddress(payload);
+    },
+    onSuccess: async () => {
+      await invalidateAddresses();
+      toast.success("Address saved");
+      setEditing(null);
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Unable to save address"));
+    },
+  });
+  const deleteAddress = useMutation({
+    mutationFn: accountApi.deleteAddress,
+    onSuccess: async () => {
+      await invalidateAddresses();
+      toast.success("Removed");
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Unable to remove address"));
+    },
+  });
+  const setDefaultAddress = useMutation({
+    mutationFn: accountApi.setDefaultAddress,
+    onSuccess: async () => {
+      await invalidateAddresses();
+      toast.success("Default updated");
+    },
+    onError: (error) => {
+      toast.error(getErrorMessage(error, "Unable to update default address"));
+    },
+  });
 
-  useEffect(() => { if (!user) nav({ to: "/login" }); }, [user, nav]);
-  if (!user) return null;
+  if (isPending || !user) return null;
 
-  const save = () => {
+  const save = async () => {
     if (!editing) return;
     if (!editing.fullName || !editing.line1) return toast.error("Name and address are required");
-    const exists = user.addresses.find((a) => a.id === editing.id);
-    if (exists) auth.updateAddress(editing.id, editing);
-    else auth.addAddress({ label: editing.label, fullName: editing.fullName, phone: editing.phone, line1: editing.line1, city: editing.city, postal: editing.postal, country: editing.country, isDefault: editing.isDefault || user.addresses.length === 0 });
-    toast.success("Address saved");
-    setEditing(null);
+    saveAddress.mutate(editing);
   };
 
   return (
@@ -43,13 +96,13 @@ function Addresses() {
         </button>
       </div>
 
-      {user.addresses.length === 0 ? (
+      {addresses.length === 0 ? (
         <div className="bg-secondary p-12 text-center">
           <p className="text-muted-foreground mb-4">You haven't saved any addresses yet.</p>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
-          {user.addresses.map((a) => (
+          {addresses.map((a) => (
             <div key={a.id} className="border border-border p-5">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -58,12 +111,12 @@ function Addresses() {
                 </div>
                 <div className="flex gap-1">
                   {!a.isDefault && (
-                    <button onClick={() => { auth.setDefaultAddress(a.id); toast.success("Default updated"); }} className="p-2 hover:bg-secondary" title="Set default">
+                    <button onClick={() => setDefaultAddress.mutate(a.id)} className="p-2 hover:bg-secondary" title="Set default">
                       <Star className="h-3.5 w-3.5" />
                     </button>
                   )}
                   <button onClick={() => setEditing(a)} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
-                  <button onClick={() => { if (confirm("Remove address?")) { auth.removeAddress(a.id); toast.success("Removed"); } }} className="p-2 hover:bg-sale hover:text-primary-foreground"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => { if (confirm("Remove address?")) deleteAddress.mutate(a.id); }} className="p-2 hover:bg-sale hover:text-primary-foreground"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
               <div className="text-sm">{a.fullName}</div>
@@ -90,6 +143,7 @@ function Addresses() {
               <Field label="Full name" value={editing.fullName} onChange={(v) => setEditing({ ...editing, fullName: v })} />
               <Field label="Phone" value={editing.phone} onChange={(v) => setEditing({ ...editing, phone: v })} />
               <Field label="Address line" value={editing.line1} onChange={(v) => setEditing({ ...editing, line1: v })} />
+              <Field label="Address line 2" value={editing.line2 ?? ""} onChange={(v) => setEditing({ ...editing, line2: v })} />
               <div className="grid grid-cols-3 gap-3">
                 <Field label="City" value={editing.city} onChange={(v) => setEditing({ ...editing, city: v })} />
                 <Field label="Postal" value={editing.postal} onChange={(v) => setEditing({ ...editing, postal: v })} />

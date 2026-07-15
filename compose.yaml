@@ -1,0 +1,25 @@
+name: bilal-rms
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: bilal-rms-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: bilal_rms
+      MARIADB_USER: bilal_rms
+      MARIADB_PASSWORD: bilal_rms
+      MARIADB_ROOT_PASSWORD: bilal_rms_root
+    ports:
+      - "3307:3306"
+    volumes:
+      - bilal-rms-mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "-pbilal_rms_root"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  bilal-rms-mariadb-data:

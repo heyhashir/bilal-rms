@@ -1,17 +1,20 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Heart, Minus, Plus, Ruler, ShieldCheck, Truck, X } from "lucide-react";
-import { useCatalog } from "@/store/catalog";
+import { catalogApi } from "@/lib/catalog-api";
+import { queryKeys } from "@/lib/query-keys";
 import { useCart, useWishlist } from "@/store/cart";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { Price } from "@/components/shop/ProductCard";
 import { sizeCharts } from "@/config/site";
 import { toast } from "sonner";
+import { getEffectiveAmount } from "@/lib/format";
 
 export const Route = createFileRoute("/product/$slug")({
   head: ({ params }) => ({
     meta: [
-      { title: `${params.slug} — Bilal Garments` },
+      { title: `${params.slug} - BALI by Bilal Garments EST 2001.` },
       { name: "description", content: "Premium product details, sizing, and styling notes." },
     ],
   }),
@@ -20,34 +23,80 @@ export const Route = createFileRoute("/product/$slug")({
 
 function ProductPage() {
   const { slug } = Route.useParams();
-  const products = useCatalog((s) => s.products);
-  const product = products.find((p) => p.slug === slug);
-  if (!product) throw notFound();
-
+  const { data: bootstrap } = useQuery({
+    queryKey: queryKeys.catalog.bootstrap,
+    queryFn: catalogApi.bootstrap,
+  });
+  const { data: productResponse } = useQuery({
+    queryKey: queryKeys.catalog.product(slug),
+    queryFn: async () => catalogApi.product(slug),
+  });
+  const products = bootstrap?.products ?? [];
+  const loaded = Boolean(productResponse ?? bootstrap);
   const wish = useWishlist();
   const cart = useCart();
-  const fav = wish.has(product.id);
-
+  const product = productResponse?.product ?? products.find((p) => p.slug === slug);
   const [img, setImg] = useState(0);
-  const [size, setSize] = useState<string>(product.sizes[0] ?? "");
-  const [color, setColor] = useState<string>(product.colors[0]?.name ?? "");
+  const [size, setSize] = useState("");
+  const [color, setColor] = useState("");
   const [qty, setQty] = useState(1);
   const [showChart, setShowChart] = useState(false);
 
-  const inStock = product.stock > 0;
-  const unitPrice = product.salePrice ?? product.price;
+  const gallery = useMemo(
+    () =>
+      product
+        ? [
+            ...product.images.map((src) => ({ type: "image" as const, src })),
+            ...(product.video ? [{ type: "video" as const, src: product.video }] : []),
+          ]
+        : [],
+    [product],
+  );
+
+  useEffect(() => {
+    if (!product) {
+      return;
+    }
+
+    setImg(0);
+    setQty(1);
+    setSize((current) => (current && product.sizes.includes(current) ? current : (product.sizes[0] ?? "")));
+    setColor((current) =>
+      current && product.colors.some((entry) => entry.name === current) ? current : (product.colors[0]?.name ?? ""),
+    );
+  }, [product?.id]);
+
+  if (!product && loaded) throw notFound();
+  if (!product) return null;
+  const fav = wish.has(product.id);
+  const hasSizes = product.sizes.length > 0;
+  const hasColors = product.colors.length > 0;
+  const activeVariant =
+    product.stockMode === "variant"
+      ? product.variants.find((variant) => {
+          const sizeMatch = !hasSizes || variant.size === size;
+          const colorMatch = !hasColors || variant.colorName === color;
+          return sizeMatch && colorMatch;
+        })
+      : null;
+  const inStock = activeVariant ? activeVariant.stock > 0 : product.stock > 0;
+  const unitPrice = activeVariant?.priceOverride ?? getEffectiveAmount(product.price, product.salePrice);
 
   const related = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
 
   const addToCart = () => {
     if (!inStock) return;
-    if (!size) return toast.error("Please select a size");
-    if (!color) return toast.error("Please select a color");
+    if (hasSizes && !size) return toast.error("Please select a size");
+    if (hasColors && !color) return toast.error("Please select a color");
+    if (product.stockMode === "variant" && !activeVariant) return toast.error("Select an available variant");
     cart.add({
       productId: product.id,
+      variantId: activeVariant?.id ?? null,
       name: product.name,
       image: product.images[0],
-      size, color, qty,
+      size: hasSizes ? size : "",
+      color: hasColors ? color : "",
+      qty,
       unitPrice,
     });
     toast.success(`${product.name} added to cart`);
@@ -55,91 +104,100 @@ function ProductPage() {
 
   return (
     <div className="container-bg py-10 md:py-14">
-      <div className="grid md:grid-cols-2 gap-10 lg:gap-16">
-        {/* GALLERY */}
+      <div className="grid gap-10 md:grid-cols-2 lg:gap-16">
         <div className="grid grid-cols-[80px_1fr] gap-4">
           <div className="flex flex-col gap-3">
-            {product.images.map((src, i) => (
+            {gallery.map((media, i) => (
               <button
-                key={i}
+                key={`${media.type}-${media.src}`}
                 onClick={() => setImg(i)}
-                className={`aspect-[4/5] overflow-hidden bg-secondary border ${img === i ? "border-foreground" : "border-border"}`}
+                className={`aspect-[4/5] overflow-hidden border bg-secondary ${img === i ? "border-foreground" : "border-border"}`}
               >
-                <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
+                {media.type === "image" ? (
+                  <img src={media.src} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                    Video
+                  </div>
+                )}
               </button>
             ))}
           </div>
           <div className="aspect-[4/5] overflow-hidden bg-secondary">
-            <img src={product.images[img]} alt={product.name} className="h-full w-full object-cover" />
+            {gallery[img]?.type === "video" ? (
+              <video src={gallery[img].src} controls className="h-full w-full object-contain" />
+            ) : (
+              <img src={gallery[img]?.src ?? product.images[0]} alt={product.name} className="h-full w-full object-cover" />
+            )}
           </div>
         </div>
 
-        {/* DETAILS */}
         <div>
           <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{product.category}</div>
-          <h1 className="display text-4xl md:text-5xl mt-2">{product.name}</h1>
+          <h1 className="display mt-2 text-4xl md:text-5xl">{product.name}</h1>
           <Price price={product.price} salePrice={product.salePrice} className="mt-4 text-base" />
 
-          <p className="mt-6 text-muted-foreground leading-relaxed">{product.description}</p>
+          <p className="mt-6 leading-relaxed text-muted-foreground">{product.description}</p>
 
-          {/* COLOR */}
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase tracking-widest font-semibold">Color: {color}</span>
+          {hasColors && (
+            <div className="mt-8">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-widest">Color: {color}</span>
+              </div>
+              <div className="flex gap-2">
+                {product.colors.map((entry) => (
+                  <button
+                    key={entry.name}
+                    onClick={() => setColor(entry.name)}
+                    title={entry.name}
+                    className={`h-10 w-10 rounded-full border-2 transition ${color === entry.name ? "scale-110 border-foreground" : "border-border"}`}
+                    style={{ background: entry.hex }}
+                  />
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2">
-              {product.colors.map((c) => (
-                <button
-                  key={c.name}
-                  onClick={() => setColor(c.name)}
-                  title={c.name}
-                  className={`h-10 w-10 rounded-full border-2 transition ${color === c.name ? "border-foreground scale-110" : "border-border"}`}
-                  style={{ background: c.hex }}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* SIZE */}
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs uppercase tracking-widest font-semibold">Size</span>
-              {product.sizeChart !== "none" && (
-                <button onClick={() => setShowChart(true)} className="text-xs uppercase tracking-widest underline underline-offset-4 inline-flex items-center gap-1">
-                  <Ruler className="h-3.5 w-3.5" /> Size guide
-                </button>
-              )}
+          {hasSizes && (
+            <div className="mt-8">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-widest">Size</span>
+                {product.sizeChart !== "none" && sizeCharts[product.sizeChart] && (
+                  <button onClick={() => setShowChart(true)} className="inline-flex items-center gap-1 text-xs uppercase tracking-widest underline underline-offset-4">
+                    <Ruler className="h-3.5 w-3.5" /> Size guide
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {product.sizes.map((entry) => (
+                  <button
+                    key={entry}
+                    onClick={() => setSize(entry)}
+                    className={`min-w-12 h-11 border px-3 text-sm ${size === entry ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-foreground"}`}
+                  >
+                    {entry}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {product.sizes.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSize(s)}
-                  className={`min-w-12 h-11 px-3 text-sm border ${size === s ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-foreground"}`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
 
-          {/* QTY + ATC */}
           <div className="mt-8 flex items-center gap-3">
-            <div className="flex items-center border border-border h-12">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="px-3 h-full"><Minus className="h-4 w-4" /></button>
+            <div className="flex h-12 items-center border border-border">
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="h-full px-3"><Minus className="h-4 w-4" /></button>
               <span className="w-10 text-center">{qty}</span>
-              <button onClick={() => setQty(qty + 1)} className="px-3 h-full"><Plus className="h-4 w-4" /></button>
+              <button onClick={() => setQty(qty + 1)} className="h-full px-3"><Plus className="h-4 w-4" /></button>
             </div>
             <button
               onClick={addToCart}
               disabled={!inStock}
-              className="flex-1 h-12 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] font-medium hover:bg-foreground/85 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="h-12 flex-1 bg-primary text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-foreground/85 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {inStock ? "Add to cart" : "Sold out"}
             </button>
             <button
               onClick={() => { wish.toggle(product.id); toast.success(fav ? "Removed from wishlist" : "Added to wishlist"); }}
-              className="h-12 w-12 grid place-items-center border border-border hover:border-foreground"
+              className="grid h-12 w-12 place-items-center border border-border hover:border-foreground"
               aria-label="Wishlist"
             >
               <Heart className={`h-4 w-4 ${fav ? "fill-sale text-sale" : ""}`} />
@@ -148,60 +206,56 @@ function ProductPage() {
 
           <div className="mt-3 text-sm">
             {inStock ? (
-              <span className="text-muted-foreground">In stock · <span className="text-foreground">{product.stock} available</span></span>
+              <span className="text-muted-foreground">In stock · <span className="text-foreground">{activeVariant?.stock ?? product.stock} available</span></span>
             ) : (
-              <span className="text-sale font-medium">Currently sold out</span>
+              <span className="font-medium text-sale">Currently sold out</span>
             )}
           </div>
 
-          {/* PERKS */}
           <div className="mt-10 grid grid-cols-2 gap-3 text-xs">
             <Perk icon={<Truck className="h-4 w-4" />} label="Free shipping over Rs. 5,000" />
             <Perk icon={<ShieldCheck className="h-4 w-4" />} label="7-day easy returns" />
           </div>
 
-          {/* TAGS */}
           {product.tags.length > 0 && (
             <div className="mt-8 flex flex-wrap gap-2">
-              {product.tags.map((t) => (
-                <span key={t} className="text-xs px-2 py-1 bg-secondary text-muted-foreground">{t}</span>
+              {product.tags.map((tag) => (
+                <span key={tag} className="bg-secondary px-2 py-1 text-xs text-muted-foreground">{tag}</span>
               ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* RELATED */}
       {related.length > 0 && (
         <section className="mt-24">
-          <h2 className="display text-3xl md:text-4xl mb-8">You may also like.</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-5 md:gap-8">
-            {related.map((p) => <ProductCard key={p.id} product={p} />)}
+          <h2 className="display mb-8 text-3xl md:text-4xl">You may also like.</h2>
+          <div className="grid grid-cols-2 gap-5 md:grid-cols-4 md:gap-8">
+            {related.map((entry) => <ProductCard key={entry.id} product={entry} />)}
           </div>
         </section>
       )}
 
-      {/* SIZE CHART MODAL */}
-      {showChart && product.sizeChart !== "none" && (
+      {showChart && product.sizeChart !== "none" && sizeCharts[product.sizeChart] && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setShowChart(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="bg-background w-full max-w-lg p-8">
-            <div className="flex justify-between items-start mb-6">
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-background p-8">
+            <div className="mb-6 flex items-start justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Size guide</div>
-                <h3 className="display text-2xl mt-1">{sizeCharts[product.sizeChart].label}</h3>
+                <h3 className="display mt-1 text-2xl">{sizeCharts[product.sizeChart].label}</h3>
               </div>
               <button onClick={() => setShowChart(false)}><X className="h-5 w-5" /></button>
             </div>
             <table className="w-full text-sm">
               <thead className="text-xs uppercase tracking-widest text-muted-foreground">
-                <tr><th className="text-left py-2">Size</th><th className="text-left py-2">Chest</th><th className="text-left py-2">Length</th></tr>
+                <tr><th className="py-2 text-left">Size</th><th className="py-2 text-left">Chest</th><th className="py-2 text-left">Length</th></tr>
               </thead>
               <tbody>
-                {sizeCharts[product.sizeChart].rows.map((r) => (
-                  <tr key={r.size} className="border-t border-border">
-                    <td className="py-2 font-medium">{r.size}</td>
-                    <td className="py-2">{r.chest}</td>
-                    <td className="py-2">{r.length}</td>
+                {sizeCharts[product.sizeChart].rows.map((row) => (
+                  <tr key={row.size} className="border-t border-border">
+                    <td className="py-2 font-medium">{row.size}</td>
+                    <td className="py-2">{row.chest}</td>
+                    <td className="py-2">{row.length}</td>
                   </tr>
                 ))}
               </tbody>

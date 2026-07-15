@@ -1,6 +1,7 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@300;400;500;600;700&display=swap");
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
+@source "../src";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -95,8 +96,6 @@
 }
 
 @layer base {
-  @import url("https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@300;400;500;600;700&display=swap");
-
   :root {
     --ease-luxe: cubic-bezier(0.22, 1, 0.36, 1);
     --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
@@ -159,13 +158,6 @@
 
   p { line-height: 1.65; }
 
-  @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
 }
 
 @layer components {
@@ -174,10 +166,16 @@
   }
   .marquee {
     display: flex;
-    gap: 3rem;
-    animation: marquee 32s linear infinite;
+    width: max-content;
+    animation: marquee 70s linear infinite;
     white-space: nowrap;
     will-change: transform;
+  }
+  .marquee-copy {
+    display: flex;
+    flex: none;
+    gap: 3rem;
+    padding-right: 3rem;
   }
   .hover-lift {
     transition: transform .5s var(--ease-luxe), box-shadow .5s var(--ease-luxe);
@@ -230,6 +228,21 @@
 @keyframes marquee {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
+}
+
+/* Keep decorative page animations calm for motion-reduced browsing. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fade-up,
+  .img-zoom > img {
+    animation: none !important;
+    transition: none !important;
+  }
+
 }
 
 @keyframes fadeUp {
