@@ -37,6 +37,7 @@ export const catalogAdminService = {
       stockMode: input.stockMode === 'variant' ? 'VARIANT' : 'SIMPLE',
       price: input.price,
       salePrice: input.salePrice ?? null,
+      costPrice: input.costPrice ?? null,
       stock: input.stockMode === 'variant' ? 0 : input.stock,
       sizeChart: normalizedSizeChart,
       sizesJson: normalizedSizes,
@@ -73,6 +74,7 @@ export const catalogAdminService = {
             colorHex: variant.colorHex,
             stock: variant.stock,
             priceOverride: variant.priceOverride ?? null,
+            costPrice: variant.costPrice ?? null,
             isActive: variant.isActive,
             barcode: normalizeOptionalString(variant.barcode),
             qrCode: normalizeOptionalString(variant.qrCode),
@@ -206,11 +208,49 @@ export const catalogAdminService = {
       qrCode: makeCode(input.qrPrefix || settings.qrPrefix, input.seed),
     };
   },
+  async reprintCodes(input: { productId: string; variantId?: string | null }) {
+    const product = await catalogRepository.findProductById(input.productId);
+    const variant = input.variantId ? product.variants.find((entry) => entry.id === input.variantId) : null;
+    if (input.variantId && !variant) {
+      throw new ApiError(404, 'Variant not found');
+    }
+
+    const settings = await catalogRepository.findStoreSettings();
+    const barcode = variant?.barcode || product.barcode || makeCode(settings.barcodePrefix, variant?.sku ?? product.slug);
+    const qrCode = variant?.qrCode || product.qrCode || makeCode(settings.qrPrefix, variant?.sku ?? product.slug);
+
+    await prisma.$transaction(async (tx) => {
+      if (variant) {
+        await catalogRepository.updateProductVariantCodes(tx, variant.id, {
+          barcode: variant.barcode || barcode,
+          qrCode: variant.qrCode || qrCode,
+        });
+      } else {
+        await catalogRepository.updateProductCodes(tx, product.id, {
+          barcode: product.barcode || barcode,
+          qrCode: product.qrCode || qrCode,
+        });
+      }
+    });
+
+    return {
+      productId: product.id,
+      variantId: variant?.id ?? null,
+      name: product.name,
+      sku: variant?.sku ?? '',
+      size: variant?.size ?? '',
+      color: variant?.colorName ?? '',
+      barcode,
+      qrCode,
+    };
+  },
   saveCategory: (input: CategoryInput) =>
     catalogRepository.upsertCategory({
       slug: input.slug,
       name: input.name,
       description: input.description,
+      parentId: input.parentId || null,
+      isActive: input.isActive,
     }),
   async deleteCategory(slug: string) {
     const productCount = await catalogRepository.countProductsByCategorySlug(slug);
@@ -218,7 +258,7 @@ export const catalogAdminService = {
       throw new ApiError(400, 'Move products out of this category first');
     }
 
-    await catalogRepository.deleteCategoryBySlug(slug);
+    await catalogRepository.archiveCategoryBySlug(slug);
   },
   saveBrand: (input: BrandInput) =>
     catalogRepository.upsertBrand({

@@ -21,7 +21,18 @@ export const reportRepository = {
   listOrders(range: DateRange) {
     return prisma.order.findMany({
       where: { createdAt: toCreatedAtRange(range) },
-      include: { items: true },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: {
+                category: true,
+              },
+            },
+            variant: true,
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   },
@@ -29,7 +40,16 @@ export const reportRepository = {
     return prisma.posSale.findMany({
       where: { createdAt: toCreatedAtRange(range) },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              include: {
+                category: true,
+              },
+            },
+            variant: true,
+          },
+        },
         returns: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -42,6 +62,12 @@ export const reportRepository = {
         employee: true,
         saleItem: true,
       },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+  listLedgerEntries(range: DateRange) {
+    return prisma.ledgerEntry.findMany({
+      where: { createdAt: toCreatedAtRange(range) },
       orderBy: { createdAt: 'desc' },
     });
   },

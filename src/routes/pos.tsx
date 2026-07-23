@@ -47,6 +47,8 @@ type SaleChoice = {
   qrCode: string;
   size: string;
   color: string;
+  brand: string;
+  category: string;
 };
 
 type CartLine = SaleChoice & {
@@ -65,8 +67,10 @@ const paymentOptions = [
 ];
 
 function PosTerminal() {
-  const { user, isPending } = useProtectedUser({ role: "admin" });
+  const { user, isPending } = useProtectedUser({ role: ["admin", "manager", "staff"] });
   const [search, setSearch] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PosSaleInput["paymentMethod"]>("cash");
   const [customerName, setCustomerName] = useState("");
@@ -90,7 +94,7 @@ function PosTerminal() {
       queueSize: loadQueuedSales().length,
     },
   );
-  const canLoadPos = !isPending && user?.role === "admin";
+  const canLoadPos = !isPending && Boolean(user) && ["admin", "manager", "staff"].includes(user.role);
 
   const updateSyncState = (patch: Partial<PosSyncState>) => {
     const next = patchPosSyncState(deviceKey, patch);
@@ -300,6 +304,8 @@ function PosTerminal() {
             qrCode: variant.qrCode ?? product.qrCode ?? "",
             size: variant.size,
             color: variant.colorName,
+            brand: product.brandName ?? "",
+            category: product.categoryName,
           });
         }
       } else {
@@ -315,21 +321,46 @@ function PosTerminal() {
           qrCode: product.qrCode ?? "",
           size: "",
           color: "",
+          brand: product.brandName ?? "",
+          category: product.categoryName,
         });
       }
     }
     return rows;
   }, [products]);
 
+  const brandOptions = useMemo(
+    () => Array.from(new Set(choices.map((choice) => choice.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right)),
+    [choices],
+  );
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(choices.map((choice) => choice.category).filter(Boolean))).sort((left, right) => left.localeCompare(right)),
+    [choices],
+  );
+
   const filteredChoices = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return [];
+    if (!term && !brandFilter && !categoryFilter) return [];
     return choices
-      .filter((choice) =>
-        `${choice.label} ${choice.subtitle} ${choice.barcode} ${choice.qrCode}`.toLowerCase().includes(term),
-      )
+      .filter((choice) => {
+        if (brandFilter && choice.brand !== brandFilter) {
+          return false;
+        }
+
+        if (categoryFilter && choice.category !== categoryFilter) {
+          return false;
+        }
+
+        if (!term) {
+          return true;
+        }
+
+        return `${choice.label} ${choice.subtitle} ${choice.barcode} ${choice.qrCode} ${choice.brand} ${choice.category} ${choice.size} ${choice.color}`
+          .toLowerCase()
+          .includes(term);
+      })
       .slice(0, 8);
-  }, [choices, search]);
+  }, [brandFilter, categoryFilter, choices, search]);
 
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 
@@ -495,7 +526,7 @@ function PosTerminal() {
     return null;
   }
 
-  if (!user || user.role !== "admin") {
+  if (!user || !["admin", "manager", "staff"].includes(user.role)) {
     return null;
   }
 
@@ -543,6 +574,32 @@ function PosTerminal() {
                   placeholder="Barcode, QR code, SKU, or product name"
                   className="w-full border border-border bg-background py-3 pl-10 pr-3 text-sm outline-none focus:border-foreground"
                 />
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <select
+                  value={brandFilter}
+                  onChange={(event) => setBrandFilter(event.target.value)}
+                  className="border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">All brands</option>
+                  {brandOptions.map((brand) => (
+                    <option key={brand} value={brand}>
+                      {brand}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                  className="border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">All categories</option>
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
               </div>
               {filteredChoices.length > 0 && (
                 <div className="mt-3 grid gap-2">

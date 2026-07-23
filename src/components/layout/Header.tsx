@@ -4,17 +4,13 @@ import { ShoppingBag, Heart, User, Menu, Search, X } from "lucide-react";
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { catalogApi } from "@/lib/catalog-api";
-import type { StorefrontSettings } from "@/lib/catalog-types";
+import type { Category, StorefrontSettings } from "@/lib/catalog-types";
 import { queryKeys } from "@/lib/query-keys";
 import { useCart, useWishlist } from "@/store/cart";
-import { site, categories } from "@/config/site";
+import { site } from "@/config/site";
 
-const nav = [
-  { to: "/shop", label: "Shop" },
-  { to: "/category/men", label: "Men" },
-  { to: "/category/women", label: "Women" },
-  { to: "/category/kids", label: "Kids" },
-  { to: "/category/accessories", label: "Accessories" },
+const navTail = [
+  { to: "/sale", label: "Sale" },
   { to: "/about", label: "About" },
   { to: "/contact", label: "Contact" },
 ] as const;
@@ -22,7 +18,7 @@ const nav = [
 const fallbackSettings: StorefrontSettings = {
   id: "fallback",
   name: site.name,
-  logoPrimaryText: "BALI",
+  logoPrimaryText: "BALY",
   logoSecondaryText: "By Bilal Garments",
   logoTertiaryText: "EST 2001",
   promoRibbonText: `Free shipping over Rs. ${site.shipping.freeAbove.toLocaleString()}\nNew drop\nAW26 collection live now\nCOD available across Pakistan\nEasy 7-day returns`,
@@ -40,12 +36,12 @@ const fallbackSettings: StorefrontSettings = {
   address: site.address,
   currency: site.currency,
   currencySymbol: site.currencySymbol,
-  invoicePrefix: "BALI",
-  receiptPrefix: "BALI",
+  invoicePrefix: "BALY",
+  receiptPrefix: "BALY",
   thermalHeader: "",
   thermalFooter: "",
-  barcodePrefix: "BALI",
-  qrPrefix: "BALIQ",
+  barcodePrefix: "BALY",
+  qrPrefix: "BALYQ",
   instagram: site.social.instagram,
   facebook: site.social.facebook,
   tiktok: site.social.tiktok,
@@ -63,8 +59,13 @@ export function Header() {
     queryKey: queryKeys.catalog.settings,
     queryFn: catalogApi.settings,
   });
+  const categoriesQuery = useQuery({
+    queryKey: queryKeys.catalog.categories,
+    queryFn: catalogApi.categories,
+  });
   const settings = settingsQuery.data?.settings ?? fallbackSettings;
   const promoItems = settings.promoRibbonItems.length > 0 ? settings.promoRibbonItems : fallbackSettings.promoRibbonItems;
+  const categories = categoriesQuery.data?.categories ?? [];
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 transition-colors">
@@ -104,7 +105,20 @@ export function Header() {
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm md:flex">
-          {nav.map((n) => {
+          <Link
+            to="/shop"
+            className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              path.startsWith("/shop")
+                ? "text-foreground after:scale-x-100"
+                : "text-muted-foreground hover:text-foreground after:scale-x-0 hover:after:scale-x-100"
+            }`}
+          >
+            Shop
+          </Link>
+          {categories.map((category) => (
+            <CategoryNavItem key={category.id} category={category} path={path} />
+          ))}
+          {navTail.map((n) => {
             const active = path.startsWith(n.to);
             return (
               <Link
@@ -162,7 +176,41 @@ export function Header() {
         }`}
       >
         <nav className="container-bg flex flex-col py-2">
-          {nav.map((n) => (
+          <Link
+            to="/shop"
+            onClick={() => setOpen(false)}
+            className="border-b border-border/50 py-3 text-sm uppercase tracking-[0.16em] transition-colors last:border-0 hover:text-accent"
+          >
+            Shop
+          </Link>
+          {categories.map((category) => (
+            <div key={category.id} className="border-b border-border/50 py-3 last:border-0">
+              <Link
+                to="/category/$slug"
+                params={{ slug: category.slug }}
+                onClick={() => setOpen(false)}
+                className="block text-sm uppercase tracking-[0.16em] transition-colors hover:text-accent"
+              >
+                {category.name}
+              </Link>
+              {category.children.length > 0 && (
+                <div className="mt-2 flex flex-col gap-2 pl-4">
+                  {category.children.map((child) => (
+                    <Link
+                      key={child.id}
+                      to="/category/$slug"
+                      params={{ slug: child.slug }}
+                      onClick={() => setOpen(false)}
+                      className="text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-accent"
+                    >
+                      {child.name}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {navTail.map((n) => (
             <Link
               key={n.to}
               to={n.to}
@@ -229,6 +277,11 @@ export function Footer() {
     queryFn: catalogApi.settings,
   });
   const settings = settingsQuery.data?.settings ?? fallbackSettings;
+  const categoriesQuery = useQuery({
+    queryKey: queryKeys.catalog.categories,
+    queryFn: catalogApi.categories,
+  });
+  const categories = categoriesQuery.data?.categories ?? [];
 
   return (
     <footer className="mt-24 border-t border-border bg-secondary">
@@ -239,7 +292,10 @@ export function Footer() {
         </div>
         <FooterCol
           title="Shop"
-          items={categories.map((c) => ({ to: `/category/${c.slug}`, label: c.name }))}
+          items={categories.flatMap((category) => [
+            { to: `/category/${category.slug}`, label: category.name },
+            ...category.children.map((child) => ({ to: `/category/${child.slug}`, label: `${category.name} / ${child.name}` })),
+          ])}
         />
         <FooterCol
           title="Help"
@@ -283,6 +339,44 @@ export function Footer() {
         </div>
       </div>
     </footer>
+  );
+}
+
+function CategoryNavItem({ category, path }: { category: Category; path: string }) {
+  const active =
+    path === `/category/${category.slug}` ||
+    category.children.some((child) => path === `/category/${child.slug}`);
+
+  return (
+    <div className="group relative">
+      <Link
+        to="/category/$slug"
+        params={{ slug: category.slug }}
+        className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          active
+            ? "text-foreground after:scale-x-100"
+            : "text-muted-foreground hover:text-foreground after:scale-x-0 hover:after:scale-x-100"
+        }`}
+      >
+        {category.name}
+      </Link>
+      {category.children.length > 0 && (
+        <div className="invisible absolute left-0 top-full z-30 min-w-[220px] translate-y-3 border border-border bg-background/95 p-3 opacity-0 shadow-2xl backdrop-blur transition duration-200 group-hover:visible group-hover:translate-y-1 group-hover:opacity-100">
+          <div className="grid gap-2">
+            {category.children.map((child) => (
+              <Link
+                key={child.id}
+                to="/category/$slug"
+                params={{ slug: child.slug }}
+                className="text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {child.name}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

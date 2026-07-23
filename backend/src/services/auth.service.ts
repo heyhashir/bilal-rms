@@ -7,8 +7,11 @@ import { createSessionToken } from '../utils/cookies';
 const sessionExpiry = () => new Date(Date.now() + env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
 export const authService = {
-  getCurrentUser(userId: string) {
+  getCurrentCustomer(userId: string) {
     return authRepository.findUserProfile(userId);
+  },
+  getCurrentAdminAccount(accountId: string) {
+    return authRepository.findAdminAccountById(accountId);
   },
   async register(input: { email: string; name: string; password: string }) {
     const email = input.email.toLowerCase();
@@ -36,8 +39,35 @@ export const authService = {
     return { user, token, expiresAt };
   },
   async login(input: { email: string; password: string; currentSessionToken?: string }) {
-    const user = await authRepository.findUserByEmail(input.email.toLowerCase());
+    if (input.currentSessionToken) {
+      await authRepository.deleteSessionsByToken(input.currentSessionToken);
+      await authRepository.deleteAdminSessionsByToken(input.currentSessionToken);
+    }
 
+    const normalizedEmail = input.email.toLowerCase();
+    const adminAccount = await authRepository.findAdminAccountByEmail(normalizedEmail);
+    if (adminAccount && adminAccount.isActive) {
+      const valid = await bcrypt.compare(input.password, adminAccount.passwordHash);
+      if (!valid) {
+        throw new ApiError(401, 'Invalid credentials');
+      }
+
+      const token = createSessionToken();
+      const expiresAt = sessionExpiry();
+
+      await authRepository.createAdminSession({
+        token,
+        accountId: adminAccount.id,
+        expiresAt,
+      });
+      await authRepository.updateAdminAccount(adminAccount.id, {
+        lastLoginAt: new Date(),
+      });
+
+      return { principal: adminAccount, token, expiresAt, kind: 'admin' as const };
+    }
+
+    const user = await authRepository.findUserByEmail(normalizedEmail);
     if (!user || !user.isActive) {
       throw new ApiError(401, 'Invalid credentials');
     }
@@ -45,10 +75,6 @@ export const authService = {
     const valid = await bcrypt.compare(input.password, user.passwordHash);
     if (!valid) {
       throw new ApiError(401, 'Invalid credentials');
-    }
-
-    if (input.currentSessionToken) {
-      await authRepository.deleteSessionsByToken(input.currentSessionToken);
     }
 
     const token = createSessionToken();
@@ -60,7 +86,7 @@ export const authService = {
       expiresAt,
     });
 
-    return { user, token, expiresAt };
+    return { principal: user, token, expiresAt, kind: 'customer' as const };
   },
   async logout(sessionToken?: string) {
     if (!sessionToken) {
@@ -68,5 +94,6 @@ export const authService = {
     }
 
     await authRepository.deleteSessionsByToken(sessionToken);
+    await authRepository.deleteAdminSessionsByToken(sessionToken);
   },
 };

@@ -28,8 +28,10 @@ export const catalogApi = {
     const suffix = searchParams.size ? `?${searchParams.toString()}` : "";
     return api.get<{ products: Product[]; meta: { total: number; maxEffectivePrice: number } }>(`/catalog/products${suffix}`);
   },
+  saleProducts: () =>
+    api.get<{ products: Product[]; meta: { total: number; maxEffectivePrice: number } }>("/catalog/products/sale"),
   product: (slug: string) => api.get<{ product: Product }>(`/catalog/products/${slug}`),
-  categories: () => api.get<{ categories: Category[] }>("/catalog/categories"),
+  categories: () => api.get<{ categories: Category[] }>("/categories"),
   brands: () => api.get<{ brands: Brand[] }>("/catalog/brands"),
   settings: () => api.get<{ settings: StorefrontSettings }>("/catalog/settings"),
   shippingZones: () => api.get<{ shippingZones: ShippingZone[] }>("/catalog/shipping-zones"),

@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
-import prisma from '../config/prisma';
 import { env } from '../config/env';
+import { authRepository } from '../repositories/auth.repository';
 import { ApiError } from '../types/ApiError';
 import { clearSessionCookie } from '../utils/cookies';
 
@@ -20,14 +20,36 @@ export const attachSession = (req: Request, res: Response, next: NextFunction): 
   }
 
   void (async () => {
-    const session = await prisma.session.findUnique({
-      where: { token },
-      include: { user: true },
-    });
+    const [customerSession, adminSession] = await Promise.all([
+      authRepository.findCustomerSessionByToken(token),
+      authRepository.findAdminSessionByToken(token),
+    ]);
 
-    if (!session || session.expiresAt.getTime() <= Date.now() || !session.user.isActive) {
-      if (session) {
-        await prisma.session.delete({ where: { id: session.id } });
+    if (adminSession) {
+      if (adminSession.expiresAt.getTime() <= Date.now() || !adminSession.account.isActive) {
+        await authRepository.deleteAdminSessionsByToken(token);
+        clearSessionCookie(res);
+        res.setHeader('x-session-expired', '1');
+        next();
+        return;
+      }
+
+      req.currentUser = {
+        id: adminSession.account.id,
+        email: adminSession.account.email,
+        name: adminSession.account.name,
+        role: adminSession.account.role,
+        kind: 'admin',
+        isActive: adminSession.account.isActive,
+      };
+
+      next();
+      return;
+    }
+
+    if (!customerSession || customerSession.expiresAt.getTime() <= Date.now() || !customerSession.user.isActive) {
+      if (customerSession) {
+        await authRepository.deleteSessionsByToken(token);
       }
       clearSessionCookie(res);
       res.setHeader('x-session-expired', '1');
@@ -36,11 +58,12 @@ export const attachSession = (req: Request, res: Response, next: NextFunction): 
     }
 
     req.currentUser = {
-      id: session.user.id,
-      email: session.user.email,
-      name: session.user.name,
-      role: session.user.role,
-      isActive: session.user.isActive,
+      id: customerSession.user.id,
+      email: customerSession.user.email,
+      name: customerSession.user.name,
+      role: customerSession.user.role,
+      kind: 'customer',
+      isActive: customerSession.user.isActive,
     };
 
     next();
@@ -56,11 +79,38 @@ export const requireAuth = (req: Request, _res: Response, next: NextFunction): v
   next();
 };
 
-export const requireAdmin = (req: Request, _res: Response, next: NextFunction): void => {
-  if (!req.currentUser || req.currentUser.role !== 'ADMIN') {
-    next(new ApiError(403, 'Admin access required'));
+export const requireCustomerAuth = (req: Request, _res: Response, next: NextFunction): void => {
+  if (!req.currentUser || req.currentUser.kind !== 'customer') {
+    next(new ApiError(401, 'Customer authentication required'));
     return;
   }
 
   next();
 };
+
+export const requireAdminPanelAuth = (req: Request, _res: Response, next: NextFunction): void => {
+  if (!req.currentUser || req.currentUser.kind !== 'admin') {
+    next(new ApiError(401, 'Admin authentication required'));
+    return;
+  }
+
+  next();
+};
+
+export const requireAdminRoles =
+  (roles: Array<'ADMIN' | 'MANAGER' | 'STAFF'>) =>
+  (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.currentUser || req.currentUser.kind !== 'admin') {
+      next(new ApiError(401, 'Admin authentication required'));
+      return;
+    }
+
+    if (!roles.includes(req.currentUser.role as 'ADMIN' | 'MANAGER' | 'STAFF')) {
+      next(new ApiError(403, 'You do not have permission to access this resource'));
+      return;
+    }
+
+    next();
+  };
+
+export const requireAdmin = requireAdminRoles(['ADMIN']);

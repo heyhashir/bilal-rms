@@ -23,7 +23,7 @@
     "build": "npm run build:client && npm run build:server",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "start": "npm run db:deploy && node backend/dist/server.js",
+    "start": "node scripts/start-production.mjs",
     "start:local": "node scripts/start-local-server.mjs",
     "postinstall": "npm --workspace backend run prisma:generate",
     "env:local": "node scripts/ensure-local-env.mjs",

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth';
+import { requireCustomerAuth } from '../middleware/auth';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiResponse } from '../utils/ApiResponse';
 import {
@@ -39,7 +39,7 @@ const addressSchema = z.object({
   isDefault: z.boolean().default(false),
 });
 
-router.use(requireAuth);
+router.use(requireCustomerAuth);
 
 router.get(
   '/profile',

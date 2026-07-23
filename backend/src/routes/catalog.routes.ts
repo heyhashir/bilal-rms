@@ -8,12 +8,14 @@ import {
   listCatalogCategories,
   listCatalogProducts,
   listCatalogShippingZones,
+  listSaleProducts,
 } from '../controllers/catalog.controller';
 
 const router = Router();
 
 router.get('/bootstrap', asyncHandler(getCatalogBootstrap));
 router.get('/products', asyncHandler(listCatalogProducts));
+router.get('/products/sale', asyncHandler(listSaleProducts));
 router.get('/products/:slug', asyncHandler(getCatalogProduct));
 router.get('/categories', asyncHandler(listCatalogCategories));
 router.get('/brands', asyncHandler(listCatalogBrands));

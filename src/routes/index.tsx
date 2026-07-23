@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { catalogApi } from "@/lib/catalog-api";
 import { queryKeys } from "@/lib/query-keys";
@@ -14,7 +15,7 @@ import catAcc from "@/assets/cat-acc.jpg";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "BALI by Bilal Garments EST 2001. - Bold Modern Fashion" },
+      { title: "BALY by Bilal Garments EST 2001. - Bold Modern Fashion" },
       { name: "description", content: "Discover the AW26 collection. Bold, modern clothing made in Pakistan." },
     ],
   }),
@@ -29,15 +30,33 @@ const catVisuals = {
 } as const;
 
 function Home() {
+  const [showSaleModal, setShowSaleModal] = useState(false);
   const { data } = useQuery({
     queryKey: queryKeys.catalog.bootstrap,
     queryFn: catalogApi.bootstrap,
   });
+  const saleQuery = useQuery({
+    queryKey: ["catalog", "sale-products"],
+    queryFn: catalogApi.saleProducts,
+  });
   const products = data?.products ?? [];
   const categories = data?.categories ?? [];
+  const topCategories = categories.filter((category) => !category.parentId);
   const featured = products.filter((p) => p.featured).slice(0, 8);
   const trending = products.filter((p) => p.trending).slice(0, 4);
-  const sale = products.filter((product) => isDiscountedProduct(product)).slice(0, 4);
+  const sale = (saleQuery.data?.products ?? products.filter((product) => isDiscountedProduct(product))).slice(0, 4);
+
+  useEffect(() => {
+    if (!saleQuery.data?.products?.length) {
+      return;
+    }
+
+    if (window.sessionStorage.getItem("sale-modal-dismissed") === "1") {
+      return;
+    }
+
+    setShowSaleModal(true);
+  }, [saleQuery.data?.products]);
 
   return (
     <>
@@ -86,7 +105,7 @@ function Home() {
       <section className="container-bg mt-24">
         <SectionHead eyebrow="Shop by category" title="Find your fit." />
         <div className="grid grid-cols-2 gap-3 md:gap-5 lg:grid-cols-4">
-          {categories.map((category) => (
+          {topCategories.map((category) => (
             <Link
               key={category.slug}
               to="/category/$slug"
@@ -126,7 +145,7 @@ function Home() {
                 <div className="mb-3 text-xs uppercase tracking-[0.3em] text-accent">Limited time</div>
                 <h2 className="display text-5xl md:text-6xl">Up to 40% off.</h2>
               </div>
-              <Link to="/shop" className="hidden items-center gap-2 text-xs uppercase tracking-widest hover:text-accent md:inline-flex">
+              <Link to="/sale" className="hidden items-center gap-2 text-xs uppercase tracking-widest hover:text-accent md:inline-flex">
                 Shop sale <ArrowUpRight className="h-4 w-4" />
               </Link>
             </div>
@@ -172,7 +191,7 @@ function Home() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              alert("Welcome to BALI by Bilal Garments EST 2001.");
+              alert("Welcome to BALY by Bilal Garments EST 2001.");
               (e.currentTarget as HTMLFormElement).reset();
             }}
             className="flex bg-background"
@@ -189,6 +208,47 @@ function Home() {
           </form>
         </div>
       </section>
+
+      {showSaleModal && sale.length > 0 && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-4" onClick={() => setShowSaleModal(false)}>
+          <div className="w-full max-w-xl bg-background p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-2 text-xs uppercase tracking-[0.3em] text-accent">Sale edit</div>
+            <h2 className="display text-3xl">Current markdowns are live.</h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Selected sale products are now surfaced automatically from the live catalog.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {sale.slice(0, 2).map((product) => (
+                <Link
+                  key={product.id}
+                  to="/product/$slug"
+                  params={{ slug: product.slug }}
+                  className="border border-border p-3 hover:bg-secondary"
+                >
+                  <div className="text-sm font-medium">{product.name}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {product.salePrice ? `Now Rs. ${product.salePrice.toLocaleString()}` : ""}
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link to="/sale" className="inline-flex items-center gap-2 bg-primary px-5 py-3 text-xs uppercase tracking-[0.2em] text-primary-foreground">
+                View sale <ArrowUpRight className="h-4 w-4" />
+              </Link>
+              <button
+                onClick={() => {
+                  window.sessionStorage.setItem("sale-modal-dismissed", "1");
+                  setShowSaleModal(false);
+                }}
+                className="border border-border px-5 py-3 text-xs uppercase tracking-[0.2em]"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

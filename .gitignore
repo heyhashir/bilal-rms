@@ -16,8 +16,14 @@ dist-ssr
 .nitro
 *.local
 backend/public
-backend/uploads/*
-!backend/uploads/.gitkeep
+backend/uploads/
+backend/runtime-imports/
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/runtime-imports/*
+!storage/runtime-imports/.gitkeep
+storage/runtime-logs/*
+!storage/runtime-logs/.gitkeep
 playwright-report
 test-results
 

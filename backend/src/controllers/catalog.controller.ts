@@ -64,6 +64,26 @@ export const listCatalogProducts = async (req: Request, res: Response) => {
   );
 };
 
+export const listSaleProducts = async (req: Request, res: Response) => {
+  const sort = typeof req.query.sort === 'string' ? req.query.sort : undefined;
+  const products = await catalogService.listSaleProducts({
+    sort: sort as never,
+  });
+
+  res.status(200).json(
+    ApiResponse.success('Sale products loaded', {
+      products: products.map(serializeProduct),
+      meta: {
+        total: products.length,
+        maxEffectivePrice: products.reduce(
+          (max, product) => Math.max(max, Number(product.salePrice ?? product.price)),
+          0,
+        ),
+      },
+    }),
+  );
+};
+
 export const getCatalogProduct = async (req: Request, res: Response) => {
   const product = await catalogService.getProduct(req.params.slug);
   res.status(200).json(ApiResponse.success('Product loaded', { product: serializeProduct(product) }));

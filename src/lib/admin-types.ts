@@ -164,6 +164,26 @@ export type ReportSummary = {
     paid: number;
     payable: number;
   };
+  profit: {
+    total: number;
+    byCategory: Array<{
+      categorySlug: string;
+      categoryName: string;
+      profit: number;
+    }>;
+    byProduct: Array<{
+      productId: string;
+      productName: string;
+      categoryName: string;
+      profit: number;
+    }>;
+  };
+  ledger: {
+    credit: number;
+    debit: number;
+    net: number;
+    count: number;
+  };
   employees: Array<{
     employeeId: string;
     employeeName: string;
@@ -185,6 +205,61 @@ export type ReportSummary = {
 export type AdminCustomer = User & {
   orderCount: number;
   totalSpend: number;
+};
+
+export type StaffAccount = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  role: "admin" | "manager" | "staff";
+  isActive: boolean;
+  lastLoginAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type Vendor = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  notes: string;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type VendorPurchase = {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  productId: string;
+  productName: string;
+  variantId: string | null;
+  variantSku: string;
+  quantity: number;
+  unitCost: number;
+  purchasedAt: number;
+  note: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type LedgerEntry = {
+  id: string;
+  type: string;
+  direction: string;
+  amount: number;
+  reference: string;
+  note: string;
+  orderId: string | null;
+  posSaleId: string | null;
+  vendorPurchaseId: string | null;
+  adminAccountId: string | null;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type InventorySnapshotItem = {

@@ -85,6 +85,11 @@ export const generateBarcodes = async (req: Request, res: Response) => {
   res.status(200).json(ApiResponse.success('Codes generated', codes));
 };
 
+export const reprintBarcodes = async (req: Request, res: Response) => {
+  const label = await catalogAdminService.reprintCodes(req.body);
+  res.status(200).json(ApiResponse.success('Label payload generated', { label }));
+};
+
 export const saveCategory = async (req: Request, res: Response) => {
   const category = await catalogAdminService.saveCategory(req.body);
   logAdminAudit(req, {

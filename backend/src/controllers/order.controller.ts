@@ -6,7 +6,7 @@ import { orderService } from '../services/order.service';
 export const checkoutOrder = async (req: Request, res: Response) => {
   const order = await orderService.checkout({
     input: req.body as never,
-    userId: req.currentUser?.id ?? null,
+    userId: req.currentUser?.kind === 'customer' ? req.currentUser.id : null,
     paymentProof: req.file
       ? {
           path: req.file.path,
@@ -28,7 +28,9 @@ export const getOrder = async (req: Request, res: Response) => {
   }
 
   const token = typeof req.query.token === 'string' ? req.query.token : '';
-  const authorized = req.currentUser?.id === order.userId || (token.length > 0 && token === order.publicToken);
+  const authorized =
+    (req.currentUser?.kind === 'customer' && req.currentUser.id === order.userId) ||
+    (token.length > 0 && token === order.publicToken);
 
   if (!authorized) {
     res.status(403).json(ApiResponse.error('Order access denied'));
@@ -60,7 +62,9 @@ export const createReturn = async (req: Request, res: Response) => {
     return;
   }
 
-  const authorized = req.currentUser?.id === order.userId || (token.length > 0 && token === order.publicToken);
+  const authorized =
+    (req.currentUser?.kind === 'customer' && req.currentUser.id === order.userId) ||
+    (token.length > 0 && token === order.publicToken);
   if (!authorized) {
     res.status(403).json(ApiResponse.error('Order access denied'));
     return;
@@ -68,7 +72,7 @@ export const createReturn = async (req: Request, res: Response) => {
 
   const { request } = await orderService.createReturn({
     orderNumber: req.params.orderNumber,
-    userId: req.currentUser?.id ?? null,
+    userId: req.currentUser?.kind === 'customer' ? req.currentUser.id : null,
     reason: input.reason,
     details: input.details,
   });

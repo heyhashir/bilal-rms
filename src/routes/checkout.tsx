@@ -14,7 +14,7 @@ import type { Order } from "@/lib/account-types";
 import { useCart } from "@/store/cart";
 
 export const Route = createFileRoute("/checkout")({
-  head: () => ({ meta: [{ title: "Checkout - BALI by Bilal Garments EST 2001." }] }),
+  head: () => ({ meta: [{ title: "Checkout - BALY by Bilal Garments EST 2001." }] }),
   component: Checkout,
 });
 

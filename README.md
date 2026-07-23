@@ -12,6 +12,71 @@ The project is structured as a single deployable Node.js application:
 
 Production is designed around Hostinger Business with a managed MySQL/MariaDB database. Local development is standardized on Docker-based MariaDB.
 
+## Hostinger Production
+
+This repository is designed to run as one Hostinger Node.js web app with one Hostinger-managed MySQL database and no separate backend host.
+
+- Build command: `npm run build`
+- Start command: `npm run start`
+- Node.js version: `20.x`
+- Production port: `3000`
+- Frontend build output: `backend/public`
+- Runtime upload path: `storage/uploads`
+- Runtime import path: `storage/runtime-imports`
+- Health checks: `/api/v1/health` and `/api/v1/health/ready`
+
+Use `.env.hostinger.example` as the template for Hostinger environment variables.
+
+Required production variables:
+
+```env
+NODE_ENV=production
+PORT=3000
+APP_URL=https://your-domain.example
+DATABASE_URL=mysql://DB_USER:DB_PASSWORD@localhost:3306/DB_NAME
+SESSION_COOKIE_NAME=bilal_rms_session
+SESSION_TTL_DAYS=30
+UPLOAD_DIR=storage/uploads
+IMPORT_DIR=storage/runtime-imports
+PUBLIC_DIR=backend/public
+MAX_UPLOAD_MB=10
+ADMIN_EMAIL=owner@example.com
+ADMIN_PASSWORD=change-this-before-launch
+```
+
+Hostinger deployment flow:
+
+1. Create a Node.js Web App in hPanel and select Node `20.x`.
+2. Create a Hostinger MySQL database and copy the host, database name, username, and password.
+3. Connect the GitHub repository and choose the production branch.
+4. Keep the repository root as the app root so Hostinger can find the top-level `package.json`.
+5. Set build command to `npm run build`.
+6. Set start command to `npm run start`.
+7. Import the variables from `.env.hostinger.example`, then replace placeholders with real values.
+8. Redeploy. Startup applies Prisma migrations, bootstraps missing core seed data, verifies readiness, and then starts Express.
+9. Verify `GET /api/v1/health/ready` before opening the site to users.
+
+Important:
+
+- Do not use FTP upload to `public_html` for production. This project is not a static site.
+- Do not deploy only `backend/public`. Hostinger must run the full Node.js app from the repository root.
+- GitHub auto-deploy should be configured in Hostinger hPanel itself. The GitHub Actions workflow in this repo is build verification only.
+
+What GitHub auto-deploy means here:
+
+- you push code to `main`
+- Hostinger pulls the latest commit from GitHub
+- Hostinger rebuilds the app
+- Hostinger restarts the Node app
+- the new version goes live on the same domain
+
+What stays on Hostinger and is not replaced by GitHub pushes:
+
+- MySQL database records
+- uploaded product images
+- uploaded product videos
+- uploaded payment proofs
+
 ## Client Review From A Clean Windows PC
 
 Docker Desktop is the only software required. Git, Node.js, npm, and a separately installed database are not required. Install Docker Desktop, start it, open PowerShell, and run this command:
@@ -125,9 +190,20 @@ DATABASE_URL="mysql://bilal_rms:bilal_rms@127.0.0.1:3307/bilal_rms"
 The intended production setup is:
 
 - Hostinger Business for the Node.js application
-- Hostinger-managed MySQL/MariaDB for persistence
+- Hostinger-managed MySQL for persistence through Prisma's `mysql` datasource
 - Express serving the built frontend and API from one deployment target
-- Uploaded media stored under the application uploads path with database-backed references
+- Uploaded media stored under `storage/uploads` with database-backed references
+
+The `/pos` route works inside the same hosted web app. Its offline queue uses browser storage on the billing PC, not a separate paid service.
+
+What works fully through the website after deployment:
+
+- storefront browsing, product pages, cart, checkout, and order tracking
+- owner admin login and management of catalog, inventory, orders, customers, employees, commissions, settings, and imports
+- POS billing through `/pos`
+- product image and video uploads
+- payment proof uploads
+- all database-backed changes from the admin or storefront
 
 ## Verification
 

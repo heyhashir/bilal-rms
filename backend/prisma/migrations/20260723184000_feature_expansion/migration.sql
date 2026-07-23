@@ -1,0 +1,2 @@
+-- No-op duplicate of 20260723123939_feature_expansion_july_2026.
+-- The schema changes were already captured in the earlier generated migration.

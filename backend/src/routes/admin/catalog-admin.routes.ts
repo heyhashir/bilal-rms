@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import {
   archiveBrand,
   archiveProduct,
@@ -10,6 +11,7 @@ import {
   listBrands,
   listCategories,
   listProducts,
+  reprintBarcodes,
   saveBrand,
   saveCategory,
   updateProduct,
@@ -50,6 +52,17 @@ router.post(
   asyncHandler(async (req, res) => {
     req.body = barcodeSchema.parse(req.body);
     await generateBarcodes(req, res);
+  }),
+);
+
+router.post(
+  '/barcodes/reprint',
+  asyncHandler(async (req, res) => {
+    req.body = z.object({
+      productId: z.string().min(1),
+      variantId: z.string().optional().nullable(),
+    }).parse(req.body);
+    await reprintBarcodes(req, res);
   }),
 );
 

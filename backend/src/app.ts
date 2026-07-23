@@ -21,6 +21,8 @@ import ordersRoutes from './routes/orders.routes';
 import accountRoutes from './routes/account.routes';
 import syncRoutes from './routes/sync.routes';
 import logger from './utils/logger';
+import { listCatalogCategories } from './controllers/catalog.controller';
+import { asyncHandler } from './utils/asyncHandler';
 
 const API_PREFIX = '/api/v1';
 
@@ -83,6 +85,7 @@ export const createApp = (): Application => {
     authRoutes,
   );
   app.use(`${API_PREFIX}/account`, accountRoutes);
+  app.get(`${API_PREFIX}/categories`, asyncHandler(listCatalogCategories));
   app.use(`${API_PREFIX}/catalog`, catalogRoutes);
   app.use(
     `${API_PREFIX}/orders/checkout`,

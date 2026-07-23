@@ -7,7 +7,8 @@ declare global {
         id: string;
         email: string;
         name: string;
-        role: 'ADMIN' | 'CUSTOMER';
+        role: 'ADMIN' | 'CUSTOMER' | 'MANAGER' | 'STAFF';
+        kind: 'customer' | 'admin';
         isActive: boolean;
       } | null;
     }

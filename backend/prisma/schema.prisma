@@ -12,6 +12,12 @@ enum UserRole {
   CUSTOMER
 }
 
+enum AdminRole {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
@@ -103,6 +109,18 @@ enum SyncDirection {
   PULL
 }
 
+enum LedgerEntryType {
+  SALE
+  PURCHASE
+  EXPENSE
+  ADJUSTMENT
+}
+
+enum LedgerEntryDirection {
+  CREDIT
+  DEBIT
+}
+
 model User {
   id           String          @id @default(cuid())
   email        String          @unique
@@ -121,6 +139,23 @@ model User {
   @@map("users")
 }
 
+model AdminAccount {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  phone        String?
+  passwordHash String
+  role         AdminRole      @default(STAFF)
+  isActive     Boolean        @default(true)
+  lastLoginAt  DateTime?
+  sessions     AdminSession[]
+  ledgerEntries LedgerEntry[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("admin_accounts")
+}
+
 model Session {
   id        String   @id @default(cuid())
   token     String   @unique
@@ -131,6 +166,18 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+model AdminSession {
+  id         String       @id @default(cuid())
+  token      String       @unique
+  accountId  String
+  expiresAt  DateTime
+  createdAt  DateTime     @default(now())
+  account    AdminAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("admin_sessions")
 }
 
 model Address {
@@ -158,10 +205,15 @@ model Category {
   slug        String    @unique
   name        String
   description String    @default("")
+  parentId    String?
+  isActive    Boolean   @default(true)
+  parent      Category? @relation("CategoryToSubcategories", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Category[] @relation("CategoryToSubcategories")
   products    Product[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  @@index([parentId])
   @@map("categories")
 }
 
@@ -189,6 +241,7 @@ model Product {
   stockMode      ProductStockMode    @default(SIMPLE)
   price          Decimal             @db.Decimal(10, 2)
   salePrice      Decimal?            @db.Decimal(10, 2)
+  costPrice      Decimal?            @db.Decimal(10, 2)
   stock          Int                 @default(0)
   sizeChart      String              @default("apparel")
   sizesJson      Json?
@@ -207,6 +260,7 @@ model Product {
   variants       ProductVariant[]
   orderItems     OrderItem[]
   inventory      InventoryMovement[]
+  vendorPurchases VendorPurchase[]
   posSaleItems   PosSaleItem[]
   posCommissions CommissionEntry[]
   commissionRule CommissionRule?
@@ -241,6 +295,7 @@ model ProductVariant {
   colorHex      String
   stock         Int                 @default(0)
   priceOverride Decimal?            @db.Decimal(10, 2)
+  costPrice     Decimal?            @db.Decimal(10, 2)
   isActive      Boolean             @default(true)
   barcode       String?             @unique
   qrCode        String?             @unique
@@ -248,6 +303,7 @@ model ProductVariant {
   product       Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItems    OrderItem[]
   inventory     InventoryMovement[]
+  vendorPurchases VendorPurchase[]
   posSaleItems  PosSaleItem[]
   posCommissions CommissionEntry[]
   commissionRule CommissionRule?
@@ -284,11 +340,13 @@ model InventoryMovement {
   orderId   String?
   posSaleId String?
   posReturnId String?
+  vendorPurchaseId String?
   product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   order     Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
   posSale   PosSale?        @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
   posReturn PosReturn?      @relation(fields: [posReturnId], references: [id], onDelete: SetNull)
+  vendorPurchase VendorPurchase? @relation(fields: [vendorPurchaseId], references: [id], onDelete: SetNull)
   createdAt DateTime        @default(now())
 
   @@index([productId])
@@ -296,6 +354,7 @@ model InventoryMovement {
   @@index([orderId])
   @@index([posSaleId])
   @@index([posReturnId])
+  @@index([vendorPurchaseId])
   @@map("inventory_movements")
 }
 
@@ -340,6 +399,7 @@ model Order {
   paymentProof     PaymentProof?
   returns          ReturnRequest[]
   inventory        InventoryMovement[]
+  ledgerEntries    LedgerEntry[]
   user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   shippingZone     ShippingZone?  @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
   createdAt        DateTime       @default(now())
@@ -457,6 +517,7 @@ model PosSale {
   receipt       Receipt?
   commissions   CommissionEntry[]
   inventory     InventoryMovement[]
+  ledgerEntries LedgerEntry[]
   device        RegisterDevice?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -614,7 +675,7 @@ model SyncJob {
 model StoreSetting {
   id              String   @id @default(cuid())
   storeName       String
-  logoPrimaryText String   @default("BALI")
+  logoPrimaryText String   @default("BALY")
   logoSecondaryText String @default("By Bilal Garments")
   logoTertiaryText String @default("EST 2001")
   promoRibbonText String   @default("Free shipping over Rs. 6,000\nNew drop\nAW26 collection live now\nCOD available across Pakistan\nEasy 7-day returns") @db.VarChar(1000)
@@ -640,4 +701,70 @@ model StoreSetting {
   updatedAt       DateTime @updatedAt
 
   @@map("store_settings")
+}
+
+model Vendor {
+  id        String           @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String           @default("")
+  isActive  Boolean          @default(true)
+  purchases VendorPurchase[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("vendors")
+}
+
+model VendorPurchase {
+  id          String              @id @default(cuid())
+  vendorId    String
+  productId   String
+  variantId   String?
+  quantity    Int
+  unitCost    Decimal             @db.Decimal(10, 2)
+  purchasedAt DateTime            @default(now())
+  note        String              @default("")
+  ledgerEntryId String?             @unique
+  vendor      Vendor              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant     ProductVariant?     @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  movements   InventoryMovement[]
+  ledgerEntry LedgerEntry?        @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([vendorId])
+  @@index([productId])
+  @@index([variantId])
+  @@index([purchasedAt])
+  @@map("vendor_purchases")
+}
+
+model LedgerEntry {
+  id               String                @id @default(cuid())
+  type             LedgerEntryType
+  direction        LedgerEntryDirection
+  amount           Decimal               @db.Decimal(10, 2)
+  reference        String?
+  note             String                @default("")
+  orderId          String?
+  posSaleId        String?
+  vendorPurchaseId String?               @unique
+  adminAccountId   String?
+  order            Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  posSale          PosSale?              @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
+  vendorPurchase   VendorPurchase?
+  adminAccount     AdminAccount?         @relation(fields: [adminAccountId], references: [id], onDelete: SetNull)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([type])
+  @@index([direction])
+  @@index([orderId])
+  @@index([posSaleId])
+  @@index([adminAccountId])
+  @@map("ledger_entries")
 }

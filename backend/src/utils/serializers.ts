@@ -1,4 +1,5 @@
 import {
+  AdminAccount,
   Address,
   Brand,
   CommissionEntry,
@@ -22,6 +23,9 @@ import {
   StoreSetting,
   SyncJob,
   User,
+  Vendor,
+  VendorPurchase,
+  LedgerEntry,
 } from '@prisma/client';
 
 type ProductWithRelations = Product & {
@@ -30,6 +34,10 @@ type ProductWithRelations = Product & {
   images: ProductImage[];
   variants: Array<ProductVariant & { commissionRule: CommissionRule | null }>;
   commissionRule: CommissionRule | null;
+};
+
+type CategoryWithChildren = Category & {
+  children?: CategoryWithChildren[];
 };
 
 type OrderWithRelations = Order & {
@@ -92,12 +100,22 @@ const normalizeMultilineStrings = (value: string): string[] =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+const serializeUserRole = (role: User['role']) => {
+  if (role === 'ADMIN') {
+    return 'admin';
+  }
+
+  return 'customer';
+};
+
+const serializeAdminRole = (role: AdminAccount['role']) => role.toLowerCase();
+
 export const serializeUser = (user: User & { addresses: Address[] }) => ({
   id: user.id,
   email: user.email,
   name: user.name,
   phone: user.phone,
-  role: user.role === 'ADMIN' ? 'admin' : 'customer',
+  role: serializeUserRole(user.role),
   addresses: user.addresses.map((address) => ({
     id: address.id,
     label: address.label,
@@ -113,6 +131,26 @@ export const serializeUser = (user: User & { addresses: Address[] }) => ({
   createdAt: user.createdAt.getTime(),
 });
 
+export const serializeAuthPrincipal = (
+  principal:
+    | (User & { addresses: Address[] })
+    | AdminAccount,
+) => {
+  if ('addresses' in principal) {
+    return serializeUser(principal);
+  }
+
+  return {
+    id: principal.id,
+    email: principal.email,
+    name: principal.name,
+    phone: principal.phone,
+    role: serializeAdminRole(principal.role),
+    addresses: [],
+    createdAt: principal.createdAt.getTime(),
+  };
+};
+
 export const serializeAdminCustomer = (entry: {
   customer: User & { addresses: Address[] };
   orderCount: number;
@@ -123,11 +161,24 @@ export const serializeAdminCustomer = (entry: {
   totalSpend: entry.totalSpend,
 });
 
-export const serializeCategory = (category: Category) => ({
+export type SerializedCategory = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  parentId: string | null;
+  isActive: boolean;
+  children: SerializedCategory[];
+};
+
+export const serializeCategory = (category: CategoryWithChildren): SerializedCategory => ({
   id: category.id,
   slug: category.slug,
   name: category.name,
   description: category.description,
+  parentId: category.parentId,
+  isActive: category.isActive,
+  children: Array.isArray(category.children) ? category.children.map(serializeCategory) : [],
 });
 
 export const serializeBrand = (brand: Brand) => ({
@@ -198,12 +249,14 @@ export const serializeProduct = (product: ProductWithRelations) => {
     description: product.description,
     category: product.category.slug,
     categoryName: product.category.name,
+    parentCategory: product.category.parentId ? product.category.parentId : null,
     brandId: product.brandId,
     brandSlug: product.brand?.slug ?? '',
     brandName: product.brand?.name ?? '',
     price,
     salePrice,
     effectivePrice: typeof salePrice === 'number' && salePrice < price ? salePrice : price,
+    costPrice: decimalToNumber(product.costPrice) ?? null,
     images: product.images.sort((a, b) => a.sortOrder - b.sortOrder).map((image) => image.path),
     sizes: Array.from(new Set([...sizes, ...variantSizes])).filter(Boolean),
     colors: Array.from(
@@ -233,6 +286,7 @@ export const serializeProduct = (product: ProductWithRelations) => {
       colorHex: variant.colorHex,
       stock: variant.stock,
       priceOverride: decimalToNumber(variant.priceOverride),
+      costPrice: decimalToNumber(variant.costPrice) ?? null,
       isActive: variant.isActive,
       barcode: variant.barcode ?? '',
       qrCode: variant.qrCode ?? '',
@@ -402,4 +456,65 @@ export const serializeSyncJob = (job: SyncJob) => ({
   lastError: job.lastError ?? '',
   createdAt: job.createdAt.getTime(),
   updatedAt: job.updatedAt.getTime(),
+});
+
+export const serializeAdminAccountSummary = (account: AdminAccount) => ({
+  id: account.id,
+  email: account.email,
+  name: account.name,
+  phone: account.phone ?? '',
+  role: account.role.toLowerCase(),
+  isActive: account.isActive,
+  lastLoginAt: account.lastLoginAt?.getTime() ?? null,
+  createdAt: account.createdAt.getTime(),
+  updatedAt: account.updatedAt.getTime(),
+});
+
+export const serializeVendor = (vendor: Vendor) => ({
+  id: vendor.id,
+  name: vendor.name,
+  phone: vendor.phone ?? '',
+  email: vendor.email ?? '',
+  address: vendor.address ?? '',
+  notes: vendor.notes,
+  isActive: vendor.isActive,
+  createdAt: vendor.createdAt.getTime(),
+  updatedAt: vendor.updatedAt.getTime(),
+});
+
+export const serializeVendorPurchase = (
+  purchase: VendorPurchase & {
+    vendor: Vendor;
+    product: Product;
+    variant: ProductVariant | null;
+  },
+) => ({
+  id: purchase.id,
+  vendorId: purchase.vendorId,
+  vendorName: purchase.vendor.name,
+  productId: purchase.productId,
+  productName: purchase.product.name,
+  variantId: purchase.variantId,
+  variantSku: purchase.variant?.sku ?? '',
+  quantity: purchase.quantity,
+  unitCost: Number(purchase.unitCost),
+  purchasedAt: purchase.purchasedAt.getTime(),
+  note: purchase.note,
+  createdAt: purchase.createdAt.getTime(),
+  updatedAt: purchase.updatedAt.getTime(),
+});
+
+export const serializeLedgerEntry = (entry: LedgerEntry) => ({
+  id: entry.id,
+  type: entry.type.toLowerCase(),
+  direction: entry.direction.toLowerCase(),
+  amount: Number(entry.amount),
+  reference: entry.reference ?? '',
+  note: entry.note,
+  orderId: entry.orderId,
+  posSaleId: entry.posSaleId,
+  vendorPurchaseId: entry.vendorPurchaseId,
+  adminAccountId: entry.adminAccountId,
+  createdAt: entry.createdAt.getTime(),
+  updatedAt: entry.updatedAt.getTime(),
 });

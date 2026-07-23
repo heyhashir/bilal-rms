@@ -14,7 +14,7 @@ import { getEffectiveAmount } from "@/lib/format";
 export const Route = createFileRoute("/product/$slug")({
   head: ({ params }) => ({
     meta: [
-      { title: `${params.slug} - BALI by Bilal Garments EST 2001.` },
+      { title: `${params.slug} - BALY by Bilal Garments EST 2001.` },
       { name: "description", content: "Premium product details, sizing, and styling notes." },
     ],
   }),

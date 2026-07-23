@@ -16,7 +16,7 @@ export type User = {
   email: string;
   name: string;
   phone?: string | null;
-  role: "customer" | "admin";
+  role: "customer" | "admin" | "manager" | "staff";
   addresses: Address[];
   createdAt: number;
 };

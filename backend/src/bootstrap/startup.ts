@@ -41,7 +41,7 @@ export const ensureStartupReadiness = async (): Promise<void> => {
   )) as Array<{ migration_name: string }>;
 
   if (migrationRows.length === 0) {
-    throw new Error('No Prisma migrations have been applied. Run "npm run db:prepare" before starting the app.');
+    throw new Error('No Prisma migrations have been applied. Run "npm run db:deploy" before starting the app.');
   }
 
   logger.info('Startup readiness checks passed', {
@@ -53,12 +53,13 @@ export const ensureStartupReadiness = async (): Promise<void> => {
 };
 
 export const verifySeedState = async (): Promise<void> => {
-  const [settingsCount, adminCount, registerCount] = await Promise.all([
+  const [settingsCount, adminAccountCount, registerCount] = await Promise.all([
     prisma.storeSetting.count(),
-    prisma.user.count({
+    prisma.adminAccount.count({
       where: {
         email: env.ADMIN_EMAIL,
         role: 'ADMIN',
+        isActive: true,
       },
     }),
     prisma.registerDevice.count({
@@ -70,7 +71,7 @@ export const verifySeedState = async (): Promise<void> => {
     throw new Error('Store settings seed is missing.');
   }
 
-  if (adminCount === 0) {
+  if (adminAccountCount === 0) {
     throw new Error(`Seed admin account "${env.ADMIN_EMAIL}" is missing.`);
   }
 
@@ -81,6 +82,7 @@ export const verifySeedState = async (): Promise<void> => {
   logger.info('Seed state verified', {
     settingsCount,
     adminEmail: env.ADMIN_EMAIL,
+    adminAccountCount,
     registerCount,
   });
 };

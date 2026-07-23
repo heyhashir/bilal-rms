@@ -29,7 +29,7 @@ function InvoicePage() {
       <div className="mx-auto max-w-4xl border border-border bg-background p-8 print:border-0 print:p-0">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-6 border-b border-border pb-6">
           <div>
-            <div className="display text-3xl">BALI by Bilal Garments EST 2001.</div>
+            <div className="display text-3xl">BALY by Bilal Garments EST 2001.</div>
             <div className="mt-2 text-sm text-muted-foreground">Order invoice</div>
           </div>
           <div className="text-sm">

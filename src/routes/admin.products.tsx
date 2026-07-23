@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
@@ -85,6 +85,10 @@ function AdminProducts() {
     queryKey: queryKeys.admin.brands,
     queryFn: async () => (await adminCatalogApi.brands()).brands,
   });
+  const categoryOptions = useMemo(
+    () => categories.flatMap((category) => [category, ...category.children]),
+    [categories],
+  );
   const deleteProduct = useMutation({
     mutationFn: adminCatalogApi.deleteProduct,
     onSuccess: async () => {
@@ -158,7 +162,7 @@ function AdminProducts() {
       {editing && (
         <ProductModal
           draft={editing}
-          categories={categories}
+          categories={categoryOptions}
           brands={brands}
           onClose={() => setEditing(null)}
           onSave={() => setEditing(null)}

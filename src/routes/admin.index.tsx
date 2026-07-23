@@ -26,7 +26,7 @@ function Dashboard() {
     <div>
       <PageHeader
         eyebrow="Dashboard"
-        title="Today at BALI by Bilal Garments EST 2001."
+        title="Today at BALY by Bilal Garments EST 2001."
         description="A live view of sales, stock, commission, and customer operations."
       />
 

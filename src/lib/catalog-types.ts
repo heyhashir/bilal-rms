@@ -8,6 +8,7 @@ export type ProductVariant = {
   colorHex: string;
   stock: number;
   priceOverride?: number;
+  costPrice?: number | null;
   isActive: boolean;
   barcode?: string;
   qrCode?: string;
@@ -22,12 +23,14 @@ export type Product = {
   description: string;
   category: string;
   categoryName: string;
+  parentCategory?: string | null;
   brandId?: string | null;
   brandSlug?: string;
   brandName?: string;
   price: number;
   salePrice?: number;
   effectivePrice: number;
+  costPrice?: number | null;
   images: string[];
   sizes: string[];
   colors: ProductColor[];
@@ -48,7 +51,15 @@ export type Product = {
   variants: ProductVariant[];
 };
 
-export type Category = { id: string; slug: string; name: string; description?: string };
+export type Category = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  parentId?: string | null;
+  isActive?: boolean;
+  children: Category[];
+};
 
 export type Brand = {
   id: string;

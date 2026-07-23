@@ -1,5 +1,5 @@
 export const site = {
-  name: "BALI by Bilal Garments EST 2001.",
+  name: "BALY by Bilal Garments EST 2001.",
   tagline: "Crafted since 2001. Worn every day.",
   description:
     "Contemporary ready-to-wear, in-store retail, and tailored essentials for Men, Women, Kids, and Accessories.",
@@ -19,14 +19,7 @@ export const site = {
   },
 };
 
-export const categories = [
-  { slug: "men", name: "Men" },
-  { slug: "women", name: "Women" },
-  { slug: "kids", name: "Kids" },
-  { slug: "accessories", name: "Accessories" },
-] as const;
-
-export type CategorySlug = (typeof categories)[number]["slug"];
+export type CategorySlug = string;
 
 export const sizeCharts: Record<string, { label: string; rows: { size: string; chest: string; length: string }[] }> = {
   apparel: {

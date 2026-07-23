@@ -4,7 +4,11 @@ import prisma from '../config/prisma';
 type CatalogClient = Prisma.TransactionClient | typeof prisma;
 
 export const productInclude = {
-  category: true,
+  category: {
+    include: {
+      parent: true,
+    },
+  },
   brand: true,
   images: true,
   commissionRule: true,
@@ -14,6 +18,19 @@ export const productInclude = {
     },
   },
 } satisfies Prisma.ProductInclude;
+
+const categoryTreeInclude = {
+  children: {
+    where: { isActive: true },
+    orderBy: { name: 'asc' },
+    include: {
+      children: {
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+      },
+    },
+  },
+} satisfies Prisma.CategoryInclude;
 
 export const catalogRepository = {
   listProducts: () =>
@@ -33,24 +50,43 @@ export const catalogRepository = {
         isActive: true,
         featured: filters?.featured,
         trending: filters?.trending,
-        category: filters?.categorySlug ? { slug: filters.categorySlug } : undefined,
         brand: filters?.brandSlug ? { slug: filters.brandSlug } : undefined,
-        OR: filters?.search
-          ? [
-              { name: { contains: filters.search } },
-              { description: { contains: filters.search } },
-            ]
-          : undefined,
+        AND: [
+          ...(filters?.categorySlug
+            ? [
+                {
+                  OR: [
+                    { category: { slug: filters.categorySlug } },
+                    { category: { parent: { slug: filters.categorySlug } } },
+                  ],
+                },
+              ]
+            : []),
+          ...(filters?.search
+            ? [
+                {
+                  OR: [
+                    { name: { contains: filters.search } },
+                    { description: { contains: filters.search } },
+                  ],
+                },
+              ]
+            : []),
+        ],
       },
       include: productInclude,
       orderBy: { createdAt: 'desc' },
     }),
   listCategories: () =>
     prisma.category.findMany({
+      where: { parentId: null },
+      include: categoryTreeInclude,
       orderBy: { name: 'asc' },
     }),
   listActiveCategories: () =>
     prisma.category.findMany({
+      where: { isActive: true, parentId: null },
+      include: categoryTreeInclude,
       orderBy: { name: 'asc' },
     }),
   listBrands: () =>
@@ -80,6 +116,10 @@ export const catalogRepository = {
   findCategoryBySlug: (slug: string) =>
     prisma.category.findUniqueOrThrow({
       where: { slug },
+    }),
+  findCategoryById: (id: string) =>
+    prisma.category.findUnique({
+      where: { id },
     }),
   findBrandBySlug: (slug: string) =>
     prisma.brand.findUnique({
@@ -124,6 +164,20 @@ export const catalogRepository = {
     client: CatalogClient,
     data: Prisma.ProductVariantUncheckedCreateInput,
   ) => client.productVariant.create({ data }),
+  updateProductCodes: (client: CatalogClient, productId: string, data: { barcode?: string | null; qrCode?: string | null }) =>
+    client.product.update({
+      where: { id: productId },
+      data,
+    }),
+  updateProductVariantCodes: (
+    client: CatalogClient,
+    variantId: string,
+    data: { barcode?: string | null; qrCode?: string | null },
+  ) =>
+    client.productVariant.update({
+      where: { id: variantId },
+      data,
+    }),
   deleteCommissionRulesForProduct: (client: CatalogClient, productId: string) =>
     client.commissionRule.deleteMany({
       where: { productId },
@@ -149,28 +203,42 @@ export const catalogRepository = {
       where: { id },
       data: { isActive: false },
     }),
-  upsertCategory: (input: { slug: string; name: string; description?: string }) =>
+  upsertCategory: (input: {
+    slug: string;
+    name: string;
+    description?: string;
+    parentId?: string | null;
+    isActive?: boolean;
+  }) =>
     prisma.category.upsert({
       where: { slug: input.slug },
       update: {
         name: input.name,
         description: input.description || '',
+        parentId: input.parentId ?? null,
+        isActive: input.isActive ?? true,
       },
       create: {
         slug: input.slug,
         name: input.name,
         description: input.description || '',
+        parentId: input.parentId ?? null,
+        isActive: input.isActive ?? true,
       },
     }),
   countProductsByCategorySlug: (slug: string) =>
     prisma.product.count({
       where: {
-        category: { slug },
+        OR: [
+          { category: { slug } },
+          { category: { parent: { slug } } },
+        ],
       },
     }),
-  deleteCategoryBySlug: (slug: string) =>
-    prisma.category.delete({
+  archiveCategoryBySlug: (slug: string) =>
+    prisma.category.update({
       where: { slug },
+      data: { isActive: false },
     }),
   upsertBrand: (input: {
     slug: string;

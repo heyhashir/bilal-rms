@@ -3,8 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About - BALI by Bilal Garments EST 2001." },
-      { name: "description", content: "BALI by Bilal Garments EST 2001. is an Attock-based contemporary clothing house designing premium ready-to-wear." },
+      { title: "About - BALY by Bilal Garments EST 2001." },
+      { name: "description", content: "BALY by Bilal Garments EST 2001. is an Attock-based contemporary clothing house designing premium ready-to-wear." },
     ],
   }),
   component: About,
@@ -17,7 +17,7 @@ function About() {
       <h1 className="display mb-10 text-5xl md:text-7xl">Made bold,<br />from Attock.</h1>
       <div className="prose prose-neutral max-w-none space-y-6 text-lg leading-relaxed text-muted-foreground">
         <p>
-          BALI by Bilal Garments EST 2001. is a contemporary clothing house designing premium ready-to-wear for those who refuse to blend in.
+          BALY by Bilal Garments EST 2001. is a contemporary clothing house designing premium ready-to-wear for those who refuse to blend in.
           We believe great clothes are quiet acts of confidence, pieces that feel as bold as the people who wear them.
         </p>
         <p>

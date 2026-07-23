@@ -26,6 +26,7 @@ function Shop() {
   });
 
   const categories = bootstrap?.categories ?? [];
+  const categoryOptions = categories.flatMap((entry) => [entry, ...entry.children]);
   const brands = bootstrap?.brands ?? [];
   const seedProducts = bootstrap?.products ?? [];
   const allSizes = useMemo(() => Array.from(new Set(seedProducts.flatMap((product) => product.sizes))), [seedProducts]);
@@ -104,10 +105,10 @@ function Shop() {
       <div className="grid gap-10 md:grid-cols-[240px_1fr]">
         <aside className="space-y-8 text-sm">
           <FilterGroup title="Category">
-            {categories.map((entry) => (
+            {categoryOptions.map((entry) => (
               <Check
                 key={entry.slug}
-                label={entry.name}
+                label={entry.parentId ? `— ${entry.name}` : entry.name}
                 checked={category === entry.slug}
                 onChange={() => setCategory((current) => (current === entry.slug ? "" : entry.slug))}
               />

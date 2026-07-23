@@ -30,23 +30,28 @@ if (!process.env.DATABASE_URL) {
 
   // eslint-disable-next-line no-console
   console.error(
-    [
-      'DATABASE_URL is missing.',
-      `Create ${localTarget} from ${localExample} and start the local MariaDB stack with "npm run db:up".`,
-      'Then run "npm run db:prepare" before starting the app.',
-    ].join('\n'),
+    process.env.NODE_ENV === 'production'
+      ? [
+          'DATABASE_URL is missing.',
+          'Set DATABASE_URL in your Hostinger Node.js app environment before starting the app.',
+        ].join('\n')
+      : [
+          'DATABASE_URL is missing.',
+          `Create ${localTarget} from ${localExample} and start the local MariaDB stack with "npm run db:up".`,
+          'Then run "npm run db:prepare" before starting the app.',
+        ].join('\n'),
   );
 }
 
 const envSchema = z.object({
-  PORT: z.coerce.number().int().positive().default(5000),
+  PORT: z.coerce.number().int().positive().default(3000),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  APP_URL: z.string().url().default('http://localhost:5000'),
+  APP_URL: z.string().url().default('http://localhost:3000'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   SESSION_COOKIE_NAME: z.string().min(1).default('bilal_rms_session'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
-  UPLOAD_DIR: z.string().min(1).default('backend/uploads'),
-  IMPORT_DIR: z.string().min(1).default('backend/runtime-imports'),
+  UPLOAD_DIR: z.string().min(1).default('storage/uploads'),
+  IMPORT_DIR: z.string().min(1).default('storage/runtime-imports'),
   PUBLIC_DIR: z.string().min(1).default('backend/public'),
   MAX_UPLOAD_MB: z.coerce.number().positive().default(10),
   ADMIN_EMAIL: z.string().email().default('admin@bilalgarments.pk'),

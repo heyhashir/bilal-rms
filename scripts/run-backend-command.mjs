@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
+const externallyProvidedEnv = new Set(Object.keys(process.env));
 const envPaths = [
   path.join(rootDir, ".env"),
   path.join(rootDir, "backend", ".env"),
@@ -19,7 +20,11 @@ for (const envPath of envPaths) {
   }
 
   const parsed = dotenv.parse(fs.readFileSync(envPath));
-  Object.assign(env, parsed);
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!externallyProvidedEnv.has(key)) {
+      env[key] = value;
+    }
+  }
 }
 
 const [command, ...args] = process.argv.slice(2);
@@ -28,16 +33,15 @@ if (!command) {
   process.exit(1);
 }
 
-const resolvedCommand =
-  process.platform === "win32" && (command === "npm" || command === "npx" || command === "node")
-    ? `${command}.cmd`
-    : command;
+const isWindowsShellCommand = process.platform === "win32" && (command === "npm" || command === "npx");
+const spawnCommand = isWindowsShellCommand ? "cmd.exe" : command;
+const spawnArgs = isWindowsShellCommand ? ["/d", "/s", "/c", `${command} ${args.join(" ")}`] : args;
 
-const result = spawnSync(resolvedCommand, args, {
+const result = spawnSync(spawnCommand, spawnArgs, {
   cwd: rootDir,
   stdio: "inherit",
   env,
-  shell: process.platform === "win32",
+  shell: false,
 });
 
 if (result.error) {

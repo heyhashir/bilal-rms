@@ -7,8 +7,8 @@ import { queryKeys } from "@/lib/query-keys";
 export const Route = createFileRoute("/category/$slug")({
   head: ({ params }) => ({
     meta: [
-      { title: `${params.slug.charAt(0).toUpperCase() + params.slug.slice(1)} - Bilal Garments` },
-      { name: "description", content: `Shop the ${params.slug} collection at Bilal Garments.` },
+      { title: `${params.slug.charAt(0).toUpperCase() + params.slug.slice(1)} - BALY by Bilal Garments EST 2001.` },
+      { name: "description", content: `Shop the ${params.slug} collection at BALY by Bilal Garments EST 2001.` },
     ],
   }),
   component: CategoryPage,
@@ -20,13 +20,14 @@ function CategoryPage() {
     queryKey: queryKeys.catalog.bootstrap,
     queryFn: catalogApi.bootstrap,
   });
+  const allCategories = (bootstrap?.categories ?? []).flatMap((category) => [category, ...category.children]);
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.catalog.productsList({ category: slug, inStock: true }),
     queryFn: async () => catalogApi.products({ category: slug, inStock: true }),
     enabled: Boolean(bootstrap),
   });
 
-  const category = bootstrap?.categories.find((entry) => entry.slug === slug);
+  const category = allCategories.find((entry) => entry.slug === slug);
   if (!category && bootstrap) {
     throw notFound();
   }

@@ -4,7 +4,7 @@ import { useAuth } from "@/store/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in - BALI by Bilal Garments EST 2001." }] }),
+  head: () => ({ meta: [{ title: "Sign in - BALY by Bilal Garments EST 2001." }] }),
   component: Login,
 });
 
@@ -31,7 +31,7 @@ function Login() {
     <div className="container-bg max-w-md py-16 md:py-24">
       <h1 className="display mb-2 text-4xl md:text-5xl">{mode === "login" ? "Sign in." : "Create account."}</h1>
       <p className="mb-8 text-sm text-muted-foreground">
-        {mode === "login" ? "Welcome back to BALI by Bilal Garments EST 2001." : "Join the inside circle."}
+        {mode === "login" ? "Welcome back to BALY by Bilal Garments EST 2001." : "Join the inside circle."}
       </p>
       <form onSubmit={submit} className="space-y-4">
         {mode === "register" && (

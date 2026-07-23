@@ -14,6 +14,7 @@ import { Route as TrackOrderRouteImport } from './routes/track-order'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as SaleRouteImport } from './routes/sale'
 import { Route as RefundPolicyRouteImport } from './routes/refund-policy'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PosRouteImport } from './routes/pos'
@@ -80,6 +81,11 @@ const ShopRoute = ShopRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SaleRoute = SaleRouteImport.update({
+  id: '/sale',
+  path: '/sale',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RefundPolicyRoute = RefundPolicyRouteImport.update({
@@ -308,6 +314,7 @@ export interface FileRoutesByFullPath {
   '/pos': typeof PosRoute
   '/privacy': typeof PrivacyRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/sale': typeof SaleRoute
   '/search': typeof SearchRoute
   '/shop': typeof ShopRoute
   '/terms': typeof TermsRoute
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/pos': typeof PosRoute
   '/privacy': typeof PrivacyRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/sale': typeof SaleRoute
   '/search': typeof SearchRoute
   '/shop': typeof ShopRoute
   '/terms': typeof TermsRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/pos': typeof PosRoute
   '/privacy': typeof PrivacyRoute
   '/refund-policy': typeof RefundPolicyRoute
+  '/sale': typeof SaleRoute
   '/search': typeof SearchRoute
   '/shop': typeof ShopRoute
   '/terms': typeof TermsRoute
@@ -457,6 +466,7 @@ export interface FileRouteTypes {
     | '/pos'
     | '/privacy'
     | '/refund-policy'
+    | '/sale'
     | '/search'
     | '/shop'
     | '/terms'
@@ -505,6 +515,7 @@ export interface FileRouteTypes {
     | '/pos'
     | '/privacy'
     | '/refund-policy'
+    | '/sale'
     | '/search'
     | '/shop'
     | '/terms'
@@ -554,6 +565,7 @@ export interface FileRouteTypes {
     | '/pos'
     | '/privacy'
     | '/refund-policy'
+    | '/sale'
     | '/search'
     | '/shop'
     | '/terms'
@@ -604,6 +616,7 @@ export interface RootRouteChildren {
   PosRoute: typeof PosRoute
   PrivacyRoute: typeof PrivacyRoute
   RefundPolicyRoute: typeof RefundPolicyRoute
+  SaleRoute: typeof SaleRoute
   SearchRoute: typeof SearchRoute
   ShopRoute: typeof ShopRoute
   TermsRoute: typeof TermsRoute
@@ -649,6 +662,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sale': {
+      id: '/sale'
+      path: '/sale'
+      fullPath: '/sale'
+      preLoaderRoute: typeof SaleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/refund-policy': {
@@ -1021,6 +1041,7 @@ const rootRouteChildren: RootRouteChildren = {
   PosRoute: PosRoute,
   PrivacyRoute: PrivacyRoute,
   RefundPolicyRoute: RefundPolicyRoute,
+  SaleRoute: SaleRoute,
   SearchRoute: SearchRoute,
   ShopRoute: ShopRoute,
   TermsRoute: TermsRoute,

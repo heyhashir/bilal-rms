@@ -106,6 +106,36 @@ export const catalogService = {
         }),
     );
   },
+  async listSaleProducts(filters: {
+    sort?: 'newest' | 'popular' | 'price-asc' | 'price-desc' | 'name-asc' | 'name-desc';
+  }) {
+    const products = await catalogRepository.listActiveProducts();
+    const saleProducts = products.filter((product) => {
+      const price = Number(product.price);
+      const salePrice = product.salePrice ? Number(product.salePrice) : null;
+      return salePrice !== null && salePrice < price;
+    });
+
+    return saleProducts.sort((left, right) => {
+      const leftPrice = Number(left.salePrice ?? left.price);
+      const rightPrice = Number(right.salePrice ?? right.price);
+
+      switch (filters.sort) {
+        case 'price-asc':
+          return leftPrice - rightPrice;
+        case 'price-desc':
+          return rightPrice - leftPrice;
+        case 'name-asc':
+          return left.name.localeCompare(right.name);
+        case 'name-desc':
+          return right.name.localeCompare(left.name);
+        case 'popular':
+          return Number(right.trending) - Number(left.trending) || right.createdAt.getTime() - left.createdAt.getTime();
+        default:
+          return right.createdAt.getTime() - left.createdAt.getTime();
+      }
+    });
+  },
   getProduct(slug: string) {
     return catalogRepository.findActiveProductBySlug(slug);
   },

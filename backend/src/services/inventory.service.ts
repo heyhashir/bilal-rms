@@ -8,7 +8,7 @@ type StockMutationInput = {
   productId: string;
   variantId?: string | null;
   delta: number;
-  reason: 'ORDER' | 'RETURN' | 'ADJUSTMENT' | 'POS_SALE' | 'POS_REFUND';
+  reason: 'ORDER' | 'RETURN' | 'ADJUSTMENT' | 'RESTOCK' | 'POS_SALE' | 'POS_REFUND';
   source?: 'ONLINE' | 'POS';
   reference?: string | null;
   orderId?: string | null;

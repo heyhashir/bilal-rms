@@ -17,6 +17,7 @@ export const variantSchema = z.object({
   qrCode: z.string().optional().or(z.literal('')),
   supplierBarcode: z.string().optional().or(z.literal('')),
   commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
+  costPrice: z.coerce.number().nonnegative().optional().nullable(),
 });
 
 const sizeChartSchema = z.enum(['apparel', 'kids', 'none']);
@@ -30,6 +31,7 @@ export const productSchema = z.object({
   stockMode: z.enum(['simple', 'variant']).default('simple'),
   price: z.coerce.number().nonnegative(),
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
+  costPrice: z.coerce.number().nonnegative().optional().nullable(),
   stock: z.coerce.number().int().nonnegative().default(0),
   sizeChart: sizeChartSchema.default('apparel'),
   sizes: z.array(z.string()).default([]),
@@ -53,6 +55,8 @@ export const categorySchema = z.object({
   name: z.string().min(2),
   slug: z.string().min(1),
   description: z.string().optional().or(z.literal('')),
+  parentId: z.string().optional().nullable().or(z.literal('')),
+  isActive: z.boolean().default(true),
 });
 
 export const brandSchema = z.object({

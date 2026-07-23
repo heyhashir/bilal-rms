@@ -5,7 +5,7 @@ export const adminCatalogApi = {
   products: () => api.get<{ products: Product[] }>("/admin/products"),
   categories: () => api.get<{ categories: Category[] }>("/admin/categories"),
   brands: () => api.get<{ brands: Brand[] }>("/admin/brands"),
-  saveCategory: (payload: { name: string; slug: string; description?: string }) =>
+  saveCategory: (payload: { name: string; slug: string; description?: string; parentId?: string | null; isActive?: boolean }) =>
     api.post<{ category: Category }>("/admin/categories", payload),
   deleteCategory: (slug: string) => api.delete<{ ok: boolean }>(`/admin/categories/${slug}`),
   saveBrand: (payload: { name: string; slug: string; country?: string; website?: string; status: "active" | "inactive" }) =>

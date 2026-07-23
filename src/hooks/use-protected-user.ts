@@ -5,7 +5,7 @@ import type { User } from "@/lib/account-types";
 import { useAuth } from "@/store/auth";
 
 type UseProtectedUserOptions = {
-  role?: User["role"];
+  role?: User["role"] | User["role"][];
   redirectTo?: string;
   unauthorizedRedirectTo?: string;
 };
@@ -18,9 +18,10 @@ export function useProtectedUser({
   const auth = useAuth();
   const { data: user, isLoading: userLoading } = useCurrentUser();
   const navigate = useNavigate();
+  const allowedRoles = Array.isArray(role) ? role : role ? [role] : [];
 
   const isPending = !auth.hydrated || auth.loading || userLoading;
-  const isAuthorized = !isPending && Boolean(user) && (!role || user?.role === role);
+  const isAuthorized = !isPending && Boolean(user) && (allowedRoles.length === 0 || allowedRoles.includes(user!.role));
 
   useEffect(() => {
     if (isPending) {
@@ -32,10 +33,10 @@ export function useProtectedUser({
       return;
     }
 
-    if (role && user.role !== role) {
+    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
       void navigate({ to: unauthorizedRedirectTo });
     }
-  }, [isPending, navigate, redirectTo, role, unauthorizedRedirectTo, user]);
+  }, [allowedRoles, isPending, navigate, redirectTo, unauthorizedRedirectTo, user]);
 
   return {
     auth,
