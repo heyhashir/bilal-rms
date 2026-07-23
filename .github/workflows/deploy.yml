@@ -1,0 +1,28 @@
+name: Automated Deploy to Hostinger
+on:
+  push:
+    branches:
+      - main # Triggers code build every time you push to main branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Compile Production Build
+        run: npm run build
+
+      - name: Sync Files to Hostinger (No Data Deletion)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: 145.79.26.204        # Connects to your Hostinger server IP
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./backend/public/   # Grabs your compiled frontend folder
+          server-dir: public_html/       # Drops it directly onto your live site
+          dangerous-clean-slate: false   # CRITICAL: Forces it to NEVER delete server database files

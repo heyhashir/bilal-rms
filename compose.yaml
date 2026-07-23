@@ -1,0 +1,52 @@
+services:
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: bilal_rms
+      MARIADB_USER: bilal_rms
+      MARIADB_PASSWORD: bilal_rms
+      MARIADB_ROOT_PASSWORD: bilal_rms_root
+    ports:
+      - "${LOCAL_DB_PORT:-3307}:3306"
+    volumes:
+      - bilal-rms-mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "-u", "root", "-pbilal_rms_root"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 60s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      APP_URL: http://localhost:5000
+      DATABASE_URL: mysql://bilal_rms:bilal_rms@mariadb:3306/bilal_rms
+      SESSION_COOKIE_NAME: bilal_rms_session
+      SESSION_TTL_DAYS: 30
+      UPLOAD_DIR: backend/uploads
+      IMPORT_DIR: backend/runtime-imports
+      PUBLIC_DIR: backend/public
+      MAX_UPLOAD_MB: 10
+      ADMIN_EMAIL: admin@bilalgarments.pk
+      ADMIN_PASSWORD: admin123
+      DEMO_SEED: "true"
+    ports:
+      - "${BILAL_RMS_PORT:-5000}:5000"
+    volumes:
+      - bilal-rms-uploads:/app/backend/uploads
+      - bilal-rms-imports:/app/backend/runtime-imports
+
+volumes:
+  bilal-rms-mariadb-data:
+  bilal-rms-uploads:
+  bilal-rms-imports:

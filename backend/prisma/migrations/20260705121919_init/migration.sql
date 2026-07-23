@@ -1,0 +1,2 @@
+-- Legacy placeholder migration kept so Prisma's migration history remains intact.
+-- The actual MySQL baseline starts in 20260706000000_mysql_init.
