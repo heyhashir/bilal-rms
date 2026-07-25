@@ -33,6 +33,12 @@ if (!prismaCliPath) {
   throw new Error("Prisma CLI was not installed. Verify the deployment install step completed.");
 }
 
+await runStep(
+  process.execPath,
+  ["scripts/prepare-prisma-engines.mjs"],
+  "Prisma engine permission preparation",
+);
+
 // Hostinger starts the Node entry file without guaranteeing `npm` is on PATH.
 await runStep(
   process.execPath,
