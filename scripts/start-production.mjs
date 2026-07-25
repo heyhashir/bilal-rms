@@ -1,5 +1,5 @@
 const databaseParts = {
-  host: process.env.DB_HOST,
+  host: process.env.DB_HOST === "localhost" ? "127.0.0.1" : process.env.DB_HOST,
   port: process.env.DB_PORT || "3306",
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -9,7 +9,7 @@ const databaseParts = {
 if (databaseParts.user && databaseParts.password && databaseParts.database) {
   process.env.DATABASE_URL =
     `mysql://${encodeURIComponent(databaseParts.user)}:${encodeURIComponent(databaseParts.password)}` +
-    `@${databaseParts.host || "localhost"}:${databaseParts.port}/${encodeURIComponent(databaseParts.database)}`;
+    `@${databaseParts.host || "127.0.0.1"}:${databaseParts.port}/${encodeURIComponent(databaseParts.database)}`;
   console.log("Configured DATABASE_URL from separate Hostinger DB_* variables.");
 }
 
