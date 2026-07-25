@@ -22,7 +22,8 @@ type Method = Order["payment"];
 
 function Checkout() {
   const navigate = useNavigate();
-  const { lines, subtotal, clear } = useCart();
+  const { lines, buyNowLine, clear, clearBuyNow } = useCart();
+  const checkoutLines = buyNowLine ? [buyNowLine] : lines;
   const { data: user } = useCurrentUser();
   const { data } = useQuery({
     queryKey: queryKeys.catalog.bootstrap,
@@ -32,6 +33,8 @@ function Checkout() {
   const defaultAddress = user?.addresses.find((entry) => entry.isDefault) ?? user?.addresses[0] ?? null;
   const [confirmed, setConfirmed] = useState<Order | null>(null);
   const [proof, setProof] = useState<File | null>(null);
+  const [checkoutKey] = useState(() => crypto.randomUUID());
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     email: user?.email ?? "",
@@ -66,13 +69,13 @@ function Checkout() {
     return exactMatch ?? shippingZones.find((entry) => entry.isUniversal) ?? null;
   }, [form.city, shippingZones]);
 
-  const sub = subtotal();
+  const sub = checkoutLines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
   const ship = zone ? (zone.freeAbove !== null && sub >= zone.freeAbove ? 0 : zone.fee) : 0;
   const total = sub + ship;
 
   if (confirmed) return <Confirmation order={confirmed} />;
 
-  if (lines.length === 0) {
+  if (checkoutLines.length === 0) {
     return (
       <div className="container-bg py-24 text-center">
         <h1 className="display mb-3 text-4xl">Nothing to checkout.</h1>
@@ -83,6 +86,7 @@ function Checkout() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!form.city.trim()) return toast.error("Enter your city");
     if (!zone) return toast.error("No shipping zone is configured");
     if (form.payment !== "cod" && !form.walletReference) return toast.error("Enter your payment reference");
@@ -101,10 +105,11 @@ function Checkout() {
     payload.set("payment", form.payment);
     payload.set("walletReference", form.walletReference);
     payload.set("notes", form.notes);
+    payload.set("checkoutKey", checkoutKey);
     payload.set(
       "lines",
       JSON.stringify(
-        lines.map((line) => ({
+        checkoutLines.map((line) => ({
           productId: line.productId,
           variantId: line.variantId ?? null,
           qty: line.qty,
@@ -117,14 +122,21 @@ function Checkout() {
     }
 
     try {
+      setIsSubmitting(true);
       const response = await orderApi.checkout(payload);
       const order = response.order;
       await queryClient.invalidateQueries({ queryKey: queryKeys.account.orders });
-      clear();
+      if (buyNowLine) {
+        clearBuyNow();
+      } else {
+        clear();
+      }
       setConfirmed(order);
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 0);
     } catch (error) {
       toast.error(getErrorMessage(error, "Unable to place order"));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -216,10 +228,14 @@ function Checkout() {
         <aside className="h-fit space-y-4 bg-secondary p-6 text-sm lg:sticky lg:top-24">
           <h2 className="display text-xl">Order summary</h2>
           <div className="max-h-72 space-y-3 overflow-auto pr-1">
-            {lines.map((line) => (
+            {checkoutLines.map((line) => (
               <div key={line.id} className="flex gap-3">
                 <div className="aspect-[4/5] w-14 shrink-0 overflow-hidden bg-background">
-                  <img src={line.image} alt="" className="h-full w-full object-cover" />
+                  {line.image ? (
+                    <img src={line.image} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-end p-1 text-[9px] text-muted-foreground">{line.name}</div>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-1 text-sm">{line.name}</div>
@@ -236,8 +252,8 @@ function Checkout() {
               <span>Total</span><span>{formatPrice(total)}</span>
             </div>
           </div>
-          <button type="submit" className="w-full bg-primary py-4 text-xs uppercase tracking-[0.2em] text-primary-foreground">
-            Place order
+          <button type="submit" disabled={isSubmitting} className="w-full bg-primary py-4 text-xs uppercase tracking-[0.2em] text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60">
+            {isSubmitting ? "Placing order..." : "Place order"}
           </button>
           <button type="button" onClick={() => navigate({ to: "/cart" })} className="w-full text-xs uppercase tracking-widest text-muted-foreground">
             Back to cart

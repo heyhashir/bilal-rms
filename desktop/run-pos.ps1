@@ -3,20 +3,20 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-Write-Host "Building frontend and backend for the local POS runtime..."
-npm run build:client
-npm run build:server
+$remoteUrl = $env:BILAL_RMS_REMOTE_URL
+if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
+  $remoteUrl = Read-Host "Enter the live Hostinger app URL (for example https://your-domain.example)"
+}
 
-Write-Host "Starting the Bilal RMS server for the POS terminal..."
-$job = Start-Job -ScriptBlock {
-  param($path)
-  Set-Location $path
-  npm run start
-} -ArgumentList $root
+if ([string]::IsNullOrWhiteSpace($remoteUrl)) {
+  throw "BILAL_RMS_REMOTE_URL is required."
+}
 
-Start-Sleep -Seconds 5
+$env:BILAL_RMS_REMOTE_URL = $remoteUrl
 
-Write-Host "Opening POS terminal in the default browser..."
-Start-Process "http://localhost:5000/pos"
+Write-Host "Building Bilal RMS for the Windows desktop POS..."
+npm run build
 
-Write-Host "Server job started with Id $($job.Id). Use 'Receive-Job -Id $($job.Id) -Keep' to inspect logs."
+Write-Host "Starting the Electron-based POS desktop app..."
+npm run desktop:install
+npm run desktop:start

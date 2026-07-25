@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+import { env } from '../config/env';
 import { settingsRepository } from '../repositories/settings.repository';
 import { syncRepository } from '../repositories/sync.repository';
 
@@ -19,9 +22,8 @@ export const syncService = {
     return syncRepository.registerDevice(deviceKey, name, notes);
   },
   async bootstrap(deviceKey: string, requestedCursor?: string) {
-    const device = deviceKey ? await syncRepository.touchDevice(deviceKey) : null;
-
-    const [settings, employees, detailedProducts] = await Promise.all([
+    const [device, settings, employees, detailedProducts] = await Promise.all([
+      deviceKey ? syncRepository.touchDevice(deviceKey) : Promise.resolve(null),
       settingsRepository.getSettings(),
       syncRepository.listActiveEmployees(),
       syncRepository.listBootstrapProducts(),
@@ -109,6 +111,41 @@ export const syncService = {
     }
 
     return createdJobs;
+  },
+  async getUpdateManifest(deviceKey: string, currentVersion?: string) {
+    const requestedVersion = currentVersion?.trim() || null;
+    const configuredBaseUrl = env.DESKTOP_UPDATE_BASE_URL?.trim() || env.APP_URL;
+    const normalizedBaseUrl = configuredBaseUrl.replace(/\/+$/, '');
+    const latestVersion = env.DESKTOP_APP_VERSION;
+    const installerFileName = `BilalRMS-Setup-${latestVersion}.exe`;
+    const installerPath = path.join(env.DESKTOP_RELEASE_DIR, 'windows', installerFileName);
+    const hasPublishedBuild = normalizedBaseUrl.length > 0 && latestVersion.length > 0 && fs.existsSync(installerPath);
+    const available = hasPublishedBuild && requestedVersion !== latestVersion;
+
+    if (deviceKey) {
+      const device = await syncRepository.findDeviceByKey(deviceKey);
+      if (device) {
+        await syncRepository.updateDeviceSyncState(device.id, {
+          lastSeenAt: new Date(),
+        });
+      }
+    }
+
+    return {
+      deviceKey,
+      currentVersion: requestedVersion,
+      latestVersion,
+      available,
+      mandatory: false,
+      notes: env.DESKTOP_UPDATE_NOTES?.trim() || '',
+      publishedAt: Date.now(),
+      windows: hasPublishedBuild
+        ? {
+            installerUrl: `${normalizedBaseUrl}/desktop/windows/${installerFileName}`,
+            manifestUrl: `${normalizedBaseUrl}/api/v1/sync/updates/${encodeURIComponent(deviceKey)}`,
+          }
+        : null,
+    };
   },
   async getDiagnostics() {
     const [devices, jobs] = await Promise.all([

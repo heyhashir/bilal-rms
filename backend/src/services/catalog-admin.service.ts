@@ -1,4 +1,5 @@
-import * as XLSX from 'xlsx';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
 import { catalogRepository } from '../repositories/catalog.repository';
@@ -14,16 +15,16 @@ export const catalogAdminService = {
     const existingProduct = productId ? await catalogRepository.findProductById(productId) : null;
     const category = await catalogRepository.findCategoryBySlug(input.categorySlug);
     const brand = input.brandSlug ? await catalogRepository.findBrandBySlug(input.brandSlug) : null;
-    const isAccessories = input.categorySlug === 'accessories';
-    const normalizedSizeChart = isAccessories ? 'none' : input.sizeChart;
-    const normalizedSizes = isAccessories
+    const normalizedSizeChart = input.sizeChart === 'auto' ? inferSizeChart(input.categorySlug) : input.sizeChart;
+    const hasSizeChart = normalizedSizeChart !== 'none';
+    const normalizedSizes = !hasSizeChart
       ? []
       : input.sizes.map((value) => value.trim()).filter(Boolean);
     const normalizedVariants =
       input.stockMode === 'variant'
         ? input.variants.map((variant) => ({
             ...variant,
-            size: isAccessories ? 'Standard' : variant.size.trim(),
+            size: hasSizeChart ? variant.size.trim() : 'Standard',
             colorName: variant.colorName.trim(),
           }))
         : [];
@@ -106,9 +107,7 @@ export const catalogAdminService = {
     return refreshed;
   },
   async importProductsFromWorkbook(workbookPath: string) {
-    const workbook = XLSX.readFile(workbookPath);
-    const firstSheet = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[firstSheet], { defval: '' });
+    const rows = await readImportRows(workbookPath);
 
     const failures: Array<{ row: number; slug: string; message: string }> = [];
     let successCount = 0;
@@ -201,6 +200,22 @@ export const catalogAdminService = {
     };
   },
   archiveProduct: (id: string) => catalogRepository.archiveProduct(id),
+  restoreProduct: (id: string) => catalogRepository.restoreProduct(id),
+  async permanentlyDeleteProduct(id: string) {
+    const product = await catalogRepository.findProductById(id);
+    const references = await catalogRepository.countProductReferences(id);
+    const referenceCount = Object.values(references).reduce((total, count) => total + count, 0);
+    if (referenceCount > 0) {
+      throw new ApiError(409, 'This product has business history and can only be archived.');
+    }
+
+    const deleted = await catalogRepository.permanentlyDeleteProduct(id);
+    await Promise.all([
+      ...product.images.map((image) => deleteUploadIfManaged(image.path)),
+      product.videoPath ? deleteUploadIfManaged(product.videoPath) : Promise.resolve(),
+    ]);
+    return deleted;
+  },
   async generateCodes(input: BarcodeInput) {
     const settings = await catalogRepository.findStoreSettings();
     return {
@@ -285,4 +300,100 @@ const makeCode = (prefix: string, seed?: string): string => {
   const safeSeed = (seed ?? '').replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 8);
   const suffix = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   return [safePrefix, safeSeed, suffix].filter(Boolean).join('-');
+};
+
+const readImportRows = async (workbookPath: string): Promise<Array<Record<string, string>>> => {
+  const extension = path.extname(workbookPath).toLowerCase();
+  if (extension !== '.csv') {
+    throw new ApiError(400, 'Only CSV product imports are currently supported. Convert Excel files to CSV before importing.');
+  }
+
+  const content = await fs.readFile(workbookPath, 'utf8');
+  const records = parseCsv(content);
+  const headers = records.shift()?.map((header) => header.trim()) ?? [];
+  if (headers.length === 0 || headers.every((header) => !header)) {
+    throw new ApiError(400, 'The first import row must contain column headers.');
+  }
+
+  return records
+    .filter((record) => record.some((value) => value.trim().length > 0))
+    .map((record) =>
+      Object.fromEntries(
+      headers
+          .map((header: string, index: number) => [header, record[index]?.trim() ?? ''] as const)
+        .filter(([header]: readonly [string, string]) => Boolean(header)),
+      ),
+    );
+};
+
+const parseCsv = (content: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index];
+    const nextCharacter = content[index + 1];
+
+    if (character === '"') {
+      if (inQuotes && nextCharacter === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (character === ',' && !inQuotes) {
+      row.push(field);
+      field = '';
+      continue;
+    }
+
+    if ((character === '\n' || character === '\r') && !inQuotes) {
+      if (character === '\r' && nextCharacter === '\n') {
+        index += 1;
+      }
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+      if (rows.length > 5_001) {
+        throw new ApiError(400, 'CSV imports are limited to 5,000 product rows.');
+      }
+      continue;
+    }
+
+    field += character;
+  }
+
+  if (inQuotes) {
+    throw new ApiError(400, 'The CSV contains an unclosed quoted field.');
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows;
+};
+
+const inferSizeChart = (categorySlug: string): 'apparel' | 'bottoms' | 'kids' | 'none' => {
+  const slug = categorySlug.toLowerCase();
+  if (slug === 'accessories' || /accessor|watch|belt|cap|scarf|sock/.test(slug)) {
+    return 'none';
+  }
+
+  if (slug === 'kids' || /kid|boy|girl|infant/.test(slug)) {
+    return 'kids';
+  }
+
+  if (/jean|bottom|trouser|pant/.test(slug)) {
+    return 'bottoms';
+  }
+
+  return 'apparel';
 };

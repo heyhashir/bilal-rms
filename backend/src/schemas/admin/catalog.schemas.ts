@@ -20,7 +20,7 @@ export const variantSchema = z.object({
   costPrice: z.coerce.number().nonnegative().optional().nullable(),
 });
 
-const sizeChartSchema = z.enum(['apparel', 'kids', 'none']);
+const sizeChartSchema = z.enum(['auto', 'apparel', 'bottoms', 'kids', 'none']);
 
 export const productSchema = z.object({
   slug: z.string().min(1),
@@ -33,7 +33,7 @@ export const productSchema = z.object({
   salePrice: z.coerce.number().nonnegative().optional().nullable(),
   costPrice: z.coerce.number().nonnegative().optional().nullable(),
   stock: z.coerce.number().int().nonnegative().default(0),
-  sizeChart: sizeChartSchema.default('apparel'),
+  sizeChart: sizeChartSchema.default('auto'),
   sizes: z.array(z.string()).default([]),
   colors: z.array(colorSchema).default([]),
   tags: z.array(z.string()).default([]),

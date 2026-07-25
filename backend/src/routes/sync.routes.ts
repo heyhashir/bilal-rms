@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../utils/asyncHandler';
-import { bootstrapSync, pushSyncJobs, registerSyncDevice } from '../controllers/sync.controller';
+import { bootstrapSync, getDesktopUpdateManifest, pushSyncJobs, registerSyncDevice } from '../controllers/sync.controller';
 import { z } from 'zod';
 
 const router = Router();
@@ -46,6 +46,19 @@ router.post(
     req.body = pushSchema.parse(req.body);
     await pushSyncJobs(req, res);
   }),
+);
+
+router.post(
+  '/jobs',
+  asyncHandler(async (req, res) => {
+    req.body = pushSchema.parse(req.body);
+    await pushSyncJobs(req, res);
+  }),
+);
+
+router.get(
+  '/updates/:deviceKey',
+  asyncHandler(getDesktopUpdateManifest),
 );
 
 export default router;

@@ -39,6 +39,35 @@ export const syncApi = {
       error?: string;
     }>;
   }) => api.post<{ count: number }>("/sync/push", payload),
+  pushSyncEvents: (payload: {
+    deviceKey: string;
+    cursor?: string;
+    jobs: Array<{
+      jobKey: string;
+      direction?: "push" | "pull";
+      entityType: string;
+      entityId?: string;
+      payload: unknown;
+      status?: "pending" | "synced" | "failed";
+      error?: string;
+    }>;
+  }) => api.post<{ count: number }>("/sync/jobs", payload),
+  updateManifest: (deviceKey: string, currentVersion?: string) =>
+    api.get<{
+      manifest: {
+        deviceKey: string;
+        currentVersion: string | null;
+        latestVersion: string;
+        available: boolean;
+        mandatory: boolean;
+        notes: string;
+        publishedAt: number;
+        windows: {
+          installerUrl: string;
+          manifestUrl: string;
+        } | null;
+      };
+    }>(`/sync/updates/${encodeURIComponent(deviceKey)}${currentVersion ? `?currentVersion=${encodeURIComponent(currentVersion)}` : ""}`),
   syncDiagnostics: () => api.get<SyncDiagnostics>("/admin/sync-diagnostics"),
   retryJob: (id: string) => api.post<{ job: { id: string; status: string; attempts: number; lastError: string } }>(`/admin/sync-jobs/${id}/retry`),
   resolveJob: (id: string) => api.post<{ job: { id: string; status: string; attempts: number; lastError: string } }>(`/admin/sync-jobs/${id}/resolve`),

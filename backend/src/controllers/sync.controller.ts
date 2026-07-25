@@ -49,3 +49,15 @@ export const pushSyncJobs = async (req: Request, res: Response) => {
     }),
   );
 };
+
+export const getDesktopUpdateManifest = async (req: Request, res: Response) => {
+  const deviceKey = typeof req.params.deviceKey === 'string' ? req.params.deviceKey : '';
+  const currentVersion = typeof req.query.currentVersion === 'string' ? req.query.currentVersion : undefined;
+  const payload = await syncService.getUpdateManifest(deviceKey, currentVersion);
+
+  res.status(200).json(
+    ApiResponse.success('Desktop update manifest loaded', {
+      manifest: payload,
+    }),
+  );
+};

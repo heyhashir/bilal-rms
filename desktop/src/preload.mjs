@@ -1,0 +1,30 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+contextBridge.exposeInMainWorld("bilalDesktop", {
+  isDesktop: true,
+  getDeviceKey: () => ipcRenderer.sendSync("bilal-desktop:get-device-key"),
+  loadPosCache: () => ipcRenderer.sendSync("bilal-desktop:load-pos-cache"),
+  // Disk-backed cache writes must not freeze the POS renderer.
+  savePosCache: (cache) => ipcRenderer.send("bilal-desktop:save-pos-cache", cache),
+  loadPosSyncState: () => ipcRenderer.sendSync("bilal-desktop:load-pos-sync-state"),
+  savePosSyncState: (syncState) => ipcRenderer.send("bilal-desktop:save-pos-sync-state", syncState),
+  patchPosSyncState: (patch) => ipcRenderer.sendSync("bilal-desktop:patch-pos-sync-state", patch),
+  loadQueuedSales: () => ipcRenderer.sendSync("bilal-desktop:load-queued-sales"),
+  loadQueuedRefunds: () => ipcRenderer.sendSync("bilal-desktop:load-queued-refunds"),
+  queuePosSale: (sale) => ipcRenderer.send("bilal-desktop:queue-pos-sale", sale),
+  removeQueuedSale: (saleNumber) => ipcRenderer.send("bilal-desktop:remove-queued-sale", saleNumber),
+  queuePosRefund: (refund) => ipcRenderer.send("bilal-desktop:queue-pos-refund", refund),
+  removeQueuedRefund: (jobKey) => ipcRenderer.send("bilal-desktop:remove-queued-refund", jobKey),
+  persistOfflineSale: (payload) => ipcRenderer.sendSync("bilal-desktop:persist-offline-sale", payload),
+  persistOfflineRefund: (payload) => ipcRenderer.sendSync("bilal-desktop:persist-offline-refund", payload),
+  rememberReceipt: (sale) => ipcRenderer.send("bilal-desktop:remember-receipt", sale),
+  listOfflineReceipts: () => ipcRenderer.sendSync("bilal-desktop:list-offline-receipts"),
+  getOfflineReceipt: (receiptOrSaleNumber) => ipcRenderer.sendSync("bilal-desktop:get-offline-receipt", receiptOrSaleNumber),
+  cacheCurrentUser: (user) => ipcRenderer.send("bilal-desktop:cache-current-user", user),
+  getCachedCurrentUser: () => ipcRenderer.sendSync("bilal-desktop:get-cached-current-user"),
+  printReceipt: (payload) => ipcRenderer.invoke("bilal-desktop:print-receipt", payload),
+  checkForUpdates: (payload) => ipcRenderer.invoke("bilal-desktop:check-for-updates", payload),
+  installUpdate: (payload) => ipcRenderer.invoke("bilal-desktop:install-update", payload),
+  openUrl: (url) => ipcRenderer.invoke("bilal-desktop:open-url", url),
+  getDesktopContext: () => ipcRenderer.sendSync("bilal-desktop:get-context"),
+});

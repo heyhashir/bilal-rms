@@ -115,7 +115,7 @@ function AdminBrands() {
         >
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Name" value={editing.name} onChange={(v) => setEditing({ ...editing, name: v })} />
+              <Field label="Name" value={editing.name} autoFocus onChange={(v) => setEditing({ ...editing, name: v })} />
               <Field label="Slug" value={editing.slug} onChange={(v) => setEditing({ ...editing, slug: v })} placeholder="auto-generated" />
             </div>
             <div className="grid gap-3 md:grid-cols-2">

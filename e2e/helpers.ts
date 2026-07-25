@@ -6,21 +6,24 @@ export const adminCredentials = {
   password: "admin123",
 };
 
+const qaPrefix = process.env.QA_RUN_PREFIX?.trim() || "Playwright";
+const qaCode = qaPrefix.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 18) || "PW";
+
 export const testData = {
-  categoryName: "Playwright Category",
-  brandName: "Playwright Brand",
-  brandSlug: "playwright-brand",
-  employeeName: "Ali Sales",
-  productName: "Playwright Kurta",
-  productSlug: "playwright-kurta",
-  productBarcode: "PW-KURTA-001",
-  productQrCode: "PWQR-KURTA-001",
-  customerName: "Walk In Customer",
-  onlineCustomerName: "Website Customer",
-  onlineCustomerEmail: "customer@example.com",
+  categoryName: `${qaPrefix} Category`,
+  brandName: `${qaPrefix} Brand`,
+  brandSlug: `${qaPrefix.toLowerCase()}-brand`.replace(/[^a-z0-9-]/g, "-"),
+  employeeName: `${qaPrefix} Employee`,
+  productName: `${qaPrefix} Kurta`,
+  productSlug: `${qaPrefix.toLowerCase()}-kurta`.replace(/[^a-z0-9-]/g, "-"),
+  productBarcode: `${qaCode}-KURTA-001`,
+  productQrCode: `${qaCode}-QR-001`,
+  customerName: `${qaPrefix} Walk-in Customer`,
+  onlineCustomerName: `${qaPrefix} Website Customer`,
+  onlineCustomerEmail: `${qaPrefix.toLowerCase().replace(/[^a-z0-9]/g, "")}@example.com`,
 };
 
-export const productImagePath = path.resolve(process.cwd(), "e2e", "fixtures", "product-image.svg");
+export const productImagePath = path.resolve(process.cwd(), "src", "assets", "p-tee.jpg");
 
 export const dismissDialogs = (page: Page) => {
   page.on("dialog", (dialog) => dialog.accept());

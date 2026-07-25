@@ -93,7 +93,7 @@ export function Header() {
 
       <div className="container-bg flex min-h-[84px] items-center justify-between gap-4 py-3">
         <button
-          className="-ml-2 p-2 md:hidden"
+          className="-ml-2 p-2 xl:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Open menu"
         >
@@ -104,7 +104,7 @@ export function Header() {
           <BrandMark settings={settings} variant="header" />
         </Link>
 
-        <nav className="hidden items-center gap-7 text-sm md:flex">
+        <nav className="hidden items-center gap-7 text-sm xl:flex">
           <Link
             to="/shop"
             className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
@@ -171,7 +171,7 @@ export function Header() {
       </div>
 
       <div
-        className={`overflow-hidden border-t border-border transition-[max-height,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
+        className={`overflow-hidden border-t border-border transition-[max-height,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] xl:hidden ${
           open ? "max-h-[420px] opacity-100" : "max-h-0 opacity-0"
         }`}
       >
@@ -277,11 +277,21 @@ export function Footer() {
     queryFn: catalogApi.settings,
   });
   const settings = settingsQuery.data?.settings ?? fallbackSettings;
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.catalog.categories,
-    queryFn: catalogApi.categories,
+  const catalogQuery = useQuery({
+    queryKey: queryKeys.catalog.bootstrap,
+    queryFn: catalogApi.bootstrap,
   });
-  const categories = categoriesQuery.data?.categories ?? [];
+  const categories = catalogQuery.data?.categories ?? [];
+  const products = catalogQuery.data?.products ?? [];
+  const visibleCategories = categories
+    .map((category) => ({
+      ...category,
+      children: category.children.filter((child) => products.some((product) => product.category === child.slug)),
+    }))
+    .filter(
+      (category) =>
+        products.some((product) => product.category === category.slug) || category.children.length > 0,
+    );
 
   return (
     <footer className="mt-24 border-t border-border bg-secondary">
@@ -292,7 +302,7 @@ export function Footer() {
         </div>
         <FooterCol
           title="Shop"
-          items={categories.flatMap((category) => [
+          items={visibleCategories.flatMap((category) => [
             { to: `/category/${category.slug}`, label: category.name },
             ...category.children.map((child) => ({ to: `/category/${child.slug}`, label: `${category.name} / ${child.name}` })),
           ])}

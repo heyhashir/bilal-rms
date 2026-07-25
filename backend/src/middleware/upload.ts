@@ -34,5 +34,5 @@ export const productVideoUpload = multer({
 export const importUpload = multer({
   storage: createDiskStorage('.', env.IMPORT_DIR),
   limits: { fileSize: fileLimit },
-  fileFilter: createMimeTypeFilter(importMimeTypes, 'Only CSV or Excel files are allowed for imports'),
+  fileFilter: createMimeTypeFilter(importMimeTypes, 'Only CSV files are allowed for imports'),
 });

@@ -24,11 +24,26 @@ for (const candidate of envCandidates) {
   }
 }
 
+const readDefaultDesktopVersion = (): string => {
+  const desktopPackagePath = path.resolve(rootDir, 'desktop/package.json');
+  if (!fs.existsSync(desktopPackagePath)) {
+    return '0.0.0';
+  }
+
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(desktopPackagePath, 'utf8')) as { version?: string };
+    return packageJson.version?.trim() || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+};
+
+const defaultDesktopVersion = readDefaultDesktopVersion();
+
 if (!process.env.DATABASE_URL) {
   const localExample = path.resolve(rootDir, 'backend/.env.local.example');
   const localTarget = path.resolve(rootDir, 'backend/.env.local');
 
-  // eslint-disable-next-line no-console
   console.error(
     process.env.NODE_ENV === 'production'
       ? [
@@ -56,12 +71,15 @@ const envSchema = z.object({
   MAX_UPLOAD_MB: z.coerce.number().positive().default(10),
   ADMIN_EMAIL: z.string().email().default('admin@bilalgarments.pk'),
   ADMIN_PASSWORD: z.string().min(8).default('admin123'),
+  DESKTOP_APP_VERSION: z.string().min(1).default(defaultDesktopVersion),
+  DESKTOP_UPDATE_BASE_URL: z.string().url().optional().or(z.literal('')),
+  DESKTOP_UPDATE_NOTES: z.string().optional().or(z.literal('')),
+  DESKTOP_RELEASE_DIR: z.string().min(1).default('storage/desktop'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
-  // eslint-disable-next-line no-console
   console.error('Invalid environment variables:', parsedEnv.error.flatten().fieldErrors);
   throw new Error('Invalid environment variables');
 }
@@ -89,6 +107,7 @@ export const env = {
   UPLOAD_DIR: path.resolve(rootDir, parsedEnv.data.UPLOAD_DIR),
   IMPORT_DIR: path.resolve(rootDir, parsedEnv.data.IMPORT_DIR),
   PUBLIC_DIR: path.resolve(rootDir, parsedEnv.data.PUBLIC_DIR),
+  DESKTOP_RELEASE_DIR: path.resolve(rootDir, parsedEnv.data.DESKTOP_RELEASE_DIR),
   isProduction: parsedEnv.data.NODE_ENV === 'production',
   isDevelopment: parsedEnv.data.NODE_ENV === 'development',
   isTest: parsedEnv.data.NODE_ENV === 'test',

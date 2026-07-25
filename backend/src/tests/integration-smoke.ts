@@ -19,6 +19,26 @@ const cleanup = async () => {
       ],
     },
   });
+  await prisma.ledgerEntry.deleteMany({
+    where: {
+      OR: [
+        { vendorPurchase: { vendor: { name: { startsWith: prefix } } } },
+        { adminAccount: { email: { startsWith: prefix } } },
+      ],
+    },
+  });
+  await prisma.vendorPurchase.deleteMany({
+    where: { vendor: { name: { startsWith: prefix } } },
+  });
+  await prisma.vendor.deleteMany({
+    where: { name: { startsWith: prefix } },
+  });
+  await prisma.adminSession.deleteMany({
+    where: { account: { email: { startsWith: prefix } } },
+  });
+  await prisma.adminAccount.deleteMany({
+    where: { email: { startsWith: prefix } },
+  });
   await prisma.commissionEntry.deleteMany({
     where: {
       OR: [
@@ -205,6 +225,10 @@ const run = async () => {
   });
 
   const { server, baseUrl } = await startServer();
+  const health = await fetch(`${baseUrl}/health`);
+  assert.equal(health.status, 200, 'health endpoint should be available');
+  const readiness = await fetch(`${baseUrl}/health/ready`);
+  assert.equal(readiness.status, 200, 'readiness endpoint should confirm database connectivity');
   const customerJar = new CookieJar();
   const adminJar = new CookieJar();
   const request = createJsonRequest(baseUrl);
@@ -236,6 +260,17 @@ const run = async () => {
 
     assert.equal(registration.status, 201, 'customer registration should succeed');
     assert.equal(registration.payload?.data.user.email, `${prefix}@example.com`);
+
+    const duplicateRegistration = await request<{ user: null }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: `${prefix}@example.com`,
+        name: 'Duplicate Customer',
+        password: 'password123',
+      }),
+    });
+    assert.equal(duplicateRegistration.status, 409, 'duplicate customer email should be rejected');
+    assert.match(duplicateRegistration.payload?.message ?? '', /email already registered/i);
 
     const me = await customerRequest<{ user: { email: string } | null }>('/auth/me');
     assert.equal(me.status, 200, 'auth/me should succeed for logged-in customer');
@@ -271,6 +306,7 @@ const run = async () => {
       walletReference?: string;
       notes?: string;
       qty?: number;
+      checkoutKey?: string;
     }) => {
       const form = new FormData();
       form.set('email', overrides?.email ?? `${prefix}@example.com`);
@@ -285,11 +321,15 @@ const run = async () => {
       form.set('payment', overrides?.payment ?? 'cod');
       form.set('walletReference', overrides?.walletReference ?? '');
       form.set('notes', overrides?.notes ?? 'Integration order');
+      if (overrides?.checkoutKey) {
+        form.set('checkoutKey', overrides.checkoutKey);
+      }
       form.set('lines', JSON.stringify([{ productId: product.id, qty: overrides?.qty ?? 1 }]));
       return form;
     };
 
-    const checkoutForm = buildCheckoutForm();
+    const checkoutKey = `${prefix}-checkout-key-001`;
+    const checkoutForm = buildCheckoutForm({ checkoutKey });
 
     const checkout = await fetch(`${baseUrl}/orders/checkout`, {
       method: 'POST',
@@ -317,6 +357,15 @@ const run = async () => {
     assert.equal(checkoutPayload.data.order.email, `${prefix}@example.com`);
     assert.equal(checkoutPayload.data.order.shippingFee, Number(shippingZone.fee), 'checkout should persist the shipping-zone fee');
     assert.equal(checkoutPayload.data.order.shipping.zone, shippingZone.name, 'checkout should persist the shipping-zone name');
+
+    const duplicateCheckout = await fetch(`${baseUrl}/orders/checkout`, {
+      method: 'POST',
+      body: buildCheckoutForm({ checkoutKey }),
+      headers: { 'x-requested-with': 'XMLHttpRequest', ...customerJar.headers() },
+    });
+    const duplicateCheckoutPayload = (await duplicateCheckout.json()) as ApiEnvelope<{ order: { id: string } }>;
+    assert.equal(duplicateCheckout.status, 201, 'repeated checkout should return the original order');
+    assert.equal(duplicateCheckoutPayload.data.order.id, checkoutPayload.data.order.id, 'repeated checkout must not create a second order');
 
     const guestCheckoutForm = buildCheckoutForm({
       email: `${prefix}-guest@example.com`,
@@ -467,6 +516,53 @@ const run = async () => {
 
     assert.equal(adminLogin.status, 200, 'admin login should succeed');
     assert.equal(adminLogin.payload?.data.user.email, env.ADMIN_EMAIL);
+
+    const invalidAdminLogin = await request<{ user: null }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: env.ADMIN_EMAIL,
+        password: 'definitely-wrong-password',
+      }),
+    });
+    assert.equal(invalidAdminLogin.status, 401, 'invalid admin credentials should be rejected');
+    assert.match(invalidAdminLogin.payload?.message ?? '', /invalid credentials/i);
+
+    const adminLogout = await adminRequest<{ ok: boolean }>('/auth/logout', {
+      method: 'POST',
+    });
+    assert.equal(adminLogout.status, 200, 'admin logout should succeed');
+
+    const postAdminLogoutDashboard = await adminRequest<unknown>('/admin/dashboard');
+    assert.equal(postAdminLogoutDashboard.status, 401, 'admin routes should reject after logout');
+
+    const adminRelogin = await adminRequest<{ user: { email: string; role: string } }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: env.ADMIN_EMAIL,
+        password: env.ADMIN_PASSWORD,
+      }),
+    });
+    assert.equal(adminRelogin.status, 200, 'admin should be able to log in again after logout');
+
+    const adminToken = adminJar.token();
+    assert.ok(adminToken, 'admin login should issue a session token');
+    await prisma.adminSession.update({
+      where: { token: adminToken ?? '' },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+
+    const expiredAdminDashboard = await adminRequest<unknown>('/admin/dashboard');
+    assert.equal(expiredAdminDashboard.status, 401, 'expired admin sessions should reject protected routes');
+    assert.equal(expiredAdminDashboard.response.headers.get('x-session-expired'), '1');
+
+    const adminReloginAfterExpiry = await adminRequest<{ user: { email: string; role: string } }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: env.ADMIN_EMAIL,
+        password: env.ADMIN_PASSWORD,
+      }),
+    });
+    assert.equal(adminReloginAfterExpiry.status, 200, 'admin should be able to recover from session expiry');
 
     const invalidImageForm = new FormData();
     invalidImageForm.set('image', new Blob(['not-an-image'], { type: 'text/plain' }), 'image.txt');
@@ -720,6 +816,11 @@ const run = async () => {
     assert.equal(updatedAdminProduct.payload?.data.product.stock, 6);
     assert.equal(updatedAdminProduct.payload?.data.product.salePrice, 1999);
 
+    const saleProducts = await request<{ products: Array<{ id: string; salePrice: number | null }>; meta: { total: number } }>('/catalog/products/sale');
+    assert.equal(saleProducts.status, 200, 'sale catalog should load');
+    assert.ok(saleProducts.payload?.data.products.some((entry) => entry.id === adminProductId && entry.salePrice === 1999), 'a product with a lower sale price should appear in the sale catalog');
+    assert.ok((saleProducts.payload?.data.meta.total ?? 0) >= 1, 'sale catalog should expose its item count');
+
     const createdPosSale = await adminRequest<{ sale: { saleNumber: string; status: string; receipt: { receiptNumber: string } | null; items: Array<{ id: string; employeeId: string; qty: number }> } }>('/admin/pos-sales', {
       method: 'POST',
       body: JSON.stringify({
@@ -851,6 +952,119 @@ const run = async () => {
       inventoryLedger.payload?.data.movements.some((entry) => entry.reason === 'pos_refund'),
       'inventory ledger should include the POS refund movement',
     );
+
+    const createdVendor = await adminRequest<{ vendor: { id: string; name: string; isActive: boolean } }>('/admin/vendors', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: `${prefix} Vendor`,
+        phone: '03009998877',
+        email: `${prefix}-vendor@example.com`,
+        address: 'Integration vendor address',
+        notes: 'Integration vendor',
+        isActive: true,
+      }),
+    });
+    assert.equal(createdVendor.status, 201, 'vendor creation should succeed');
+    const vendorId = createdVendor.payload?.data.vendor.id;
+    assert.ok(vendorId, 'vendor creation should return an id');
+
+    const vendorPurchase = await adminRequest<{ purchase: { id: string; vendorName: string; quantity: number } }>('/admin/vendor-purchases', {
+      method: 'POST',
+      body: JSON.stringify({
+        vendorId,
+        productId: product.id,
+        quantity: 2,
+        unitCost: 900,
+        note: 'Integration vendor restock',
+      }),
+    });
+    assert.equal(vendorPurchase.status, 201, 'vendor purchase should succeed');
+    assert.equal(vendorPurchase.payload?.data.purchase.quantity, 2);
+
+    const vendorPurchases = await adminRequest<{ purchases: Array<{ id: string }> }>('/admin/vendor-purchases');
+    assert.equal(vendorPurchases.status, 200, 'vendor purchase history should load');
+    assert.ok(vendorPurchases.payload?.data.purchases.some((entry) => entry.id === vendorPurchase.payload?.data.purchase.id), 'vendor purchase history should include the new purchase');
+
+    const postPurchaseLedger = await adminRequest<{ movements: Array<{ productId: string; reason: string }> }>('/admin/inventory/ledger?limit=50');
+    assert.ok(postPurchaseLedger.payload?.data.movements.some((entry) => entry.productId === product.id && entry.reason === 'restock'), 'vendor purchase should create a restock movement');
+
+    const today = new Date().toISOString().slice(0, 10);
+    const reportSummary = await adminRequest<{
+      summary: { overview: { onlineOrders: number; posSales: number; onlineRevenue: number; posRevenue: number }; profit: { total: number } };
+    }>(`/admin/reports/summary?from=${today}&to=${today}`);
+    assert.equal(reportSummary.status, 200, 'admin report summary should load');
+    assert.ok((reportSummary.payload?.data.summary.overview.onlineOrders ?? 0) >= 2, 'report should include online orders');
+    assert.ok((reportSummary.payload?.data.summary.overview.posSales ?? 0) >= 1, 'report should include POS sales');
+    assert.ok((reportSummary.payload?.data.summary.overview.onlineRevenue ?? 0) > 0, 'report should include online revenue');
+    assert.ok((reportSummary.payload?.data.summary.profit.total ?? 0) >= 0, 'report should calculate profit');
+
+    const ledgerEntry = await adminRequest<{ entry: { id: string; type: string } }>('/admin/ledger', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'expense', direction: 'debit', amount: 125, reference: `${prefix}-expense`, note: 'Integration expense' }),
+    });
+    assert.equal(ledgerEntry.status, 201, 'admin ledger entry should be created');
+    assert.equal(ledgerEntry.payload?.data.entry.type, 'expense');
+    const listedLedger = await adminRequest<{ entries: Array<{ id: string }> }>(`/admin/ledger?from=${today}&to=${today}`);
+    assert.equal(listedLedger.status, 200, 'admin ledger should load');
+    assert.ok(listedLedger.payload?.data.entries.some((entry) => entry.id === ledgerEntry.payload?.data.entry.id), 'ledger list should include the created expense');
+
+    const managerAccount = await adminRequest<{ account: { id: string; role: string } }>('/admin/staff-accounts', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: `${prefix}-manager@example.com`,
+        name: 'Integration Manager',
+        phone: '03001110000',
+        role: 'manager',
+        password: 'manager123',
+        isActive: true,
+      }),
+    });
+    assert.equal(managerAccount.status, 201, 'manager account creation should succeed');
+    assert.equal(managerAccount.payload?.data.account.role, 'manager');
+
+    const staffAccount = await adminRequest<{ account: { id: string; role: string } }>('/admin/staff-accounts', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: `${prefix}-staff@example.com`,
+        name: 'Integration Staff',
+        phone: '03002220000',
+        role: 'staff',
+        password: 'staff1234',
+        isActive: true,
+      }),
+    });
+    assert.equal(staffAccount.status, 201, 'staff account creation should succeed');
+    assert.equal(staffAccount.payload?.data.account.role, 'staff');
+
+    const managerRequest = createJsonRequest(baseUrl, new CookieJar());
+    const managerLogin = await managerRequest<{ user: { role: string } }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: `${prefix}-manager@example.com`, password: 'manager123' }),
+    });
+    assert.equal(managerLogin.status, 200, 'manager login should succeed');
+    assert.equal(managerLogin.payload?.data.user.role, 'manager');
+    const managerReports = await managerRequest<unknown>('/admin/reports/summary');
+    assert.equal(managerReports.status, 403, 'manager should be blocked from financial reports');
+    const managerOrders = await managerRequest<unknown>('/admin/orders');
+    assert.equal(managerOrders.status, 200, 'manager should access operational orders');
+    const managerVendors = await managerRequest<unknown>('/admin/vendors');
+    assert.equal(managerVendors.status, 403, 'manager should be blocked from vendor financial views');
+    const managerStaffAccounts = await managerRequest<unknown>('/admin/staff-accounts');
+    assert.equal(managerStaffAccounts.status, 403, 'manager should be blocked from staff account administration');
+
+    const staffRequest = createJsonRequest(baseUrl, new CookieJar());
+    const staffLogin = await staffRequest<{ user: { role: string } }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: `${prefix}-staff@example.com`, password: 'staff1234' }),
+    });
+    assert.equal(staffLogin.status, 200, 'staff login should succeed');
+    assert.equal(staffLogin.payload?.data.user.role, 'staff');
+    const staffOrders = await staffRequest<unknown>('/admin/orders');
+    assert.equal(staffOrders.status, 403, 'staff should be blocked from online order administration');
+    const staffProducts = await staffRequest<unknown>('/admin/products');
+    assert.equal(staffProducts.status, 200, 'staff should access catalog operations');
+    const staffReports = await staffRequest<unknown>('/admin/reports/summary');
+    assert.equal(staffReports.status, 403, 'staff should be blocked from financial reports');
 
     const adminOrders = await adminRequest<{ orders: Array<{ id: string; status: string }> }>('/admin/orders');
     assert.equal(adminOrders.status, 200, 'admin orders should load');

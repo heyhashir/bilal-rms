@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import { env } from '../config/env';
 import { authRepository } from '../repositories/auth.repository';
 import { ApiError } from '../types/ApiError';
@@ -14,18 +15,27 @@ export const authService = {
     return authRepository.findAdminAccountById(accountId);
   },
   async register(input: { email: string; name: string; password: string }) {
-    const email = input.email.toLowerCase();
+    const email = input.email.trim().toLowerCase();
     const exists = await authRepository.findUserByEmail(email);
 
     if (exists) {
       throw new ApiError(409, 'Email already registered');
     }
 
-    const user = await authRepository.createUser({
-      email,
-      name: input.name,
-      passwordHash: await bcrypt.hash(input.password, 12),
-    });
+    let user;
+    try {
+      user = await authRepository.createUser({
+        email,
+        name: input.name.trim(),
+        passwordHash: await bcrypt.hash(input.password, 12),
+      });
+    } catch (error) {
+      // The unique index handles concurrent requests that pass the pre-check.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ApiError(409, 'Email already registered');
+      }
+      throw error;
+    }
 
     const token = createSessionToken();
     const expiresAt = sessionExpiry();
@@ -44,7 +54,7 @@ export const authService = {
       await authRepository.deleteAdminSessionsByToken(input.currentSessionToken);
     }
 
-    const normalizedEmail = input.email.toLowerCase();
+    const normalizedEmail = input.email.trim().toLowerCase();
     const adminAccount = await authRepository.findAdminAccountByEmail(normalizedEmail);
     if (adminAccount && adminAccount.isActive) {
       const valid = await bcrypt.compare(input.password, adminAccount.passwordHash);

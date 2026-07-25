@@ -376,6 +376,7 @@ model Order {
   id               String         @id @default(cuid())
   orderNumber      String         @unique
   publicToken      String         @unique
+  checkoutKey      String?        @unique
   userId           String?
   customerName     String
   email            String
@@ -421,6 +422,7 @@ model OrderItem {
   size      String?
   colorName String?
   unitPrice Decimal         @db.Decimal(10, 2)
+  unitCost  Decimal?        @db.Decimal(10, 2)
   qty       Int
   order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product         @relation(fields: [productId], references: [id])
@@ -541,6 +543,7 @@ model PosSaleItem {
   size             String?
   colorName        String?
   unitPrice        Decimal         @db.Decimal(10, 2)
+  unitCost         Decimal?        @db.Decimal(10, 2)
   qty              Int
   refundedQty      Int             @default(0)
   lineTotal        Decimal         @db.Decimal(10, 2)

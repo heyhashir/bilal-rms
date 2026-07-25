@@ -1,6 +1,8 @@
 import { spawn, spawnSync } from "child_process";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -17,6 +19,39 @@ const runtimeEnv = {
       }
     : {}),
 };
+
+const readLocalDatabasePort = () => {
+  const envFiles = [
+    path.join(rootDir, "backend", ".env.local"),
+    path.join(rootDir, "backend", ".env"),
+    path.join(rootDir, ".env"),
+  ];
+
+  for (const envFile of envFiles) {
+    if (!fs.existsSync(envFile)) {
+      continue;
+    }
+
+    const parsed = dotenv.parse(fs.readFileSync(envFile));
+    const databaseUrl = parsed.DATABASE_URL ?? runtimeEnv.DATABASE_URL;
+    if (!databaseUrl) {
+      continue;
+    }
+
+    try {
+      const normalized = databaseUrl.replace(/^"|"$/g, "");
+      const url = new URL(normalized);
+      return Number(url.port || "3306");
+    } catch {
+      // Ignore malformed URLs and continue to the next candidate.
+    }
+  }
+
+  return Number(process.env.LOCAL_DB_PORT || "3307");
+};
+
+const localDbPort = readLocalDatabasePort();
+runtimeEnv.LOCAL_DB_PORT = String(localDbPort);
 
 const resolveCommand = (command) => {
   if (process.platform !== "win32") {
@@ -106,9 +141,12 @@ if (resetDb) {
 }
 
 run("docker", ["compose", "up", "-d", "mariadb"]);
-run("npm", ["run", "db:wait"]);
-await runWithRetry("npm", ["run", "db:deploy"], { attempts: 5, delayMs: 4000, label: "db:deploy" });
-await runWithRetry("npm", ["run", "seed"], { attempts: 5, delayMs: 4000, label: "seed" });
+run("node", ["scripts/wait-for-port.mjs", "127.0.0.1", String(localDbPort), "180000", "MariaDB"]);
+// A fresh MariaDB volume may accept TCP connections before its initialization
+// entrypoint has finished. Keep retrying the migration/seed steps until the
+// database is genuinely ready instead of failing the browser harness early.
+await runWithRetry("npm", ["run", "db:deploy"], { attempts: 30, delayMs: 5000, label: "db:deploy" });
+await runWithRetry("npm", ["run", "seed"], { attempts: 10, delayMs: 5000, label: "seed" });
 run("npm", ["run", "build"]);
 
 const child = spawn("node", ["backend/dist/server.js"], {

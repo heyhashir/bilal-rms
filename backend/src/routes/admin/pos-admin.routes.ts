@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 const router = Router();
 
+
 const posLineSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().optional().nullable(),

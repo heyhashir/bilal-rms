@@ -13,10 +13,8 @@ const deferredRoutes = [
   { file: "admin.discounts.tsx", path: "/admin/discounts" },
   { file: "admin.notifications.tsx", path: "/admin/notifications" },
   { file: "admin.purchase-orders.tsx", path: "/admin/purchase-orders" },
-  { file: "admin.roles.tsx", path: "/admin/roles" },
   { file: "admin.seo.tsx", path: "/admin/seo" },
   { file: "admin.size-charts.tsx", path: "/admin/size-charts" },
-  { file: "admin.suppliers.tsx", path: "/admin/suppliers" },
 ];
 
 const adminLayoutSource = fs.readFileSync(adminLayoutPath, "utf8");

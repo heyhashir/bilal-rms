@@ -8,6 +8,7 @@ export function ProductCard({ product, variant = "grid" }: { product: Product; v
   const wish = useWishlist();
   const fav = wish.ids.includes(product.id);
   const onSale = isDiscountedProduct(product);
+  const primaryImage = product.images[0];
 
   if (variant === "list") {
     return (
@@ -17,7 +18,11 @@ export function ProductCard({ product, variant = "grid" }: { product: Product; v
         className="flex gap-5 border-b border-border py-5 group"
       >
         <div className="img-zoom relative w-40 aspect-[4/5] overflow-hidden bg-secondary shrink-0">
-          <img src={product.images[0]} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          {primaryImage ? (
+            <img src={primaryImage} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full items-end p-3 text-xs text-muted-foreground">{product.name}</div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-medium">{product.name}</h3>
@@ -35,13 +40,17 @@ export function ProductCard({ product, variant = "grid" }: { product: Product; v
       className="block hover-lift group"
     >
       <div className="img-zoom relative aspect-[4/5] overflow-hidden bg-secondary">
-        <img
-          src={product.images[0]}
-          alt={product.name}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover"
-        />
+        {primaryImage ? (
+          <img
+            src={primaryImage}
+            alt={product.name}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-end p-4 text-sm text-muted-foreground">{product.name}</div>
+        )}
         {/* secondary image cross-fade */}
         {product.images[1] && (
           <img

@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 const router = Router();
 
+
 const commissionStatusSchema = z.object({
   status: z.enum(['earned', 'reversed', 'paid']),
   note: z.string().optional().or(z.literal('')),

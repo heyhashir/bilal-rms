@@ -24,8 +24,16 @@ storage/runtime-imports/*
 !storage/runtime-imports/.gitkeep
 storage/runtime-logs/*
 !storage/runtime-logs/.gitkeep
+storage/desktop/
 playwright-report
 test-results
+
+# Generated desktop build artifacts and local QA captures
+desktop/dist/
+desktop/dist-fixed*/
+desktop/*.png
+/.codex-*.png
+*.docx
 
 # Wrangler / Cloudflare
 .wrangler/
@@ -42,7 +50,7 @@ test-results
 *.sln
 *.sw?
 
-# Local planning / architecture docs
+# Developer documentation belongs in docs/developer, not the repository root.
 API_CONTRACTS.md
 ARCHITECTURE.md
 CONTRIBUTING.md
@@ -52,3 +60,5 @@ REFACTOR_PROGRESS.md
 RELEASE_CHECKLIST.md
 improvements.md
 desktop/README.md
+!docs/developer/
+!docs/developer/*.md

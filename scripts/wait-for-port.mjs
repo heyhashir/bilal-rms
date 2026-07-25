@@ -28,14 +28,29 @@ const tryConnect = () =>
   });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const discoverContainer = () => {
+  if (containerName) {
+    return containerName;
+  }
+
+  const result = spawnSync(
+    dockerCommand,
+    ["ps", "--filter", "label=com.docker.compose.service=mariadb", "--format", "{{.ID}}"],
+    { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8", shell: false },
+  );
+
+  return result.status === 0 ? result.stdout.trim().split(/\s+/)[0] || "" : "";
+};
+
 const getContainerState = () => {
-  if (!containerName) {
+  const targetContainer = discoverContainer();
+  if (!targetContainer) {
     return null;
   }
 
   const result = spawnSync(
     dockerCommand,
-    ["inspect", "-f", "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", containerName],
+    ["inspect", "-f", "{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}", targetContainer],
     {
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf8",

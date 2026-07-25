@@ -96,7 +96,7 @@ export const reportService = {
     for (const order of orders) {
       for (const item of order.items) {
         const unitPrice = Number(item.unitPrice);
-        const unitCost = Number(item.variant?.costPrice ?? item.product.costPrice ?? 0);
+        const unitCost = Number(item.unitCost ?? item.variant?.costPrice ?? item.product.costPrice ?? 0);
         const profit = (unitPrice - unitCost) * item.qty;
         totalProfit += profit;
 
@@ -122,7 +122,7 @@ export const reportService = {
     for (const sale of posSales) {
       for (const item of sale.items) {
         const unitPrice = Number(item.unitPrice);
-        const unitCost = Number(item.variant?.costPrice ?? item.product.costPrice ?? 0);
+        const unitCost = Number(item.unitCost ?? item.variant?.costPrice ?? item.product.costPrice ?? 0);
         const saleProfit = (unitPrice - unitCost) * item.qty;
         const refundCost = (unitPrice - unitCost) * item.refundedQty;
         const profit = saleProfit - refundCost;

@@ -91,7 +91,7 @@ function AdminSuppliers() {
   return (
     <div>
       <PageHeader
-        eyebrow="Suppliers"
+        eyebrow="Vendors"
         title="Vendors and stock intake."
         description="Keep vendor records and convert purchases into inventory restocks plus ledger entries."
         action={

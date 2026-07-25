@@ -42,6 +42,9 @@ PUBLIC_DIR=backend/public
 MAX_UPLOAD_MB=10
 ADMIN_EMAIL=owner@example.com
 ADMIN_PASSWORD=change-this-before-launch
+DESKTOP_APP_VERSION=0.1.0
+DESKTOP_UPDATE_BASE_URL=https://your-domain.example
+DESKTOP_UPDATE_NOTES=Windows POS desktop update
 ```
 
 Hostinger deployment flow:
@@ -77,6 +80,13 @@ What stays on Hostinger and is not replaced by GitHub pushes:
 - uploaded product videos
 - uploaded payment proofs
 
+### Backup and Recovery
+
+- Use Hostinger hPanel database backups or export MySQL before schema changes. Restore the export into the same Hostinger database, then run `npm run db:deploy` on the next deployment.
+- Back up the persistent `storage/uploads` directory separately from the code repository. GitHub contains code only and never replaces uploaded media or payment proofs.
+- Keep the original product CSV/XLSX files so the catalog can be re-imported after database recovery.
+- Do not delete desktop POS SQLite data while the register is offline. Reconnect it and let the sync queue finish before reinstalling or resetting the app.
+
 ## Client Review From A Clean Windows PC
 
 Docker Desktop is the only software required. Git, Node.js, npm, and a separately installed database are not required. Install Docker Desktop, start it, open PowerShell, and run this command:
@@ -107,6 +117,7 @@ Uploaded product media and the local database are stored in Docker named volumes
 - Ecommerce storefront with catalog browsing, product detail, cart, checkout, and order tracking
 - Owner admin for products, categories, brands, orders, customers, returns, refunds, employees, commissions, settings, reports, and imports
 - POS billing flow for in-store sales with barcode or QR lookup, receipt generation, and stock updates
+- Windows desktop POS runtime for one billing PC with local SQLite-backed offline queue, receipt history, and Windows printer support
 - Shared inventory ledger for online orders, POS sales, refunds, and manual adjustments
 - Employee-based commission tracking for in-store sales
 - Media upload support for product images, product videos, and payment proof screenshots
@@ -148,7 +159,7 @@ npm run dev:full
 
 This starts:
 
-- MariaDB in Docker on `127.0.0.1:3307`
+- MariaDB in Docker on `127.0.0.1:3308`
 - the backend development server
 - the frontend development server
 
@@ -182,7 +193,7 @@ Local development uses the committed Docker MariaDB runtime. Prisma migrations a
 Default local database target:
 
 ```env
-DATABASE_URL="mysql://bilal_rms:bilal_rms@127.0.0.1:3307/bilal_rms"
+DATABASE_URL="mysql://bilal_rms:bilal_rms@127.0.0.1:3308/bilal_rms"
 ```
 
 ## Production Model
@@ -193,6 +204,8 @@ The intended production setup is:
 - Hostinger-managed MySQL for persistence through Prisma's `mysql` datasource
 - Express serving the built frontend and API from one deployment target
 - Uploaded media stored under `storage/uploads` with database-backed references
+
+For shops that want a dedicated billing application, the `desktop/` package wraps the same POS flow in an Electron Windows app. It serves the built POS UI locally, stores offline billing data in a local SQLite file, and syncs back to the same Hostinger-hosted APIs when internet is available.
 
 The `/pos` route works inside the same hosted web app. Its offline queue uses browser storage on the billing PC, not a separate paid service.
 

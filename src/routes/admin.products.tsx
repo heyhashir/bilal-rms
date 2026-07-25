@@ -26,7 +26,7 @@ type Draft = {
   price: number;
   salePrice?: number;
   stock: number;
-  sizeChart: "apparel" | "kids" | "none";
+  sizeChart: "auto" | "apparel" | "bottoms" | "kids" | "none";
   sizes: string[];
   colors: { name: string; hex: string }[];
   tags: string[];
@@ -54,7 +54,7 @@ const makeDraft = (product?: Product): Draft => ({
   price: product?.price ?? 0,
   salePrice: product?.salePrice,
   stock: product?.stock ?? 0,
-  sizeChart: (product?.sizeChart as Draft["sizeChart"]) ?? "apparel",
+  sizeChart: (product?.sizeChart as Draft["sizeChart"]) ?? "auto",
   sizes: product?.sizes ?? [],
   colors: product?.colors ?? [],
   tags: product?.tags ?? [],
@@ -62,7 +62,7 @@ const makeDraft = (product?: Product): Draft => ({
   seoDescription: product?.seoDescription ?? "",
   featured: product?.featured ?? false,
   trending: product?.trending ?? false,
-  isActive: true,
+  isActive: product?.isActive ?? true,
   images: product?.images ?? [],
   video: product?.video ?? "",
   barcode: product?.barcode ?? "",
@@ -70,6 +70,15 @@ const makeDraft = (product?: Product): Draft => ({
   supplierBarcode: product?.supplierBarcode ?? "",
   variantsJson: product ? JSON.stringify(product.variants, null, 2) : "[]",
 });
+
+const invalidateCatalogAfterMutation = async () => {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.catalog.bootstrap }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.catalog.products }),
+    queryClient.invalidateQueries({ queryKey: ["catalog", "product"] }),
+  ]);
+};
 
 function AdminProducts() {
   const [editing, setEditing] = useState<Draft | null>(null);
@@ -92,12 +101,28 @@ function AdminProducts() {
   const deleteProduct = useMutation({
     mutationFn: adminCatalogApi.deleteProduct,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.products });
+      await invalidateCatalogAfterMutation();
       toast.success("Product archived");
     },
     onError: (error) => {
       toast.error(getErrorMessage(error, "Unable to archive product"));
     },
+  });
+  const restoreProduct = useMutation({
+    mutationFn: adminCatalogApi.restoreProduct,
+    onSuccess: async () => {
+      await invalidateCatalogAfterMutation();
+      toast.success("Product restored");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to restore product")),
+  });
+  const permanentDeleteProduct = useMutation({
+    mutationFn: adminCatalogApi.permanentDeleteProduct,
+    onSuccess: async () => {
+      await invalidateCatalogAfterMutation();
+      toast.success("Product permanently deleted");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to permanently delete product")),
   });
 
   return (
@@ -141,15 +166,32 @@ function AdminProducts() {
                 <td className="p-3">
                   <div className="flex justify-end gap-2">
                     <button onClick={() => setEditing(makeDraft(product))} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
+                    {product.isActive !== false ? (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Archive "${product.name}"?`)) deleteProduct.mutate(product.id);
+                        }}
+                        className="p-2 hover:bg-sale hover:text-primary-foreground"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => restoreProduct.mutate(product.id)}
+                        className="px-2 text-[10px] uppercase tracking-widest underline"
+                      >
+                        Restore
+                      </button>
+                    )}
                     <button
-                      onClick={async () => {
-                        if (confirm(`Archive "${product.name}"?`)) {
-                          deleteProduct.mutate(product.id);
+                      onClick={() => {
+                        if (confirm(`Permanently delete "${product.name}"? This cannot be undone.`)) {
+                          permanentDeleteProduct.mutate(product.id);
                         }
                       }}
-                      className="p-2 hover:bg-sale hover:text-primary-foreground"
+                      className="px-2 text-[10px] uppercase tracking-widest text-sale underline"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
                     </button>
                   </div>
                 </td>
@@ -186,11 +228,13 @@ function ProductModal({
   onSave: () => void;
 }) {
   const [form, setForm] = useState(draft);
+  // Keep generated slugs in sync with a new product name until an operator edits it.
+  const [slugEdited, setSlugEdited] = useState(Boolean(draft.slug));
   const [sizeText, setSizeText] = useState(draft.sizes.join(", "));
   const [tagText, setTagText] = useState(draft.tags.join(", "));
   const [colorName, setColorName] = useState("");
   const [colorHex, setColorHex] = useState("#111111");
-  const isAccessory = form.categorySlug === "accessories";
+  const isAccessory = form.sizeChart === "none" || inferSizeChart(form.categorySlug) === "none";
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -237,7 +281,7 @@ function ProductModal({
         variants: JSON.parse(form.variantsJson || "[]"),
       }, form.id);
       toast.success(form.id ? "Product updated" : "Product created");
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.products });
+      await invalidateCatalogAfterMutation();
       onSave();
     } catch (error) {
       toast.error(getErrorMessage(error, "Unable to save product"));
@@ -258,8 +302,20 @@ function ProductModal({
     >
       <div className="space-y-5">
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Name" value={form.name} onChange={(v) => setForm({ ...form, name: v, slug: form.slug || slugify(v) })} />
-          <Field label="Slug" value={form.slug} onChange={(v) => setForm({ ...form, slug: slugify(v) })} />
+          <Field
+            label="Name"
+            value={form.name}
+            autoFocus
+            onChange={(v) => setForm((current) => ({ ...current, name: v, slug: slugEdited ? current.slug : slugify(v) }))}
+          />
+          <Field
+            label="Slug"
+            value={form.slug}
+            onChange={(v) => {
+              setSlugEdited(true);
+              setForm((current) => ({ ...current, slug: slugify(v) }));
+            }}
+          />
         </div>
         <Field label="Description" value={form.description} onChange={(v) => setForm({ ...form, description: v })} textarea />
         <div className="grid gap-3 md:grid-cols-4">
@@ -270,7 +326,7 @@ function ProductModal({
               setForm((current) => ({
                 ...current,
                 categorySlug: v,
-                sizeChart: v === "accessories" ? "none" : current.sizeChart === "none" ? "apparel" : current.sizeChart,
+                sizeChart: "auto",
               }))
             }
             options={categories.map((category) => ({ value: category.slug, label: category.name }))}
@@ -307,7 +363,9 @@ function ProductModal({
             value={form.sizeChart}
             onChange={(v) => setForm({ ...form, sizeChart: v as Draft["sizeChart"] })}
             options={[
+              { value: "auto", label: "Auto by category" },
               { value: "apparel", label: "Apparel" },
+              { value: "bottoms", label: "Jeans / bottoms" },
               { value: "kids", label: "Kids" },
               { value: "none", label: "No size chart" },
             ]}
@@ -380,3 +438,11 @@ function ProductModal({
 }
 
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+const inferSizeChart = (categorySlug: string): "apparel" | "bottoms" | "kids" | "none" => {
+  const slug = categorySlug.toLowerCase();
+  if (slug === "accessories" || /accessor|watch|belt|cap|scarf|sock/.test(slug)) return "none";
+  if (slug === "kids" || /kid|boy|girl|infant/.test(slug)) return "kids";
+  if (/jean|bottom|trouser|pant/.test(slug)) return "bottoms";
+  return "apparel";
+};

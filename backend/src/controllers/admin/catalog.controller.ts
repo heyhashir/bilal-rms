@@ -80,6 +80,26 @@ export const archiveProduct = async (req: Request, res: Response) => {
   res.status(200).json(ApiResponse.success('Product archived', { ok: true }));
 };
 
+export const restoreProduct = async (req: Request, res: Response) => {
+  await catalogAdminService.restoreProduct(req.params.id);
+  logAdminAudit(req, {
+    action: 'product.restored',
+    targetType: 'product',
+    targetId: req.params.id,
+  });
+  res.status(200).json(ApiResponse.success('Product restored', { ok: true }));
+};
+
+export const permanentlyDeleteProduct = async (req: Request, res: Response) => {
+  await catalogAdminService.permanentlyDeleteProduct(req.params.id);
+  logAdminAudit(req, {
+    action: 'product.deleted',
+    targetType: 'product',
+    targetId: req.params.id,
+  });
+  res.status(200).json(ApiResponse.success('Product permanently deleted', { ok: true }));
+};
+
 export const generateBarcodes = async (req: Request, res: Response) => {
   const codes = await catalogAdminService.generateCodes(req.body);
   res.status(200).json(ApiResponse.success('Codes generated', codes));

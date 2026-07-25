@@ -130,6 +130,7 @@ export const posService = {
         const product = productMap.get(line.productId)!;
         const variant = line.variantId ? product.variants.find((entry) => entry.id === line.variantId) : null;
         const unitPrice = line.unitPrice ?? Number(variant?.priceOverride ?? product.salePrice ?? product.price);
+        const unitCost = Number(variant?.costPrice ?? product.costPrice ?? 0);
         const employeeId = toNullable(line.employeeId);
         const employee = employeeId ? employeeMap.get(employeeId) : null;
         const rate = employee ? Number(employee.commissionRate) : null;
@@ -150,6 +151,7 @@ export const posService = {
             size: variant?.size ?? '',
             colorName: variant?.colorName ?? '',
             unitPrice,
+            unitCost,
             qty: line.qty,
             lineTotal: unitPrice * line.qty,
             commissionRate: rate ?? null,

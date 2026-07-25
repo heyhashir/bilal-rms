@@ -42,6 +42,7 @@ export type Product = {
   seoDescription?: string;
   trending?: boolean;
   featured?: boolean;
+  isActive?: boolean;
   barcode?: string;
   qrCode?: string;
   supplierBarcode?: string;

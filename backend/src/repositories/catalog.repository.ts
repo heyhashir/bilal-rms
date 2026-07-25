@@ -67,7 +67,16 @@ export const catalogRepository = {
                 {
                   OR: [
                     { name: { contains: filters.search } },
+                    { slug: { contains: filters.search } },
                     { description: { contains: filters.search } },
+                    { barcode: { contains: filters.search } },
+                    { qrCode: { contains: filters.search } },
+                    { supplierBarcode: { contains: filters.search } },
+                    { brand: { name: { contains: filters.search } } },
+                    { category: { name: { contains: filters.search } } },
+                    { variants: { some: { sku: { contains: filters.search } } } },
+                    { variants: { some: { size: { contains: filters.search } } } },
+                    { variants: { some: { colorName: { contains: filters.search } } } },
                   ],
                 },
               ]
@@ -202,6 +211,26 @@ export const catalogRepository = {
     prisma.product.update({
       where: { id },
       data: { isActive: false },
+    }),
+  restoreProduct: (id: string) =>
+    prisma.product.update({
+      where: { id },
+      data: { isActive: true },
+    }),
+  countProductReferences: async (productId: string) => {
+    const [orderItems, posSaleItems, inventory, vendorPurchases, commissions] = await Promise.all([
+      prisma.orderItem.count({ where: { productId } }),
+      prisma.posSaleItem.count({ where: { productId } }),
+      prisma.inventoryMovement.count({ where: { productId } }),
+      prisma.vendorPurchase.count({ where: { productId } }),
+      prisma.commissionEntry.count({ where: { productId } }),
+    ]);
+
+    return { orderItems, posSaleItems, inventory, vendorPurchases, commissions };
+  },
+  permanentlyDeleteProduct: (id: string) =>
+    prisma.product.delete({
+      where: { id },
     }),
   upsertCategory: (input: {
     slug: string;

@@ -67,6 +67,7 @@ function AdminCategories() {
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="New category or subcategory"
+          autoFocus
           className="border border-border bg-background px-3 py-2.5 text-sm"
         />
         <select

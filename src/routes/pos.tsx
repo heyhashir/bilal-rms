@@ -10,18 +10,27 @@ import { adminEmployeesApi } from "@/lib/admin-employees-api";
 import { adminPosApi } from "@/lib/admin-pos-api";
 import { adminSettingsApi } from "@/lib/admin-settings-api";
 import type { Employee, PosSale, PosSaleInput } from "@/lib/admin-types";
+import type { DesktopUpdateManifest } from "@/lib/desktop-bridge";
 import {
   applySaleToCachedStock,
+  findOfflineReceipt,
   getPosDeviceKey,
   loadPosCache,
+  loadOfflineReceipts,
+  loadQueuedRefunds,
   loadPosSyncState,
   loadQueuedSales,
   patchPosSyncState,
-  queuePosSale,
+  persistOfflineSale,
+  persistOfflineRefund,
+  type PosRefundQueueItem,
+  rememberReceipt,
+  removeQueuedRefund,
   removeQueuedSale,
   savePosCache,
   type PosSyncState,
 } from "@/lib/pos-local";
+import { getDesktopBridge } from "@/lib/desktop-bridge";
 import { formatPrice } from "@/lib/format";
 import { getEffectiveAmount } from "@/lib/format";
 import { queryClient } from "@/lib/query-client";
@@ -78,8 +87,17 @@ function PosTerminal() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [receipt, setReceipt] = useState<PosSale | null>(null);
+  const [receiptLookup, setReceiptLookup] = useState("");
+  const [storedReceipts, setStoredReceipts] = useState<PosSale[]>([]);
+  const [updateMessage, setUpdateMessage] = useState("");
+  const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateManifest | null>(null);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [refundReason, setRefundReason] = useState("Customer return");
+  const [refundNote, setRefundNote] = useState("");
+  const [refundQtys, setRefundQtys] = useState<Record<string, number>>({});
   const [queueCount, setQueueCount] = useState(0);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [initialCache] = useState(() => loadPosCache());
   const deviceKey = useMemo(() => getPosDeviceKey(), []);
   const [syncState, setSyncState] = useState<PosSyncState>(() =>
     loadPosSyncState() ?? {
@@ -91,7 +109,7 @@ function PosTerminal() {
       lastSyncError: "",
       retryCount: 0,
       failedJobs: 0,
-      queueSize: loadQueuedSales().length,
+      queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
     },
   );
   const canLoadPos = !isPending && Boolean(user) && ["admin", "manager", "staff"].includes(user.role);
@@ -104,7 +122,8 @@ function PosTerminal() {
 
   const productsQuery = useQuery({
     queryKey: queryKeys.pos.products,
-    enabled: canLoadPos,
+    enabled: false,
+    initialData: initialCache ? { products: initialCache.products, source: "cache" as PosQuerySource } : undefined,
     queryFn: async () => {
       try {
         const payload = await adminCatalogApi.products();
@@ -122,7 +141,8 @@ function PosTerminal() {
 
   const employeesQuery = useQuery({
     queryKey: queryKeys.pos.employees,
-    enabled: canLoadPos,
+    enabled: false,
+    initialData: initialCache ? { employees: initialCache.employees, source: "cache" as PosQuerySource } : undefined,
     queryFn: async () => {
       try {
         const payload = await adminEmployeesApi.employees();
@@ -140,7 +160,8 @@ function PosTerminal() {
 
   const settingsQuery = useQuery({
     queryKey: queryKeys.pos.settings,
-    enabled: canLoadPos,
+    enabled: false,
+    initialData: initialCache ? { settings: initialCache.settings, source: "cache" as PosQuerySource } : undefined,
     queryFn: async () => {
       try {
         const payload = await adminSettingsApi.settings();
@@ -170,8 +191,9 @@ function PosTerminal() {
 
   const syncQueuedSales = async () => {
     const queued = loadQueuedSales();
+    const queuedRefunds = loadQueuedRefunds();
     const attemptedAt = Date.now();
-    if (queued.length === 0) {
+    if (queued.length === 0 && queuedRefunds.length === 0) {
       setQueueCount(0);
       updateSyncState({
         queueSize: 0,
@@ -190,6 +212,20 @@ function PosTerminal() {
       try {
         await adminPosApi.createPosSale(sale);
         removeQueuedSale(sale.saleNumber ?? "");
+        await syncApi.pushSyncEvents({
+          deviceKey,
+          cursor: syncState.lastCursor ?? undefined,
+          jobs: [
+            {
+              jobKey: `${sale.saleNumber ?? "queued-sale"}:sale`,
+              direction: "push",
+              entityType: "pos-sale",
+              entityId: sale.saleNumber,
+              payload: sale,
+              status: "synced",
+            },
+          ],
+        });
         synced += 1;
       } catch (error) {
         failed += 1;
@@ -197,7 +233,36 @@ function PosTerminal() {
       }
     }
 
-    const remaining = loadQueuedSales().length;
+    for (const refund of queuedRefunds) {
+      try {
+        await adminPosApi.refundPosSale(refund.saleNumber, {
+          reason: refund.reason,
+          note: refund.note,
+          items: refund.items,
+        });
+        removeQueuedRefund(refund.jobKey);
+        await syncApi.pushSyncEvents({
+          deviceKey,
+          cursor: syncState.lastCursor ?? undefined,
+          jobs: [
+            {
+              jobKey: refund.jobKey,
+              direction: "push",
+              entityType: "pos-refund",
+              entityId: refund.saleNumber,
+              payload: refund,
+              status: "synced",
+            },
+          ],
+        });
+        synced += 1;
+      } catch (error) {
+        failed += 1;
+        lastError = getErrorMessage(error, "Unable to sync queued refund");
+      }
+    }
+
+    const remaining = loadQueuedSales().length + loadQueuedRefunds().length;
     setQueueCount(remaining);
     updateSyncState({
       queueSize: remaining,
@@ -216,42 +281,58 @@ function PosTerminal() {
         queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }),
         queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
       ]);
-      toast.success(`Synced ${synced} queued sale${synced === 1 ? "" : "s"}`);
+      toast.success(`Synced ${synced} queued item${synced === 1 ? "" : "s"}`);
     }
   };
 
   useEffect(() => {
     const bootstrapPos = async () => {
       try {
-        const device = await syncApi.registerDevice({ deviceKey, name: "Shop POS", notes: "Browser POS terminal" });
         const bootstrap = await syncApi.syncBootstrap(deviceKey, syncState.lastCursor ?? undefined);
-        savePosCache({
+        const nextCache = {
           products: bootstrap.products,
           employees: bootstrap.employees,
           settings: bootstrap.settings,
           updatedAt: Date.now(),
-        });
+        };
+        savePosCache(nextCache);
+        queryClient.setQueryData(queryKeys.pos.products, { products: bootstrap.products, source: "live" as PosQuerySource });
+        queryClient.setQueryData(queryKeys.pos.employees, { employees: bootstrap.employees, source: "live" as PosQuerySource });
+        queryClient.setQueryData(queryKeys.pos.settings, { settings: bootstrap.settings, source: "live" as PosQuerySource });
         updateSyncState({
           lastCursor: bootstrap.cursor,
           lastBootstrapAt: Date.now(),
-          lastSyncError: device.device.lastSyncError,
-          queueSize: loadQueuedSales().length,
+          lastSyncError: "",
+          queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
         });
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.pos.employees }),
-          queryClient.invalidateQueries({ queryKey: queryKeys.pos.settings }),
-        ]);
-        await syncQueuedSales();
+        void syncQueuedSales();
+        const desktopBridge = getDesktopBridge();
+        if (desktopBridge) {
+          void desktopBridge
+            .checkForUpdates({
+              deviceKey,
+              currentVersion: desktopBridge.getDesktopContext().appVersion,
+            })
+            .then((update) => {
+              setDesktopUpdate(update);
+              setUpdateMessage(
+                update.available
+                  ? `Desktop update ${update.latestVersion} is available.`
+                  : `Desktop app is up to date (${update.latestVersion}).`,
+              );
+            })
+            .catch(() => undefined);
+        }
       } catch (error) {
         setOfflineMode(true);
         updateSyncState({
           lastSyncAttemptAt: Date.now(),
           lastSyncError: getErrorMessage(error, "Unable to reach sync bootstrap"),
-          queueSize: loadQueuedSales().length,
+          queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
         });
       } finally {
-        setQueueCount(loadQueuedSales().length);
+        setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
+        setStoredReceipts(loadOfflineReceipts());
       }
     };
 
@@ -260,18 +341,24 @@ function PosTerminal() {
     }
   }, [canLoadPos, deviceKey]);
 
-  useEffect(() => {
-    if (!productsQuery.data || !employeesQuery.data || !settingsQuery.data) {
+  const installDesktopUpdate = async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge || !desktopUpdate?.available || !desktopUpdate.windows?.installerUrl) {
       return;
     }
 
-    savePosCache({
-      products: productsQuery.data.products,
-      employees: employeesQuery.data.employees,
-      settings: settingsQuery.data.settings,
-      updatedAt: Date.now(),
-    });
-  }, [employeesQuery.data, productsQuery.data, settingsQuery.data]);
+    try {
+      setIsInstallingUpdate(true);
+      await bridge.installUpdate({
+        installerUrl: desktopUpdate.windows.installerUrl,
+      });
+      toast.success("Update installer launched. The app will close so Windows can continue the upgrade.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to launch desktop update"));
+    } finally {
+      setIsInstallingUpdate(false);
+    }
+  };
 
   useEffect(() => {
     if (!canLoadPos) {
@@ -285,6 +372,12 @@ function PosTerminal() {
 
     setOfflineMode(usingCachedSource);
   }, [canLoadPos, employeesQuery.data, productsQuery.data, settingsQuery.data]);
+
+  useEffect(() => {
+    setRefundQtys({});
+    setRefundReason("Customer return");
+    setRefundNote("");
+  }, [receipt?.saleNumber]);
 
   const choices = useMemo<SaleChoice[]>(() => {
     const rows: SaleChoice[] = [];
@@ -407,66 +500,110 @@ function PosTerminal() {
       })),
     };
 
-    queuePosSale(payload);
-    applySaleToCachedStock(payload);
-    setQueueCount(loadQueuedSales().length);
-    toast.success("Sale saved locally and queued for sync");
-    setReceipt({
-      id: saleNumber,
-      saleNumber,
-      source: "pos",
-      status: "finalized",
-      customerName,
-      customerPhone,
-      customerEmail,
-      subtotal,
-      total: subtotal,
-      paidAmount: subtotal,
-      paymentMethod,
-      notes,
-      syncedStatus: "pending",
-      syncedAt: null,
-      finalizedAt: Date.now(),
-      deviceId: deviceKey,
-      deviceName: "Shop POS",
-      receipt: {
-        id: saleNumber,
-        receiptNumber: `${settings?.receiptPrefix ?? "REC"}-${saleNumber}`,
-        invoiceNumber: `${settings?.invoicePrefix ?? "BG"}-${saleNumber}`,
-        reprintCount: 0,
-        lastPrintedAt: Date.now(),
-      },
-      items: cart.map((line) => ({
-        id: `${line.productId}-${line.variantId ?? "base"}`,
-        productId: line.productId,
-        variantId: line.variantId ?? null,
-        employeeId: line.employeeId,
-        employeeName: employees.find((employee) => employee.id === line.employeeId)?.name ?? "",
-        name: line.label,
-        slug: line.subtitle,
-        sku: line.subtitle,
-        image: line.image,
-        barcode: line.barcode,
-        qrCode: line.qrCode,
-        size: line.size,
-        color: line.color,
-        qty: line.qty,
-        refundedQty: 0,
-        unitPrice: line.unitPrice,
-        lineTotal: line.unitPrice * line.qty,
-        commissionRate: null,
-        commissionAmount: null,
-      })),
-      payments: [],
-      returns: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+    const offlineReceipt = persistOfflineSale({
+      sale: payload,
+      employees,
+      settings,
     });
+    applySaleToCachedStock(payload);
+    setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
+    toast.success("Sale saved locally and queued for sync");
+    setReceipt(offlineReceipt);
+    setStoredReceipts(loadOfflineReceipts());
     setCart([]);
     setCustomerName("");
     setCustomerPhone("");
     setCustomerEmail("");
     setNotes("");
+  };
+
+  const processRefund = async () => {
+    if (!receipt) {
+      return;
+    }
+
+    const items = receipt.items
+      .map((line) => {
+        const qty = Math.max(0, refundQtys[line.id] ?? 0);
+        const remaining = line.qty - line.refundedQty;
+        if (qty <= 0 || qty > remaining) {
+          return null;
+        }
+
+        return {
+          saleItemId: line.id,
+          qty,
+        };
+      })
+      .filter((entry): entry is { saleItemId: string; qty: number } => Boolean(entry));
+
+    if (items.length === 0) {
+      toast.error("Enter at least one refundable quantity");
+      return;
+    }
+
+    if (offlineMode || !navigator.onLine) {
+      const refundJob: PosRefundQueueItem = {
+        jobKey: `refund-${receipt.saleNumber}-${Date.now().toString(36).toUpperCase()}`,
+        saleNumber: receipt.saleNumber,
+        reason: refundReason.trim() || "Customer return",
+        note: refundNote.trim(),
+        items,
+      };
+
+      const nextReceipt = persistOfflineRefund({ refund: refundJob });
+      if (!nextReceipt) {
+        toast.error("Receipt not found in local history");
+        return;
+      }
+
+      setReceipt(nextReceipt);
+      setStoredReceipts(loadOfflineReceipts());
+      setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
+      toast.success("Refund saved locally and queued for sync");
+      return;
+    }
+
+    try {
+      const response = await adminPosApi.refundPosSale(receipt.saleNumber, {
+        reason: refundReason.trim() || "Customer return",
+        note: refundNote.trim(),
+        items,
+      });
+      rememberReceipt(response.sale);
+      setReceipt(response.sale);
+      setStoredReceipts(loadOfflineReceipts());
+      await syncApi.pushSyncEvents({
+        deviceKey,
+        cursor: syncState.lastCursor ?? undefined,
+        jobs: [
+          {
+            jobKey: `refund-${response.sale.saleNumber}-${Date.now().toString(36).toUpperCase()}`,
+            direction: "push",
+            entityType: "pos-refund",
+            entityId: response.sale.saleNumber,
+            payload: {
+              saleNumber: response.sale.saleNumber,
+              items,
+              reason: refundReason.trim() || "Customer return",
+              note: refundNote.trim(),
+            },
+            status: "synced",
+          },
+        ],
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
+      ]);
+      toast.success("Refund processed");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to process refund"));
+    }
   };
 
   const checkout = async () => {
@@ -502,6 +639,8 @@ function PosTerminal() {
     try {
       const response = await adminPosApi.createPosSale(payload);
       setReceipt(response.sale);
+      rememberReceipt(response.sale);
+      setStoredReceipts(loadOfflineReceipts());
       setCart([]);
       setCustomerName("");
       setCustomerPhone("");
@@ -547,7 +686,7 @@ function PosTerminal() {
             </div>
             <ActionButton onClick={() => void syncQueuedSales()} variant="ghost"><RefreshCcw className="h-3.5 w-3.5" /> Sync queued</ActionButton>
             <Link to="/admin" className="inline-flex items-center gap-2 border border-border px-4 py-2.5 text-xs uppercase tracking-widest hover:bg-secondary">
-              <ArrowLeft className="h-3.5 w-3.5" /> Admin
+              <ArrowLeft className="h-3.5 w-3.5" /> Management dashboard
             </Link>
           </>
         }
@@ -752,7 +891,55 @@ function PosTerminal() {
                 <div>Backlog: <span className="text-foreground">{syncState.queueSize}</span></div>
                 <div>Retry count: <span className="text-foreground">{syncState.retryCount}</span></div>
                 <div>Failed syncs: <span className="text-foreground">{syncState.failedJobs}</span></div>
+                {updateMessage && <div className="text-foreground">{updateMessage}</div>}
+                {desktopUpdate?.available && desktopUpdate.windows && (
+                  <div className="pt-2">
+                    <ActionButton onClick={() => void installDesktopUpdate()} disabled={isInstallingUpdate}>
+                      {isInstallingUpdate ? "Launching installer..." : `Install desktop update ${desktopUpdate.latestVersion}`}
+                    </ActionButton>
+                  </div>
+                )}
                 {syncState.lastSyncError && <div className="text-sale">Last error: {syncState.lastSyncError}</div>}
+              </div>
+            </div>
+
+            <div className="border border-border p-5">
+              <div className="mb-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">Receipt lookup</div>
+              <div className="flex gap-3">
+                <input
+                  value={receiptLookup}
+                  onChange={(event) => setReceiptLookup(event.target.value)}
+                  placeholder="Receipt or sale number"
+                  className="flex-1 border border-border bg-background px-3 py-2 text-sm"
+                />
+                <ActionButton
+                  variant="ghost"
+                  onClick={() => {
+                    const found = findOfflineReceipt(receiptLookup);
+                    if (!found) {
+                      toast.error("Receipt not found in local history");
+                      return;
+                    }
+                    setReceipt(found);
+                  }}
+                >
+                  Open
+                </ActionButton>
+              </div>
+              <div className="mt-3 space-y-2">
+                {storedReceipts.slice(0, 5).map((sale) => (
+                  <button
+                    key={sale.saleNumber}
+                    onClick={() => setReceipt(sale)}
+                    className="flex w-full items-center justify-between border border-border px-3 py-2 text-left hover:bg-secondary"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{sale.receipt?.receiptNumber ?? sale.saleNumber}</div>
+                      <div className="text-xs text-muted-foreground">{sale.customerName || "Walk-in customer"}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{new Date(sale.createdAt).toLocaleString()}</div>
+                  </button>
+                ))}
               </div>
             </div>
           </section>
@@ -767,7 +954,24 @@ function PosTerminal() {
           footer={
             <>
               <ActionButton variant="ghost" onClick={() => setReceipt(null)}>Close</ActionButton>
-              <ActionButton onClick={() => window.print()}><Printer className="h-3.5 w-3.5" /> Print</ActionButton>
+              <ActionButton
+                onClick={async () => {
+                  const bridge = getDesktopBridge();
+                  if (bridge) {
+                    try {
+                      await bridge.printReceipt({ sale: receipt, settings });
+                      toast.success("Receipt sent to printer");
+                    } catch (error) {
+                      toast.error(getErrorMessage(error, "Unable to print receipt"));
+                    }
+                    return;
+                  }
+
+                  window.print();
+                }}
+              >
+                <Printer className="h-3.5 w-3.5" /> Print
+              </ActionButton>
             </>
           }
         >
@@ -806,6 +1010,43 @@ function PosTerminal() {
                   <div className="font-semibold">{formatPrice(line.lineTotal)}</div>
                 </div>
               ))}
+            </div>
+            <div className="border border-border p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.3em] text-muted-foreground">Process refund</div>
+              <div className="space-y-3">
+                {receipt.items.map((line) => {
+                  const refundable = line.qty - line.refundedQty;
+                  return (
+                    <div key={`${line.id}-refund`} className="grid gap-2 md:grid-cols-[1fr_120px]">
+                      <div>
+                        <div className="font-medium">{line.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Refunded {line.refundedQty} / {line.qty}
+                        </div>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        max={Math.max(0, refundable)}
+                        disabled={refundable <= 0}
+                        value={refundQtys[line.id] ?? 0}
+                        onChange={(event) =>
+                          setRefundQtys((current) => ({
+                            ...current,
+                            [line.id]: Math.max(0, Math.min(refundable, Number(event.target.value) || 0)),
+                          }))
+                        }
+                        className="border border-border bg-background px-3 py-2 text-sm"
+                      />
+                    </div>
+                  );
+                })}
+                <Field label="Refund reason" value={refundReason} onChange={setRefundReason} />
+                <Field label="Refund note" value={refundNote} onChange={setRefundNote} textarea />
+                <div className="flex justify-end">
+                  <ActionButton variant="ghost" onClick={() => void processRefund()}>Process refund</ActionButton>
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-between border-t border-border pt-3 font-semibold">
               <span>Total</span>

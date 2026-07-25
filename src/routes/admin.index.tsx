@@ -5,7 +5,8 @@ import { adminDashboardApi } from "@/lib/admin-dashboard-api";
 import type { DashboardStats } from "@/lib/admin-types";
 import { formatPrice } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
-import { EmptyState, PageHeader, StatCard } from "@/components/admin/primitives";
+import { getErrorMessage } from "@/lib/api";
+import { ActionButton, EmptyState, PageHeader, StatCard } from "@/components/admin/primitives";
 
 export const Route = createFileRoute("/admin/")({
   component: Dashboard,
@@ -13,13 +14,27 @@ export const Route = createFileRoute("/admin/")({
 
 function Dashboard() {
   const [panel, setPanel] = useState<"revenue" | "stock" | "employees">("revenue");
-  const { data: stats } = useQuery<DashboardStats | null>({
+  const { data: stats, isLoading, error, refetch, isFetching } = useQuery<DashboardStats | null>({
     queryKey: queryKeys.admin.dashboard,
     queryFn: async () => (await adminDashboardApi.dashboard()).dashboard,
   });
 
-  if (!stats) {
+  if (isLoading && !stats) {
     return <EmptyState title="Loading dashboard" hint="Fetching live store metrics." />;
+  }
+
+  if (error && !stats) {
+    return (
+      <EmptyState
+        title="Dashboard unavailable"
+        hint={getErrorMessage(error, "The live dashboard could not be loaded.")}
+        cta={<ActionButton onClick={() => void refetch()}>Retry</ActionButton>}
+      />
+    );
+  }
+
+  if (!stats) {
+    return <EmptyState title="No dashboard data" hint="There is no live store activity to display yet." />;
   }
 
   return (
@@ -28,6 +43,7 @@ function Dashboard() {
         eyebrow="Dashboard"
         title="Today at BALY by Bilal Garments EST 2001."
         description="A live view of sales, stock, commission, and customer operations."
+        action={isFetching ? <span className="text-xs uppercase tracking-widest text-muted-foreground">Refreshing...</span> : undefined}
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">

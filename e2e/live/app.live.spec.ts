@@ -5,8 +5,9 @@ test.describe("Bilal RMS live-safe smoke", () => {
   test("shop, POS reporting, commissions, and normal navigation stay usable", async ({ page }) => {
     dismissDialogs(page);
     await loginAsAdmin(page);
+    const qaPrefix = process.env.QA_RUN_PREFIX?.trim() || `qa-live-${Date.now()}`;
 
-    const fixture = await page.evaluate(async () => {
+    const fixture = await page.evaluate(async (prefix) => {
       const categoriesResponse = await fetch("/api/v1/admin/categories", {
         credentials: "include",
       });
@@ -16,12 +17,11 @@ test.describe("Bilal RMS live-safe smoke", () => {
         throw new Error("No category available for live smoke fixture");
       }
 
-      const seed = Date.now();
-      const employeeName = `Live QA Employee ${seed}`;
-      const productName = `Live QA Product ${seed}`;
-      const productSlug = `live-qa-product-${seed}`;
-      const barcode = `LIVE-${seed}`;
-      const qrCode = `LIVEQR-${seed}`;
+      const employeeName = `${prefix} Employee`;
+      const productName = `${prefix} Product`;
+      const productSlug = `${prefix}-product`;
+      const barcode = `${prefix}-barcode`;
+      const qrCode = `${prefix}-qr`;
 
       const employeeResponse = await fetch("/api/v1/admin/employees", {
         method: "POST",
@@ -33,6 +33,7 @@ test.describe("Bilal RMS live-safe smoke", () => {
         body: JSON.stringify({
           name: employeeName,
           status: "active",
+          commissionRate: 5,
           notes: "Live smoke employee",
         }),
       });
@@ -82,11 +83,11 @@ test.describe("Bilal RMS live-safe smoke", () => {
         productSlug,
         barcode,
       };
-    });
+    }, qaPrefix);
 
     await page.goto("/shop");
     await expect(page.getByRole("heading", { name: "Shop everything." })).toBeVisible();
-    await expect(page.getByText(fixture.productName)).toBeVisible();
+    await expect(page.getByRole("link", { name: fixture.productName }).first()).toBeVisible();
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "Control room." })).toBeVisible();
     await page.reload();
@@ -102,10 +103,17 @@ test.describe("Bilal RMS live-safe smoke", () => {
     await page.getByPlaceholder("Barcode, QR code, SKU, or product name").fill(fixture.barcode);
     await page.locator("button").filter({ hasText: fixture.productName }).first().click();
     await page.locator("tbody select").first().selectOption({ label: fixture.employeeName });
-    await page.getByLabel(/^Customer name$/).fill(`Live smoke ${Date.now()}`);
+    await page.getByLabel(/^Customer name$/).fill(`${qaPrefix} Customer`);
+    const createSaleResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/v1/admin/pos-sales") &&
+        response.request().method() === "POST" &&
+        response.status() === 201,
+    );
     await page.getByRole("button", { name: "Finalize bill" }).click();
-    await expect(page.getByText(/Receipt /)).toBeVisible();
-    const receiptNumber = (await page.getByText(/Receipt /).textContent()) ?? "";
+    const createdSalePayload = await (await createSaleResponse).json();
+    await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
+    const receiptNumber = createdSalePayload?.data?.sale?.receipt?.receiptNumber ?? "";
     await page.getByRole("button", { name: "Close" }).click();
 
     await page.goto("/admin/pos-sales");

@@ -18,6 +18,7 @@ type CheckoutInput = {
   payment: 'cod' | 'jazzcash' | 'easypaisa';
   walletReference?: string;
   notes?: string;
+  checkoutKey?: string;
   lines: Array<{
     productId: string;
     variantId?: string | null;
@@ -55,6 +56,19 @@ export const orderService = {
     } | null;
   }) {
     const { input, userId, paymentProof } = params;
+    if (input.checkoutKey) {
+      const existingOrder = await orderRepository.findByCheckoutKey(input.checkoutKey);
+      if (existingOrder) {
+        const sameCustomer =
+          existingOrder.email === input.email.toLowerCase() &&
+          (existingOrder.userId ?? null) === (userId ?? null);
+        if (sameCustomer) {
+          return existingOrder;
+        }
+
+        throw new ApiError(409, 'This checkout key is already associated with another order');
+      }
+    }
     const shippingZone = await orderRepository.findShippingZoneById(input.shippingZoneId);
 
     const productIds = input.lines.map((line) => line.productId);
@@ -89,6 +103,7 @@ export const orderService = {
       const createdOrder = await orderRepository.createOrder(tx, {
         orderNumber,
         publicToken,
+        checkoutKey: input.checkoutKey || null,
         userId: userId ?? null,
         customerName: input.customerName,
         email: input.email.toLowerCase(),
@@ -113,6 +128,7 @@ export const orderService = {
         const product = productMap.get(line.productId)!;
         const variant = line.variantId ? product.variants.find((entry) => entry.id === line.variantId) : null;
         const unitPrice = Number(variant?.priceOverride ?? product.salePrice ?? product.price);
+        const unitCost = Number(variant?.costPrice ?? product.costPrice ?? 0);
 
         await orderRepository.createOrderItem(tx, {
           orderId: createdOrder.id,
@@ -124,6 +140,7 @@ export const orderService = {
           size: variant?.size ?? '',
           colorName: variant?.colorName ?? '',
           unitPrice,
+          unitCost,
           qty: line.qty,
         });
 

@@ -272,6 +272,7 @@ export const serializeProduct = (product: ProductWithRelations) => {
     seoDescription: product.seoDescription ?? '',
     trending: product.trending,
     featured: product.featured,
+    isActive: product.isActive,
     barcode: product.barcode ?? '',
     qrCode: product.qrCode ?? '',
     supplierBarcode: product.supplierBarcode ?? '',

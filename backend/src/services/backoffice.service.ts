@@ -172,6 +172,19 @@ export const backofficeService = {
         },
       });
 
+      // A restock establishes the cost basis used for subsequent sale snapshots.
+      if (input.variantId) {
+        await tx.productVariant.update({
+          where: { id: input.variantId },
+          data: { costPrice: input.unitCost },
+        });
+      } else {
+        await tx.product.update({
+          where: { id: input.productId },
+          data: { costPrice: input.unitCost },
+        });
+      }
+
       await inventoryService.applyStockMutation(tx, {
         productId: input.productId,
         variantId: input.variantId ?? null,
@@ -202,11 +215,20 @@ export const backofficeService = {
     });
   },
   listLedgerEntries(params?: { from?: string; to?: string }) {
+    const from = params?.from ? new Date(params.from) : undefined;
+    const to = params?.to ? new Date(params.to) : undefined;
+    if (from && /^\d{4}-\d{2}-\d{2}$/.test(params?.from ?? '')) {
+      from.setHours(0, 0, 0, 0);
+    }
+    if (to && /^\d{4}-\d{2}-\d{2}$/.test(params?.to ?? '')) {
+      to.setHours(23, 59, 59, 999);
+    }
+
     return prisma.ledgerEntry.findMany({
       where: {
         createdAt: {
-          gte: params?.from ? new Date(params.from) : undefined,
-          lte: params?.to ? new Date(params.to) : undefined,
+          gte: from,
+          lte: to,
         },
       },
       orderBy: { createdAt: 'desc' },

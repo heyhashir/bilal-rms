@@ -55,7 +55,16 @@ export const createApp = (): Application => {
   app.use(requestId);
   app.use(
     helmet({
+      // Browsers such as WebKit upgrade localhost asset URLs to HTTPS when this
+      // directive is present, leaving local development and QA with a blank SPA.
+      // Keep the protection for real HTTPS deployments only.
+      contentSecurityPolicy: {
+        directives: {
+          upgradeInsecureRequests: env.isProduction ? [] : null,
+        },
+      },
       crossOriginResourcePolicy: false,
+      strictTransportSecurity: env.isProduction ? undefined : false,
     }),
   );
   app.use(
@@ -71,19 +80,28 @@ export const createApp = (): Application => {
   app.use(requestLogger);
 
   app.use('/uploads', express.static(env.UPLOAD_DIR));
+  app.use('/desktop', express.static(env.DESKTOP_RELEASE_DIR));
   app.use(attachSession);
   app.use(API_PREFIX, requireApiCsrfHeader);
 
   app.use(`${API_PREFIX}/health`, healthRoutes);
   app.use(
-    `${API_PREFIX}/auth`,
+    `${API_PREFIX}/auth/login`,
     createLimiter({
       windowMs: 15 * 60 * 1000,
       limit: 30,
       message: 'Too many authentication attempts, please try again later.',
     }),
-    authRoutes,
   );
+  app.use(
+    `${API_PREFIX}/auth/register`,
+    createLimiter({
+      windowMs: 15 * 60 * 1000,
+      limit: 30,
+      message: 'Too many authentication attempts, please try again later.',
+    }),
+  );
+  app.use(`${API_PREFIX}/auth`, authRoutes);
   app.use(`${API_PREFIX}/account`, accountRoutes);
   app.get(`${API_PREFIX}/categories`, asyncHandler(listCatalogCategories));
   app.use(`${API_PREFIX}/catalog`, catalogRoutes);

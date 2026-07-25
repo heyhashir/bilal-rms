@@ -56,7 +56,7 @@ export const listCatalogProducts = async (req: Request, res: Response) => {
       meta: {
         total: products.length,
         maxEffectivePrice: products.reduce(
-          (max, product) => Math.max(max, Number(product.salePrice ?? product.price)),
+          (max, product) => Math.max(max, effectivePrice(product.price, product.salePrice)),
           0,
         ),
       },
@@ -76,12 +76,18 @@ export const listSaleProducts = async (req: Request, res: Response) => {
       meta: {
         total: products.length,
         maxEffectivePrice: products.reduce(
-          (max, product) => Math.max(max, Number(product.salePrice ?? product.price)),
+          (max, product) => Math.max(max, effectivePrice(product.price, product.salePrice)),
           0,
         ),
       },
     }),
   );
+};
+
+const effectivePrice = (price: unknown, salePrice: unknown) => {
+  const regular = Number(price);
+  const sale = salePrice === null || salePrice === undefined ? null : Number(salePrice);
+  return sale !== null && sale < regular ? sale : regular;
 };
 
 export const getCatalogProduct = async (req: Request, res: Response) => {

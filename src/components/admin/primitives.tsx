@@ -145,6 +145,7 @@ export function Field({
   type = "text",
   textarea,
   placeholder,
+  autoFocus,
 }: {
   label: string;
   value: string;
@@ -152,6 +153,7 @@ export function Field({
   type?: string;
   textarea?: boolean;
   placeholder?: string;
+  autoFocus?: boolean;
 }) {
   return (
     <label className="block">
@@ -162,6 +164,7 @@ export function Field({
           onChange={(e) => onChange(e.target.value)}
           rows={3}
           placeholder={placeholder}
+          autoFocus={autoFocus}
           className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground"
         />
       ) : (
@@ -170,6 +173,7 @@ export function Field({
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
+          autoFocus={autoFocus}
           className="w-full border border-border bg-background px-3 py-2 text-sm outline-none focus:border-foreground"
         />
       )}

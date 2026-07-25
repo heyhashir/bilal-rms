@@ -16,14 +16,14 @@ test.describe("Bilal RMS smoke", () => {
     await expect(page.getByRole("complementary").getByText("Men", { exact: true })).toBeVisible();
 
     await loginAsAdmin(page);
-    await expect(page.getByText("Today at BALI by Bilal Garments EST 2001.")).toBeVisible();
+    await expect(page.getByText("Today at BALY by Bilal Garments EST 2001.")).toBeVisible();
     await page.reload();
     await expect(page.getByRole("heading", { name: "Control room." })).toBeVisible();
 
     await page.goto("/admin/categories");
-    await page.getByPlaceholder("New category name").fill(testData.categoryName);
+    await page.getByPlaceholder("New category or subcategory").fill(testData.categoryName);
     await page.getByRole("button", { name: "Add" }).click();
-    await expect(page.getByText(testData.categoryName)).toBeVisible();
+    await expect(page.locator("div.font-medium", { hasText: testData.categoryName }).last()).toBeVisible();
 
     await page.goto("/admin/brands");
     await page.getByRole("button", { name: /New brand/ }).click();

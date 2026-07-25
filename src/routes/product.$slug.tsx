@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Heart, Minus, Plus, Ruler, ShieldCheck, Truck, X } from "lucide-react";
@@ -23,6 +23,7 @@ export const Route = createFileRoute("/product/$slug")({
 
 function ProductPage() {
   const { slug } = Route.useParams();
+  const navigate = useNavigate();
   const { data: bootstrap } = useQuery({
     queryKey: queryKeys.catalog.bootstrap,
     queryFn: catalogApi.bootstrap,
@@ -66,6 +67,21 @@ function ProductPage() {
     );
   }, [product?.id]);
 
+  useEffect(() => {
+    if (!showChart) {
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowChart(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showChart]);
+
   if (!product && loaded) throw notFound();
   if (!product) return null;
   const fav = wish.has(product.id);
@@ -100,6 +116,24 @@ function ProductPage() {
       unitPrice,
     });
     toast.success(`${product.name} added to cart`);
+  };
+
+  const buyNow = () => {
+    if (!inStock) return;
+    if (hasSizes && !size) return toast.error("Please select a size");
+    if (hasColors && !color) return toast.error("Please select a color");
+    if (product.stockMode === "variant" && !activeVariant) return toast.error("Select an available variant");
+    cart.setBuyNow({
+      productId: product.id,
+      variantId: activeVariant?.id ?? null,
+      name: product.name,
+      image: product.images[0],
+      size: hasSizes ? size : "",
+      color: hasColors ? color : "",
+      qty,
+      unitPrice,
+    });
+    void navigate({ to: "/checkout" });
   };
 
   return (
@@ -196,6 +230,13 @@ function ProductPage() {
               {inStock ? "Add to cart" : "Sold out"}
             </button>
             <button
+              onClick={buyNow}
+              disabled={!inStock}
+              className="h-12 flex-1 border border-primary bg-background text-xs font-medium uppercase tracking-[0.2em] text-primary transition hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Buy now
+            </button>
+            <button
               onClick={() => { wish.toggle(product.id); toast.success(fav ? "Removed from wishlist" : "Added to wishlist"); }}
               className="grid h-12 w-12 place-items-center border border-border hover:border-foreground"
               aria-label="Wishlist"
@@ -246,20 +287,28 @@ function ProductPage() {
               </div>
               <button onClick={() => setShowChart(false)}><X className="h-5 w-5" /></button>
             </div>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-sm">
               <thead className="text-xs uppercase tracking-widest text-muted-foreground">
-                <tr><th className="py-2 text-left">Size</th><th className="py-2 text-left">Chest</th><th className="py-2 text-left">Length</th></tr>
+                <tr>
+                  {sizeCharts[product.sizeChart].columns.map((column) => (
+                    <th key={column.key} className="py-2 text-left">{column.label}</th>
+                  ))}
+                </tr>
               </thead>
               <tbody>
                 {sizeCharts[product.sizeChart].rows.map((row) => (
                   <tr key={row.size} className="border-t border-border">
-                    <td className="py-2 font-medium">{row.size}</td>
-                    <td className="py-2">{row.chest}</td>
-                    <td className="py-2">{row.length}</td>
+                    {sizeCharts[product.sizeChart].columns.map((column) => (
+                      <td key={column.key} className={`py-2 ${column.key === "size" ? "font-medium" : ""}`}>
+                        {row[column.key] ?? "-"}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

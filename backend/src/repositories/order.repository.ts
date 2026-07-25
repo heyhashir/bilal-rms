@@ -50,6 +50,12 @@ const buildOrderBy = (sort = 'createdAt', direction: 'asc' | 'desc' = 'desc'): P
 };
 
 export const orderRepository = {
+  findByCheckoutKey(checkoutKey: string) {
+    return prisma.order.findUnique({
+      where: { checkoutKey },
+      include: orderInclude,
+    });
+  },
   findShippingZoneById(shippingZoneId: string) {
     return prisma.shippingZone.findUniqueOrThrow({
       where: { id: shippingZoneId },

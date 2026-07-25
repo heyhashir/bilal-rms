@@ -1,5 +1,7 @@
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useProtectedUser } from "@/hooks/use-protected-user";
+import { isDesktopRuntime } from "@/lib/desktop-bridge";
+import { useAuth } from "@/store/auth";
 import {
   LayoutDashboard,
   Package,
@@ -17,6 +19,7 @@ import {
   HandCoins,
   Upload,
   BarChart3,
+  LogOut,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
@@ -44,7 +47,7 @@ const groups = [
     label: "Inventory",
     items: [
       { to: "/admin/inventory", label: "Inventory", icon: Boxes },
-      { to: "/admin/suppliers", label: "Suppliers", icon: Boxes },
+      { to: "/admin/suppliers", label: "Vendors", icon: Boxes },
     ],
   },
   {
@@ -77,7 +80,9 @@ const groups = [
 
 function AdminLayout() {
   const { user, isPending } = useProtectedUser({ role: ["admin", "manager", "staff"] });
+  const navigate = useNavigate();
   const path = useRouterState({ select: (router) => router.location.pathname });
+  const isDesktop = isDesktopRuntime();
 
   if (isPending || !user) {
     return null;
@@ -92,7 +97,7 @@ function AdminLayout() {
         }
 
         if (user.role === "manager") {
-          return !["/admin/reports", "/admin/commissions", "/admin/roles", "/admin/settings", "/admin/imports"].includes(item.to);
+          return !["/admin/reports", "/admin/commissions", "/admin/roles", "/admin/settings", "/admin/imports", "/admin/suppliers"].includes(item.to);
         }
 
         return ["/admin/products", "/admin/categories", "/admin/brands", "/pos"].includes(item.to);
@@ -100,24 +105,45 @@ function AdminLayout() {
     }))
     .filter((group) => group.items.length > 0);
 
+  const desktopShell = isDesktop;
+
   return (
-    <div className="container-bg py-8 md:py-12">
-      <div className="mb-8 flex items-end justify-between border-b border-border pb-5">
+    <div className={`container-bg ${desktopShell ? "flex h-dvh min-h-0 flex-col overflow-hidden py-6 md:py-8" : "py-8 md:py-12"}`}>
+      <div className="mb-8 shrink-0 flex items-end justify-between border-b border-border pb-5">
         <div>
           <div className="mb-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">Retail management</div>
           <h1 className="display text-3xl md:text-4xl">Control room.</h1>
         </div>
-        <Link
-          to="/"
+        {isDesktop ? (
+          <Link
+            to="/pos"
+            className="inline-flex items-center gap-1 text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          >
+            <ScanLine className="h-3.5 w-3.5" /> Open POS terminal
+          </Link>
+        ) : (
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1 text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to site
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={async () => {
+            await useAuth.getState().logout();
+            await navigate({ to: "/login" });
+          }}
           className="inline-flex items-center gap-1 text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Back to site
-        </Link>
+          <LogOut className="h-3.5 w-3.5" /> Sign out
+        </button>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[240px_1fr]">
-        <aside>
-          <nav className="flex gap-6 overflow-x-auto pb-3 lg:sticky lg:top-24 lg:flex-col lg:pb-0">
+      <div className={desktopShell ? "grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] gap-6" : "grid gap-8 lg:grid-cols-[240px_1fr]"}>
+        <aside className={desktopShell ? "min-h-0 overflow-y-auto pr-2" : undefined}>
+          <nav className={desktopShell ? "flex flex-col gap-6 pb-6" : "flex gap-6 overflow-x-auto pb-3 lg:sticky lg:top-24 lg:flex-col lg:pb-0"}>
             {visibleGroups.map((group) => (
               <div key={group.label} className="shrink-0">
                 <div className="mb-2 hidden px-3 text-[10px] uppercase tracking-[0.3em] text-muted-foreground lg:block">
@@ -143,7 +169,7 @@ function AdminLayout() {
             ))}
           </nav>
         </aside>
-        <section className="min-w-0">
+        <section className={desktopShell ? "min-w-0 min-h-0 overflow-y-auto pb-8 pr-2" : "min-w-0"}>
           <Outlet />
         </section>
       </div>

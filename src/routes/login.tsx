@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/store/auth";
+import { isDesktopRuntime } from "@/lib/desktop-bridge";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
@@ -24,7 +25,8 @@ function Login() {
     if (err) return toast.error(err);
     toast.success(mode === "login" ? "Welcome back" : "Account created");
     const u = useAuth.getState().user;
-    nav({ to: u?.role === "admin" ? "/admin" : "/account" });
+    const isDesktopOperator = isDesktopRuntime() && ["admin", "manager", "staff"].includes(u?.role ?? "");
+    nav({ to: isDesktopOperator ? "/admin" : u?.role === "admin" ? "/admin" : "/account" });
   };
 
   return (
@@ -39,8 +41,12 @@ function Login() {
         )}
         <Field label="Email" type="email" value={email} onChange={setEmail} />
         <Field label="Password" type="password" value={password} onChange={setPassword} />
-        <button className="w-full bg-primary py-4 text-xs uppercase tracking-[0.2em] text-primary-foreground">
-          {mode === "login" ? "Sign in" : "Create account"}
+        <button
+          disabled={auth.loading}
+          aria-busy={auth.loading}
+          className="w-full bg-primary py-4 text-xs uppercase tracking-[0.2em] text-primary-foreground transition-opacity disabled:cursor-wait disabled:opacity-70"
+        >
+          {auth.loading ? (mode === "login" ? "Signing in..." : "Creating account...") : mode === "login" ? "Sign in" : "Create account"}
         </button>
       </form>
 

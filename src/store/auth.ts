@@ -104,7 +104,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       queryClient.setQueryData(queryKeys.auth.currentUser, user);
       setUserState(set, user);
       set({ loading: false, hydrated: true });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser, refetchType: "inactive" });
       return null;
     } catch (error) {
       set({ loading: false, hydrated: true });
@@ -122,7 +122,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       queryClient.setQueryData(queryKeys.auth.currentUser, user);
       setUserState(set, user);
       set({ loading: false, hydrated: true });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser, refetchType: "inactive" });
       return null;
     } catch (error) {
       set({ loading: false, hydrated: true });
@@ -147,7 +147,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       queryClient.setQueryData(queryKeys.auth.currentUser, payload.user);
       queryClient.setQueryData(queryKeys.account.profile, payload.user);
       setUserState(set, payload.user);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.auth.currentUser, refetchType: "inactive" });
       return null;
     } catch (error) {
       return getErrorMessage(error, "Unable to update profile");

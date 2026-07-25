@@ -13,7 +13,7 @@ test.describe("Bilal RMS regression", () => {
     await loginAsAdmin(page);
 
     await page.goto("/admin/categories");
-    await page.getByPlaceholder("New category name").fill(testData.categoryName);
+    await page.getByPlaceholder("New category or subcategory").fill(testData.categoryName);
     await page.getByRole("button", { name: "Add" }).click();
 
     await page.goto("/admin/brands");
@@ -31,11 +31,10 @@ test.describe("Bilal RMS regression", () => {
     await page.getByLabel(/^Stock$/).fill("8");
     await page.getByLabel(/^Barcode$/).fill(testData.productBarcode);
     await page.getByLabel(/^QR code$/).fill(testData.productQrCode);
-    await page.getByLabel(/^Commission %$/).fill("5");
     await page.getByLabel(/^Sizes \(comma separated\)$/).fill("M");
     await page.getByPlaceholder("Color name").fill("Black");
     await page.getByRole("button", { name: "Add", exact: true }).click();
-    await page.locator('label:has-text("Upload") input[type="file"]').setInputFiles(productImagePath);
+    await page.locator('input[type="file"][accept="image/*"]').first().setInputFiles(productImagePath);
     await saveModal(page);
 
     await page.evaluate(async (employeeName) => {
@@ -49,6 +48,7 @@ test.describe("Bilal RMS regression", () => {
         body: JSON.stringify({
           name: employeeName,
           status: "active",
+          commissionRate: 5,
           notes: "Regression fixture employee",
         }),
       });
@@ -76,6 +76,7 @@ test.describe("Bilal RMS regression", () => {
     await expect(commissionRow).toContainText(/earned/i);
 
     await page.goto("/admin/pos-sales");
+    await page.getByPlaceholder("Search...").fill(testData.customerName);
     await page.getByRole("button", { name: "View" }).first().click();
     await page.getByText("Refund qty").locator("xpath=ancestor::div[1]").locator("input").fill("1");
     await page.getByText("Refund reason").locator("xpath=ancestor::label[1]").locator("input").fill("Customer returned item");

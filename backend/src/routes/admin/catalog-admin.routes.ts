@@ -1,3 +1,4 @@
+import path from 'path';
 import { Router } from 'express';
 import { z } from 'zod';
 import {
@@ -15,17 +16,55 @@ import {
   saveBrand,
   saveCategory,
   updateProduct,
+  restoreProduct,
+  permanentlyDeleteProduct,
 } from '../../controllers/admin/catalog.controller';
-import { importUpload } from '../../middleware/upload';
+import { importUpload, productImageUpload, productVideoUpload } from '../../middleware/upload';
 import { barcodeSchema, brandSchema, categorySchema, productSchema } from '../../schemas/admin/catalog.schemas';
+import { ApiResponse } from '../../utils/ApiResponse';
 import { asyncHandler } from '../../utils/asyncHandler';
 
 const router = Router();
+
 
 router.get('/products', asyncHandler(listProducts));
 router.get('/categories', asyncHandler(listCategories));
 router.get('/brands', asyncHandler(listBrands));
 router.get('/uploads/diagnostics', asyncHandler(getUploadDiagnostics));
+
+router.post(
+  '/uploads/product-image',
+  productImageUpload.single('image'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      res.status(400).json(ApiResponse.error('Image file is required'));
+      return;
+    }
+
+    res.status(201).json(
+      ApiResponse.success('Image uploaded', {
+        path: `/uploads/products/${path.basename(req.file.path)}`,
+      }),
+    );
+  }),
+);
+
+router.post(
+  '/uploads/product-video',
+  productVideoUpload.single('video'),
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      res.status(400).json(ApiResponse.error('Video file is required'));
+      return;
+    }
+
+    res.status(201).json(
+      ApiResponse.success('Video uploaded', {
+        path: `/uploads/videos/${path.basename(req.file.path)}`,
+      }),
+    );
+  }),
+);
 
 router.post('/products/import', importUpload.single('file'), asyncHandler(importProducts));
 
@@ -46,6 +85,8 @@ router.put(
 );
 
 router.delete('/products/:id', asyncHandler(archiveProduct));
+router.post('/products/:id/restore', asyncHandler(restoreProduct));
+router.delete('/products/:id/permanent', asyncHandler(permanentlyDeleteProduct));
 
 router.post(
   '/barcodes/generate',

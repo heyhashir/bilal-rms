@@ -76,10 +76,27 @@ const shouldEmitAuthExpired = (url: string, status: number) => {
   return !url.startsWith("/auth/");
 };
 
+let cachedApiBaseUrl: string | null | undefined;
+
+const getApiBaseUrl = () => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  if (cachedApiBaseUrl !== undefined) {
+    return cachedApiBaseUrl ?? "";
+  }
+
+  const desktopBaseUrl = window.bilalDesktop?.getDesktopContext().cloudApiBaseUrl?.trim();
+  cachedApiBaseUrl = desktopBaseUrl ? desktopBaseUrl.replace(/\/+$/, "") : null;
+  return cachedApiBaseUrl ?? "";
+};
+
 const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
   const isFormData = init?.body instanceof FormData;
   const method = (init?.method ?? "GET").toUpperCase();
-  const response = await fetch(`/api/v1${url}`, {
+  const apiBaseUrl = getApiBaseUrl();
+  const response = await fetch(`${apiBaseUrl}/api/v1${url}`, {
     credentials: "include",
     ...init,
     headers: {

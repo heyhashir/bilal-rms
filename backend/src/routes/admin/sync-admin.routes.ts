@@ -8,6 +8,7 @@ import { asyncHandler } from '../../utils/asyncHandler';
 
 const router = Router();
 
+
 router.get('/sync-diagnostics', asyncHandler(getSyncDiagnosticsController));
 router.post('/sync-jobs/:id/retry', asyncHandler(retrySyncJobController));
 router.post('/sync-jobs/:id/resolve', asyncHandler(resolveSyncJobController));

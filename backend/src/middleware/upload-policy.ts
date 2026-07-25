@@ -33,6 +33,8 @@ export const imageMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/g
 export const videoMimeTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
 export const importMimeTypes = [
   'text/csv',
+  'application/csv',
+  // Windows and Excel frequently identify a CSV file with this generic MIME type.
+  // The catalog service still enforces the .csv extension before parsing.
   'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];

@@ -70,7 +70,9 @@ function Shop() {
   });
 
   const products = data?.products ?? [];
-  const max = data?.meta.maxEffectivePrice ?? initialMax;
+  // Keep the range tied to the unfiltered catalog. A filtered response can have a
+  // lower maximum and must not make the control jump while the user is browsing.
+  const max = initialMax;
 
   useEffect(() => {
     if (!bootstrap) {

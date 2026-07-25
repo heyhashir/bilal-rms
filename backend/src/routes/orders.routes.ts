@@ -25,6 +25,7 @@ const checkoutSchema = z.object({
   payment: z.enum(['cod', 'jazzcash', 'easypaisa']),
   walletReference: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  checkoutKey: z.string().min(16).max(128).optional().or(z.literal('')),
   lines: z.array(lineSchema).min(1),
 });
 

@@ -37,7 +37,7 @@ export const catalogService = {
     return catalogRepository.listActiveProducts(filters).then((products) =>
       products
         .filter((product) => {
-          const effectivePrice = Number(product.salePrice ?? product.price);
+          const effectivePrice = getEffectivePrice(product.price, product.salePrice);
           if (typeof filters.minPrice === 'number' && effectivePrice < filters.minPrice) {
             return false;
           }
@@ -86,8 +86,8 @@ export const catalogService = {
           return true;
         })
         .sort((left, right) => {
-          const leftPrice = Number(left.salePrice ?? left.price);
-          const rightPrice = Number(right.salePrice ?? right.price);
+          const leftPrice = getEffectivePrice(left.price, left.salePrice);
+          const rightPrice = getEffectivePrice(right.price, right.salePrice);
 
           switch (filters.sort) {
             case 'price-asc':
@@ -112,13 +112,13 @@ export const catalogService = {
     const products = await catalogRepository.listActiveProducts();
     const saleProducts = products.filter((product) => {
       const price = Number(product.price);
-      const salePrice = product.salePrice ? Number(product.salePrice) : null;
+      const salePrice = product.salePrice === null ? null : Number(product.salePrice);
       return salePrice !== null && salePrice < price;
     });
 
     return saleProducts.sort((left, right) => {
-      const leftPrice = Number(left.salePrice ?? left.price);
-      const rightPrice = Number(right.salePrice ?? right.price);
+      const leftPrice = getEffectivePrice(left.price, left.salePrice);
+      const rightPrice = getEffectivePrice(right.price, right.salePrice);
 
       switch (filters.sort) {
         case 'price-asc':
@@ -151,4 +151,10 @@ export const catalogService = {
   listShippingZones() {
     return catalogRepository.listActiveShippingZones();
   },
+};
+
+const getEffectivePrice = (price: unknown, salePrice: unknown) => {
+  const regular = Number(price);
+  const sale = salePrice === null || salePrice === undefined ? null : Number(salePrice);
+  return sale !== null && sale < regular ? sale : regular;
 };

@@ -1,10 +1,12 @@
-import { Outlet, createRootRoute, Link } from "@tanstack/react-router";
+import { Outlet, createRootRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { Header, Footer } from "@/components/layout/Header";
 import { Toaster } from "@/components/ui/sonner";
 import { AUTH_EXPIRED_EVENT } from "@/lib/api";
+import { isDesktopRuntime } from "@/lib/desktop-bridge";
 import { useAuth } from "@/store/auth";
+import { useCart } from "@/store/cart";
 
 function NotFoundComponent() {
   return (
@@ -31,10 +33,18 @@ export const Route = createRootRoute({
 function RootComponent() {
   const hydrateAuth = useAuth((s) => s.hydrate);
   const expireSession = useAuth((s) => s.expireSession);
+  const isDesktopWorkspace = isDesktopRuntime();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   useEffect(() => {
+    // Desktop always starts at sign-in and receives identity from that flow.
+    // Avoid starting storefront session hydration before the login route mounts.
+    if (isDesktopWorkspace) {
+      return;
+    }
+
     void hydrateAuth();
-  }, [hydrateAuth]);
+  }, [hydrateAuth, isDesktopWorkspace]);
 
   useEffect(() => {
     let lastHandledAt = 0;
@@ -60,13 +70,21 @@ function RootComponent() {
     };
   }, [expireSession]);
 
+  useEffect(() => {
+    // Buy Now is a temporary checkout-only line. Clear it after the user leaves
+    // checkout, while preserving it during the product-to-checkout transition.
+    if (pathname !== "/checkout") {
+      useCart.getState().clearBuyNow();
+    }
+  }, [pathname]);
+
   return (
     <>
-      <Header />
+      {!isDesktopWorkspace && <Header />}
       <main>
         <Outlet />
       </main>
-      <Footer />
+      {!isDesktopWorkspace && <Footer />}
       <Toaster />
     </>
   );

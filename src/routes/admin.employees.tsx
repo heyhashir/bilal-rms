@@ -152,7 +152,7 @@ function AdminEmployees() {
           }
         >
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Full name" value={editing.name} onChange={(value) => setEditing({ ...editing, name: value })} />
+            <Field label="Full name" value={editing.name} autoFocus onChange={(value) => setEditing({ ...editing, name: value })} />
             <Field label="Phone" value={editing.phone} onChange={(value) => setEditing({ ...editing, phone: value })} />
             <Field
               label="Commission %"

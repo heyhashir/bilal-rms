@@ -16,6 +16,8 @@ export const adminCatalogApi = {
       ? api.put<{ product: Product }>(`/admin/products/${productId}`, payload)
       : api.post<{ product: Product }>("/admin/products", payload),
   deleteProduct: (id: string) => api.delete<{ ok: boolean }>(`/admin/products/${id}`),
+  restoreProduct: (id: string) => api.post<{ ok: boolean }>(`/admin/products/${id}/restore`),
+  permanentDeleteProduct: (id: string) => api.delete<{ ok: boolean }>(`/admin/products/${id}/permanent`),
   uploadProductImage: (file: File) => {
     const form = new FormData();
     form.set("image", file);

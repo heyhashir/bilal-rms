@@ -9,6 +9,8 @@ export const ensureRuntimeDirectories = (): void => {
     path.join(env.UPLOAD_DIR, 'payments'),
     path.join(env.UPLOAD_DIR, 'videos'),
     env.IMPORT_DIR,
+    env.DESKTOP_RELEASE_DIR,
+    path.join(env.DESKTOP_RELEASE_DIR, 'windows'),
     path.join(process.cwd(), 'logs'),
   ];
 

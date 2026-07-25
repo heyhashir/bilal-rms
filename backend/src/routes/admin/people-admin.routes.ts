@@ -11,6 +11,7 @@ import {
   saveEmployee as saveEmployeeController,
 } from '../../controllers/admin/employee.controller';
 import { employeeSchema } from '../../schemas/admin/employee.schemas';
+import { requireAdminRoles } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { z } from 'zod';
 
@@ -30,6 +31,9 @@ router.get('/customers', asyncHandler(listCustomersController));
 router.get('/customers/export', asyncHandler(exportCustomersController));
 
 router.get('/employees', asyncHandler(listEmployeesController));
+
+// Staff login administration is financial/security-sensitive and remains owner-only.
+router.use('/staff-accounts', requireAdminRoles(['ADMIN']));
 router.get('/staff-accounts', asyncHandler(listStaffAccountsController));
 
 router.post(

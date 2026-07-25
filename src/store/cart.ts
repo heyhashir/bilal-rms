@@ -15,7 +15,10 @@ export type CartLine = {
 
 type CartState = {
   lines: CartLine[];
+  buyNowLine: CartLine | null;
   add: (line: Omit<CartLine, "id">) => void;
+  setBuyNow: (line: Omit<CartLine, "id">) => void;
+  clearBuyNow: () => void;
   remove: (id: string) => void;
   setQty: (id: string, qty: number) => void;
   clear: () => void;
@@ -27,6 +30,7 @@ export const useCart = create<CartState>()(
   persist(
     (set, get) => ({
       lines: [],
+      buyNowLine: null,
       add: (line) => {
         const id = `${line.productId}|${line.variantId ?? ""}|${line.size}|${line.color}`;
         set((s) => {
@@ -41,6 +45,14 @@ export const useCart = create<CartState>()(
           return { lines: [...s.lines, { ...line, id }] };
         });
       },
+      setBuyNow: (line) =>
+        set({
+          buyNowLine: {
+            ...line,
+            id: `${line.productId}|${line.variantId ?? ""}|${line.size}|${line.color}`,
+          },
+        }),
+      clearBuyNow: () => set({ buyNowLine: null }),
       remove: (id) => set((s) => ({ lines: s.lines.filter((l) => l.id !== id) })),
       setQty: (id, qty) =>
         set((s) => ({
@@ -52,7 +64,10 @@ export const useCart = create<CartState>()(
       count: () => get().lines.reduce((a, l) => a + l.qty, 0),
       subtotal: () => get().lines.reduce((a, l) => a + l.qty * l.unitPrice, 0),
     }),
-    { name: "bg-cart-v1" },
+    {
+      name: "bg-cart-v1",
+      partialize: (state) => ({ lines: state.lines }),
+    },
   ),
 );
 

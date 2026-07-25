@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 const router = Router();
 
+
 const shippingZoneSchema = z.object({
   name: z.string().min(2),
   city: z.string().min(2),

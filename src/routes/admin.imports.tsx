@@ -34,7 +34,7 @@ function AdminImports() {
       <PageHeader
         eyebrow="Launch data"
         title="Catalog import"
-        description="Upload CSV/XLSX launch data, review per-row import failures, and scan for missing image or payment-proof files."
+        description="Upload CSV launch data (up to 5,000 rows), review per-row import failures, and scan for missing image or payment-proof files."
         action={
           <ActionButton variant="ghost" onClick={() => void refetchDiagnostics()}>
             Refresh file diagnostics
@@ -52,7 +52,7 @@ function AdminImports() {
             <span className="text-sm">{file ? file.name : "Choose import file"}</span>
             <input
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv"
               className="hidden"
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
