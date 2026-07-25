@@ -100,16 +100,9 @@ npm run start:local
 
 Open `http://127.0.0.1:5000` after the health check succeeds.
 
-### Local Default Owner Account
+### Local Owner Account
 
-The local seed uses the values in `backend/.env.local`:
-
-```text
-Email: admin@bilalgarments.pk
-Password: admin123
-```
-
-These credentials are for local development only. Production startup rejects the default password.
+Set `ADMIN_EMAIL` and a unique `ADMIN_PASSWORD` in `backend/.env.local` before running the seed command. Credentials are never displayed in the application or committed to Git.
 
 ## Client Review With Docker Only
 

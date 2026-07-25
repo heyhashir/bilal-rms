@@ -58,11 +58,6 @@ function Login() {
         )}
       </div>
 
-      <div className="mt-10 bg-secondary p-4 text-xs text-muted-foreground">
-        <div className="mb-1 font-semibold text-foreground">Demo admin</div>
-        admin@bilalgarments.pk · admin123
-      </div>
-
       <div className="mt-6 text-center text-xs">
         <Link to="/" className="underline underline-offset-4 text-muted-foreground">
           Back to home

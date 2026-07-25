@@ -37,14 +37,14 @@ function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
 
   useEffect(() => {
-    // Desktop always starts at sign-in and receives identity from that flow.
-    // Avoid starting storefront session hydration before the login route mounts.
-    if (isDesktopWorkspace) {
+    // Keep desktop sign-in fast, but hydrate protected pages so refreshes and
+    // direct navigation do not leave the admin/POS workspace blank.
+    if (isDesktopWorkspace && pathname === "/login") {
       return;
     }
 
     void hydrateAuth();
-  }, [hydrateAuth, isDesktopWorkspace]);
+  }, [hydrateAuth, isDesktopWorkspace, pathname]);
 
   useEffect(() => {
     let lastHandledAt = 0;

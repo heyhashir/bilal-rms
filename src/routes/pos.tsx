@@ -73,7 +73,9 @@ function PosTerminal() {
   const [storedReceipts, setStoredReceipts] = useState<PosSale[]>([]);
   const [updateMessage, setUpdateMessage] = useState("");
   const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateManifest | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [lastUpdateCheckAt, setLastUpdateCheckAt] = useState<number | null>(null);
   const [refundReason, setRefundReason] = useState("Customer return");
   const [refundNote, setRefundNote] = useState("");
   const [refundQtys, setRefundQtys] = useState<Record<string, number>>({});
@@ -96,6 +98,8 @@ function PosTerminal() {
       },
   );
   const canLoadPos = !isPending && Boolean(user) && ["admin", "manager", "staff"].includes(user.role);
+  const desktopBridge = getDesktopBridge();
+  const desktopContext = desktopBridge?.getDesktopContext() ?? null;
 
   const updateSyncState = (patch: Partial<PosSyncState>) => {
     const next = patchPosSyncState(deviceKey, patch);
@@ -253,9 +257,49 @@ function PosTerminal() {
     }
   };
 
+  const checkDesktopUpdate = async (showFeedback = false) => {
+    if (!desktopBridge || !desktopContext) {
+      return;
+    }
+
+    try {
+      setIsCheckingUpdate(true);
+      setUpdateMessage("Checking the live release channel...");
+      const update = await desktopBridge.checkForUpdates({
+        deviceKey,
+        currentVersion: desktopContext.appVersion,
+      });
+      setDesktopUpdate(update);
+      setLastUpdateCheckAt(Date.now());
+      setUpdateMessage(
+        update.available
+          ? `Version ${update.latestVersion} is ready to install.`
+          : `You are up to date on version ${desktopContext.appVersion}.`,
+      );
+      if (showFeedback) {
+        toast.success(update.available ? `Desktop update ${update.latestVersion} is available` : "Desktop app is up to date");
+      }
+    } catch (error) {
+      const message = getErrorMessage(error, "Unable to check for desktop updates");
+      setUpdateMessage(message);
+      if (showFeedback) {
+        toast.error(message);
+      }
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
   useEffect(() => {
     const bootstrapPos = async () => {
       try {
+        if (desktopContext) {
+          await syncApi.registerDevice({
+            deviceKey,
+            name: desktopContext.appName,
+            notes: `Windows desktop ${desktopContext.appVersion}`,
+          });
+        }
         const bootstrap = await syncApi.syncBootstrap(deviceKey, syncState.lastCursor ?? undefined);
         const nextCache = {
           products: bootstrap.products,
@@ -283,18 +327,8 @@ function PosTerminal() {
           queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
         });
         void syncQueuedSales();
-        const desktopBridge = getDesktopBridge();
         if (desktopBridge) {
-          void desktopBridge
-            .checkForUpdates({
-              deviceKey,
-              currentVersion: desktopBridge.getDesktopContext().appVersion,
-            })
-            .then((update) => {
-              setDesktopUpdate(update);
-              setUpdateMessage(update.available ? `Desktop update ${update.latestVersion} is available.` : `Desktop app is up to date (${update.latestVersion}).`);
-            })
-            .catch(() => undefined);
+          void checkDesktopUpdate();
         }
       } catch (error) {
         setOfflineMode(true);
@@ -851,17 +885,48 @@ function PosTerminal() {
                 <div>
                   Failed syncs: <span className="text-foreground">{syncState.failedJobs}</span>
                 </div>
-                {updateMessage && <div className="text-foreground">{updateMessage}</div>}
-                {desktopUpdate?.available && desktopUpdate.windows && (
-                  <div className="pt-2">
-                    <ActionButton onClick={() => void installDesktopUpdate()} disabled={isInstallingUpdate}>
-                      {isInstallingUpdate ? "Launching installer..." : `Install desktop update ${desktopUpdate.latestVersion}`}
-                    </ActionButton>
-                  </div>
-                )}
                 {syncState.lastSyncError && <div className="text-sale">Last error: {syncState.lastSyncError}</div>}
               </div>
             </div>
+
+            {desktopContext && (
+              <div className="border border-border p-5">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Desktop updates</div>
+                    <div className="mt-2 text-lg font-semibold">Release channel</div>
+                  </div>
+                  <StatusPill status={desktopUpdate?.available ? "pending" : "synced"} />
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div>
+                    Installed version: <span className="font-medium text-foreground">{desktopContext.appVersion}</span>
+                  </div>
+                  <div>
+                    Latest version: <span className="font-medium text-foreground">{desktopUpdate?.latestVersion ?? "Check required"}</span>
+                  </div>
+                  <div>
+                    Cloud: <span className="break-all text-foreground">{desktopContext.cloudOrigin}</span>
+                  </div>
+                  <div>
+                    Last checked: <span className="text-foreground">{lastUpdateCheckAt ? new Date(lastUpdateCheckAt).toLocaleString() : "Not checked yet"}</span>
+                  </div>
+                  {updateMessage && <div className={desktopUpdate?.available ? "font-medium text-foreground" : ""}>{updateMessage}</div>}
+                  {desktopUpdate?.notes && <div>Release notes: {desktopUpdate.notes}</div>}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <ActionButton variant="ghost" onClick={() => void checkDesktopUpdate(true)} disabled={isCheckingUpdate || isInstallingUpdate}>
+                    <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isCheckingUpdate ? "animate-spin" : ""}`} />
+                    {isCheckingUpdate ? "Checking..." : "Check now"}
+                  </ActionButton>
+                  {desktopUpdate?.available && desktopUpdate.windows && (
+                    <ActionButton onClick={() => void installDesktopUpdate()} disabled={isInstallingUpdate || isCheckingUpdate}>
+                      {isInstallingUpdate ? "Launching installer..." : `Install ${desktopUpdate.latestVersion}`}
+                    </ActionButton>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="border border-border p-5">
               <div className="mb-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">Receipt lookup</div>

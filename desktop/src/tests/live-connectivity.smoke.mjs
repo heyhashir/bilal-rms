@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
+import dotenv from "dotenv";
 
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const rootDir = path.resolve(desktopDir, "..");
@@ -53,6 +54,25 @@ try {
   assert.equal(categories.status, 200);
   assert.equal(categories.body.success, true);
 
+  const registration = await window.evaluate(async () => {
+    const context = window.bilalDesktop.getDesktopContext();
+    const response = await fetch("/api/v1/sync/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({
+        deviceKey: window.bilalDesktop.getDeviceKey(),
+        name: context.appName,
+        notes: `Live connectivity smoke ${context.appVersion}`,
+      }),
+    });
+    return { status: response.status, body: await response.json() };
+  });
+  assert.equal(registration.status, 201);
+  assert.equal(registration.body.success, true);
+
   const bootstrap = await window.evaluate(async () => {
     const deviceKey = window.bilalDesktop.getDeviceKey();
     const response = await fetch(`/api/v1/sync/bootstrap?deviceKey=${encodeURIComponent(deviceKey)}`);
@@ -62,6 +82,62 @@ try {
   assert.equal(bootstrap.body.success, true);
   assert.ok(Array.isArray(bootstrap.body.data.products));
   assert.ok(Array.isArray(bootstrap.body.data.employees));
+
+  const adminEnvPath = process.env.BILAL_RMS_ADMIN_ENV?.trim();
+  if (adminEnvPath) {
+    const adminEnv = dotenv.parse(fs.readFileSync(path.resolve(adminEnvPath)));
+    assert.ok(adminEnv.ADMIN_EMAIL && adminEnv.ADMIN_PASSWORD, "Admin credential file is incomplete");
+
+    await window.getByLabel("Email").fill(adminEnv.ADMIN_EMAIL);
+    await window.getByLabel("Password").fill(adminEnv.ADMIN_PASSWORD);
+    await window.getByRole("button", { name: "Sign in" }).click();
+    await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/admin$/);
+    const authenticatedSession = await window.evaluate(async () => {
+      const response = await fetch("/api/v1/auth/me");
+      return await response.json();
+    });
+    assert.equal(authenticatedSession.data?.user?.role, "admin");
+    await window.goto(new URL("/pos", window.url()).toString());
+    await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/pos$/);
+    const reloadedSession = await window.evaluate(async () => {
+      const response = await fetch("/api/v1/auth/me");
+      return await response.json();
+    });
+    assert.equal(reloadedSession.data?.user?.role, "admin");
+    await window.waitForFunction(() => document.body.innerText.length > 0);
+    const posBody = await window.locator("body").innerText();
+    assert.match(posBody, /desktop updates/i, `Desktop update section did not render. POS body: ${posBody.slice(0, 500)}`);
+    await window.getByText("Desktop updates", { exact: true }).waitFor({ timeout: 15_000 });
+    await window.getByRole("button", { name: "Check now" }).click();
+    await window.getByRole("button", { name: "Check now" }).waitFor();
+
+    await window.waitForFunction(
+      ({ productCount, cursor }) => {
+        const cache = window.bilalDesktop.loadPosCache();
+        const syncState = window.bilalDesktop.loadPosSyncState();
+        return cache?.products.length === productCount && syncState?.lastCursor === cursor;
+      },
+      {
+        productCount: bootstrap.body.data.products.length,
+        cursor: bootstrap.body.data.cursor,
+      },
+    );
+
+    const localProjection = await window.evaluate(() => ({
+      products: window.bilalDesktop.loadPosCache()?.products.length ?? null,
+      cursor: window.bilalDesktop.loadPosSyncState()?.lastCursor ?? null,
+    }));
+    assert.equal(localProjection.products, bootstrap.body.data.products.length);
+    assert.equal(localProjection.cursor, bootstrap.body.data.cursor);
+
+    await window.evaluate(async () => {
+      await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+      });
+    });
+    console.log("Desktop authenticated live sync smoke passed");
+  }
 
   console.log("Desktop live connectivity smoke passed");
   passed = true;
