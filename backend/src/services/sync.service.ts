@@ -3,6 +3,7 @@ import path from 'path';
 import { env } from '../config/env';
 import { settingsRepository } from '../repositories/settings.repository';
 import { syncRepository } from '../repositories/sync.repository';
+import { compareVersions, newestVersion } from '../utils/versions';
 
 const computeCursor = (input: {
   settingsUpdatedAt: Date;
@@ -116,11 +117,13 @@ export const syncService = {
     const requestedVersion = currentVersion?.trim() || null;
     const configuredBaseUrl = env.DESKTOP_UPDATE_BASE_URL?.trim() || env.APP_URL;
     const normalizedBaseUrl = configuredBaseUrl.replace(/\/+$/, '');
-    const latestVersion = env.DESKTOP_APP_VERSION;
+    // A stale Hostinger variable must never advertise a downgrade below the
+    // desktop version bundled with the deployed source revision.
+    const latestVersion = newestVersion(env.DESKTOP_APP_VERSION, env.DESKTOP_BUNDLED_VERSION);
     const installerFileName = `BilalRMS-Setup-${latestVersion}.exe`;
     const installerPath = path.join(env.DESKTOP_RELEASE_DIR, 'windows', installerFileName);
     const hasPublishedBuild = normalizedBaseUrl.length > 0 && latestVersion.length > 0 && fs.existsSync(installerPath);
-    const available = hasPublishedBuild && requestedVersion !== latestVersion;
+    const available = hasPublishedBuild && (!requestedVersion || compareVersions(latestVersion, requestedVersion) > 0);
 
     if (deviceKey) {
       const device = await syncRepository.findDeviceByKey(deviceKey);

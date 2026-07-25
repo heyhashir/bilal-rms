@@ -6,6 +6,7 @@ import { orderService } from '../services/order.service';
 import { posService } from '../services/pos.service';
 import { syncService } from '../services/sync.service';
 import { ApiError } from '../types/ApiError';
+import { compareVersions, newestVersion } from '../utils/versions';
 
 const prefix = `svc-${Date.now().toString(36)}`;
 
@@ -239,6 +240,8 @@ const run = async () => {
   assert.ok(adjustmentMovement, 'inventory adjustment should create an adjustment movement');
 
   const syncDevice = await syncService.registerDevice(`${prefix}-sync-device`, 'Service Smoke Sync Device', 'Service smoke');
+  assert.equal(newestVersion('0.1.1', '0.2.4'), '0.2.4', 'stale configured releases must not override a newer bundled app');
+  assert.ok(compareVersions('0.2.10', '0.2.4') > 0, 'desktop versions must compare numerically');
 
   const syncBootstrap = await syncService.bootstrap(`${prefix}-sync-device`);
   assert.ok(syncBootstrap.cursor, 'sync bootstrap should return a durable cursor');
@@ -280,6 +283,9 @@ const run = async () => {
 
   assert.equal(firstSyncBatch.length, 1, 'first sync push should create a sync job');
   assert.equal(duplicateSyncBatch.length, 0, 'duplicate sync push should be rejected');
+
+  const futureVersionManifest = await syncService.getUpdateManifest(`${prefix}-sync-device`, '99.0.0');
+  assert.equal(futureVersionManifest.available, false, 'the update channel must never offer a desktop downgrade');
 
   console.log('Backend service smoke passed');
 };
