@@ -33,6 +33,7 @@ const runStep = (command, args, label) =>
   });
 
 await runStep("npm", ["run", "db:deploy"], "Prisma migrate deploy");
+await runStep("node", ["backend/dist/bootstrap/seed.js"], "Core data bootstrap");
 if (process.env.DEMO_SEED === "true") {
   await runStep("node", ["backend/dist/bootstrap/demo.js"], "Demo seed");
 }

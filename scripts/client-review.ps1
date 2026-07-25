@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-  [string]$RepoUrl = "https://github.com/MuhammadHashir19/bilal-rms.git",
-  [string]$Branch = "docs/professional-readme",
+  [string]$RepoUrl = "https://github.com/heyhashir/bilal-rms.git",
+  [string]$Branch = "main",
   [string]$InstallPath = (Join-Path $HOME "BilalRmsReview"),
   [int]$Port = 5000
 )
