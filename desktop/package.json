@@ -1,22 +1,23 @@
 {
   "name": "bilal-rms-desktop",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Bilal RMS Windows POS desktop runtime",
   "author": "Bilal RMS",
   "main": "src/main.mjs",
   "type": "module",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis",
+    "test:live": "node src/tests/live-connectivity.smoke.mjs",
+    "dist": "node scripts/build-windows.mjs",
     "pack": "electron-builder --dir"
   },
   "dependencies": {
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8"
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.bilalrms.pos",

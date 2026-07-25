@@ -36,6 +36,7 @@
     "desktop:dist": "npm --prefix desktop run dist",
     "desktop:publish-local": "node scripts/publish-desktop-release.mjs",
     "test:desktop:local": "node desktop/src/tests/local-store.smoke.mjs",
+    "test:desktop:live": "npm --prefix desktop run test:live",
     "postinstall": "npm --workspace backend run prisma:generate && npm run build",
     "env:local": "node scripts/ensure-local-env.mjs",
     "db:up": "docker compose up -d mariadb",

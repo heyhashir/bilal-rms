@@ -51,6 +51,7 @@ export type DesktopBridge = {
     appVersion: string;
     appName: string;
     cloudApiBaseUrl: string | null;
+    cloudOrigin: string;
   };
 };
 

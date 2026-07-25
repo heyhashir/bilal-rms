@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -41,7 +42,12 @@ const resolveFrontendDir = () => {
 const remoteBaseUrl =
   process.env.BILAL_RMS_REMOTE_URL?.trim().replace(/\/+$/, "") ||
   process.env.APP_URL?.trim().replace(/\/+$/, "") ||
-  "http://127.0.0.1:5000";
+  "https://balybybilalgarments.com";
+
+const remoteUrl = new URL(remoteBaseUrl);
+if (!["http:", "https:"].includes(remoteUrl.protocol)) {
+  throw new Error("BILAL_RMS_REMOTE_URL must use http or https");
+}
 
 let mainWindow = null;
 let localServer = null;
@@ -58,10 +64,93 @@ const logStartupStage = (stage) => {
   fs.appendFileSync(startupLogPath, `${Date.now() - startupStartedAt}ms ${stage}\n`);
 };
 
+const isCloudPath = (pathname) =>
+  pathname === "/api" ||
+  pathname.startsWith("/api/") ||
+  pathname === "/uploads" ||
+  pathname.startsWith("/uploads/") ||
+  pathname === "/desktop" ||
+  pathname.startsWith("/desktop/");
+
+const normalizeProxyCookies = (cookies) =>
+  cookies?.map((cookie) =>
+    cookie
+      .replace(/;\s*Secure\b/gi, "")
+      .replace(/;\s*Domain=[^;]+/gi, ""),
+  );
+
+const proxyCloudRequest = (req, res, requestUrl) => {
+  const target = new URL(`${requestUrl.pathname}${requestUrl.search}`, remoteUrl);
+  const transport = target.protocol === "https:" ? https : http;
+  const headers = {
+    ...req.headers,
+    host: target.host,
+    origin: remoteUrl.origin,
+    referer: `${remoteUrl.origin}/`,
+    "x-forwarded-host": remoteUrl.host,
+    "x-forwarded-proto": remoteUrl.protocol.slice(0, -1),
+  };
+
+  delete headers.connection;
+
+  const upstream = transport.request(
+    target,
+    {
+      method: req.method,
+      headers,
+      timeout: 30_000,
+    },
+    (upstreamResponse) => {
+      const responseHeaders = { ...upstreamResponse.headers };
+      const proxyCookies = normalizeProxyCookies(upstreamResponse.headers["set-cookie"]);
+      if (proxyCookies) {
+        responseHeaders["set-cookie"] = proxyCookies;
+      }
+      delete responseHeaders["content-security-policy"];
+      delete responseHeaders["content-security-policy-report-only"];
+
+      res.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders);
+      upstreamResponse.pipe(res);
+    },
+  );
+
+  upstream.on("timeout", () => {
+    upstream.destroy(new Error("Cloud request timed out"));
+  });
+  upstream.on("error", (error) => {
+    if (res.headersSent) {
+      res.destroy(error);
+      return;
+    }
+
+    const isApiRequest = requestUrl.pathname.startsWith("/api/");
+    res.writeHead(503, {
+      "Content-Type": isApiRequest ? "application/json; charset=utf-8" : "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+    res.end(
+      isApiRequest
+        ? JSON.stringify({
+            success: false,
+            message: "The cloud service is unavailable. Offline POS data remains available.",
+            data: null,
+          })
+        : "Cloud media is temporarily unavailable.",
+    );
+  });
+
+  req.pipe(upstream);
+};
+
 const startStaticServer = async (frontendDir) =>
   await new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
+      if (isCloudPath(requestUrl.pathname)) {
+        proxyCloudRequest(req, res, requestUrl);
+        return;
+      }
+
       const safePath = requestUrl.pathname === "/" ? "/index.html" : requestUrl.pathname;
       const assetPath = path.normalize(path.join(frontendDir, safePath));
       const isWithinFrontend = assetPath.startsWith(frontendDir);
@@ -230,7 +319,11 @@ const registerIpc = () => {
   });
 
   ipcMain.on("bilal-desktop:get-context", (event) => {
-    event.returnValue = store.getDesktopContext();
+    event.returnValue = {
+      ...store.getDesktopContext(),
+      cloudApiBaseUrl: localOrigin,
+      cloudOrigin: remoteUrl.origin,
+    };
   });
 
   ipcMain.handle("bilal-desktop:print-receipt", async (_event, payload) => {

@@ -146,7 +146,7 @@ npm run desktop:install
 npm run desktop:start
 ```
 
-Set `BILAL_RMS_REMOTE_URL` to the API base URL when using a remote environment. Without it, the desktop runtime uses `http://127.0.0.1:5000`.
+Packaged desktop builds connect to `https://balybybilalgarments.com` by default through an internal loopback proxy. Set `BILAL_RMS_REMOTE_URL` only when testing against a different local or staging API.
 
 ### Build A Windows Installer
 

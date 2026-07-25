@@ -31,6 +31,7 @@ test-results
 # Generated desktop build artifacts and local QA captures
 desktop/dist/
 desktop/dist-fixed*/
+desktop/dist-*/
 desktop/*.png
 /.codex-*.png
 *.docx
