@@ -9,6 +9,10 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { createLocalStore } from "./local-store.mjs";
 import { createReceiptHtml } from "./receipt-template.mjs";
 
+// Electron GPU compositing can leave a permanently white window on Windows RDP
+// sessions. The POS UI is lightweight, so software rendering is the safer default.
+app.disableHardwareAcceleration();
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopPackage = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
 
@@ -54,14 +58,30 @@ let localServer = null;
 let localOrigin = "";
 let store = null;
 
-const startupLogPath = process.env.BILAL_RMS_STARTUP_LOG?.trim();
+let startupLogPath = process.env.BILAL_RMS_STARTUP_LOG?.trim() || "";
 const startupStartedAt = Date.now();
-const logStartupStage = (stage) => {
+const configureStartupLog = () => {
+  if (!startupLogPath) {
+    startupLogPath = path.join(app.getPath("userData"), "runtime", "desktop.log");
+  }
+
+  fs.mkdirSync(path.dirname(startupLogPath), { recursive: true });
+  fs.appendFileSync(
+    startupLogPath,
+    `\n${new Date().toISOString()} Bilal RMS POS ${desktopPackage.version} starting\n`,
+  );
+};
+
+const writeRuntimeLog = (message) => {
   if (!startupLogPath) {
     return;
   }
 
-  fs.appendFileSync(startupLogPath, `${Date.now() - startupStartedAt}ms ${stage}\n`);
+  fs.appendFileSync(startupLogPath, `${new Date().toISOString()} ${message}\n`);
+};
+
+const logStartupStage = (stage) => {
+  writeRuntimeLog(`${Date.now() - startupStartedAt}ms ${stage}`);
 };
 
 const isCloudPath = (pathname) =>
@@ -394,6 +414,8 @@ const createMainWindow = async () => {
     height: 960,
     minWidth: 1100,
     minHeight: 720,
+    show: false,
+    backgroundColor: "#f5f1e8",
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
@@ -403,11 +425,38 @@ const createMainWindow = async () => {
   });
 
   logStartupStage("window-created");
-  await mainWindow.loadURL(`${localOrigin}/login`);
-  logStartupStage("login-loaded");
+  mainWindow.once("ready-to-show", () => {
+    mainWindow?.show();
+    logStartupStage("window-shown");
+  });
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedUrl) => {
+    writeRuntimeLog(`renderer-load-failed code=${errorCode} url=${validatedUrl} error=${errorDescription}`);
+  });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    writeRuntimeLog(`renderer-process-gone reason=${details.reason} exitCode=${details.exitCode}`);
+  });
+  mainWindow.on("unresponsive", () => {
+    writeRuntimeLog("window-unresponsive");
+  });
+
+  try {
+    await mainWindow.loadURL(`${localOrigin}/login`);
+    logStartupStage("login-loaded");
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+      logStartupStage("window-shown-after-load");
+    }
+  } catch (error) {
+    writeRuntimeLog(`login-load-error ${error instanceof Error ? error.message : String(error)}`);
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    throw error;
+  }
 };
 
 app.whenReady().then(async () => {
+  configureStartupLog();
   logStartupStage("electron-ready");
   store = await createLocalStore({
     userDataPath: path.join(app.getPath("userData"), "runtime"),

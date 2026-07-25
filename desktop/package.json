@@ -1,7 +1,7 @@
 {
   "name": "bilal-rms-desktop",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Bilal RMS Windows POS desktop runtime",
   "author": "Bilal RMS",
   "main": "src/main.mjs",
@@ -22,6 +22,7 @@
   "build": {
     "appId": "com.bilalrms.pos",
     "productName": "Bilal RMS POS",
+    "electronDist": "node_modules/electron/dist",
     "compression": "maximum",
     "asar": true,
     "directories": {
