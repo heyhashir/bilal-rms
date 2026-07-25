@@ -116,6 +116,10 @@ try {
     await window.getByText("Desktop updates", { exact: true }).waitFor({ timeout: 15_000 });
     await window.getByRole("button", { name: "Check now" }).click();
     await window.getByRole("button", { name: "Check now" }).waitFor();
+    await window.waitForFunction(
+      (version) => document.body.innerText.includes(`Latest version: ${version}`),
+      context.appVersion,
+    );
 
     await window.waitForFunction(
       ({ productCount, cursor }) => {
