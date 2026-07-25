@@ -97,6 +97,12 @@ try {
       return await response.json();
     });
     assert.equal(authenticatedSession.data?.user?.role, "admin");
+    await window.goto(new URL("/category/kids", window.url()).toString());
+    await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/category\/kids$/);
+    const desktopBackButton = window.getByRole("button", { name: "Back to previous screen" });
+    await desktopBackButton.waitFor();
+    await desktopBackButton.click();
+    await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/admin$/);
     await window.goto(new URL("/pos", window.url()).toString());
     await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/pos$/);
     const reloadedSession = await window.evaluate(async () => {

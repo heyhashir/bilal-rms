@@ -1,4 +1,5 @@
-import { Outlet, createRootRoute, Link, useRouterState } from "@tanstack/react-router";
+import { Outlet, createRootRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { ArrowLeft, LayoutDashboard, ScanLine } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { Header, Footer } from "@/components/layout/Header";
@@ -30,11 +31,65 @@ export const Route = createRootRoute({
   notFoundComponent: NotFoundComponent,
 });
 
+function DesktopRouteBar({ pathname }: { pathname: string }) {
+  const navigate = useNavigate();
+  const pageName =
+    pathname
+      .split("/")
+      .filter(Boolean)
+      .at(-1)
+      ?.replaceAll("-", " ") ?? "Storefront";
+
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    void navigate({ to: "/admin" });
+  };
+
+  return (
+    <div className="sticky top-0 z-[70] flex min-h-14 items-center justify-between gap-4 border-b border-border bg-background px-5 py-2 shadow-sm">
+      <button
+        type="button"
+        onClick={goBack}
+        aria-label="Back to previous screen"
+        className="inline-flex items-center gap-2 border border-border px-4 py-2 text-xs uppercase tracking-widest hover:bg-secondary"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+      <div className="hidden min-w-0 flex-1 text-center text-xs uppercase tracking-[0.3em] text-muted-foreground md:block">
+        {pageName}
+      </div>
+      <nav className="flex items-center gap-2" aria-label="Desktop workspace">
+        <Link
+          to="/admin"
+          className="inline-flex items-center gap-2 border border-border px-4 py-2 text-xs uppercase tracking-widest hover:bg-secondary"
+        >
+          <LayoutDashboard className="h-4 w-4" />
+          Management
+        </Link>
+        <Link
+          to="/pos"
+          className="inline-flex items-center gap-2 bg-primary px-4 py-2 text-xs uppercase tracking-widest text-primary-foreground"
+        >
+          <ScanLine className="h-4 w-4" />
+          POS Terminal
+        </Link>
+      </nav>
+    </div>
+  );
+}
+
 function RootComponent() {
   const hydrateAuth = useAuth((s) => s.hydrate);
   const expireSession = useAuth((s) => s.expireSession);
   const isDesktopWorkspace = isDesktopRuntime();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const showDesktopRouteBar =
+    isDesktopWorkspace && pathname !== "/login" && pathname !== "/pos" && !pathname.startsWith("/admin");
 
   useEffect(() => {
     // Keep desktop sign-in fast, but hydrate protected pages so refreshes and
@@ -81,6 +136,7 @@ function RootComponent() {
   return (
     <>
       {!isDesktopWorkspace && <Header />}
+      {showDesktopRouteBar && <DesktopRouteBar pathname={pathname} />}
       <main>
         <Outlet />
       </main>
