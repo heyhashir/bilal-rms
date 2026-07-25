@@ -1,20 +1,12 @@
 import { spawn } from "child_process";
+import { existsSync } from "fs";
+import { resolve } from "path";
 
 const rootDir = process.cwd();
 
-const resolveCommand = (command) =>
-  process.platform === "win32" && (command === "npm" || command === "npx")
-    ? "cmd.exe"
-    : command;
-
 const runStep = (command, args, label) =>
   new Promise((resolve, reject) => {
-    const spawnArgs =
-      process.platform === "win32" && (command === "npm" || command === "npx")
-        ? ["/d", "/s", "/c", `${command} ${args.join(" ")}`]
-        : args;
-
-    const child = spawn(resolveCommand(command), spawnArgs, {
+    const child = spawn(command, args, {
       cwd: rootDir,
       env: process.env,
       stdio: "inherit",
@@ -32,9 +24,29 @@ const runStep = (command, args, label) =>
     });
   });
 
-await runStep("npm", ["run", "db:deploy"], "Prisma migrate deploy");
-await runStep("node", ["backend/dist/bootstrap/seed.js"], "Core data bootstrap");
-if (process.env.DEMO_SEED === "true") {
-  await runStep("node", ["backend/dist/bootstrap/demo.js"], "Demo seed");
+const prismaCliPath = [
+  resolve(rootDir, "node_modules", "prisma", "build", "index.js"),
+  resolve(rootDir, "backend", "node_modules", "prisma", "build", "index.js"),
+].find(existsSync);
+
+if (!prismaCliPath) {
+  throw new Error("Prisma CLI was not installed. Verify the deployment install step completed.");
 }
-await runStep("node", ["backend/dist/server.js"], "Production server");
+
+// Hostinger starts the Node entry file without guaranteeing `npm` is on PATH.
+await runStep(
+  process.execPath,
+  [
+    prismaCliPath,
+    "migrate",
+    "deploy",
+    "--schema",
+    resolve(rootDir, "backend", "prisma", "schema.prisma"),
+  ],
+  "Prisma migrate deploy",
+);
+await runStep(process.execPath, ["backend/dist/bootstrap/seed.js"], "Core data bootstrap");
+if (process.env.DEMO_SEED === "true") {
+  await runStep(process.execPath, ["backend/dist/bootstrap/demo.js"], "Demo seed");
+}
+await runStep(process.execPath, ["backend/dist/server.js"], "Production server");
