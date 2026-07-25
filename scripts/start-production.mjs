@@ -33,26 +33,35 @@ if (!prismaCliPath) {
   throw new Error("Prisma CLI was not installed. Verify the deployment install step completed.");
 }
 
-await runStep(
-  process.execPath,
-  ["scripts/prepare-prisma-engines.mjs"],
-  "Prisma engine permission preparation",
-);
+const runProductionBootstrap = async () => {
+  await runStep(
+    process.execPath,
+    ["scripts/prepare-prisma-engines.mjs"],
+    "Prisma engine permission preparation",
+  );
 
-// Hostinger starts the Node entry file without guaranteeing `npm` is on PATH.
-await runStep(
-  process.execPath,
-  [
-    prismaCliPath,
-    "migrate",
-    "deploy",
-    "--schema",
-    resolve(rootDir, "backend", "prisma", "schema.prisma"),
-  ],
-  "Prisma migrate deploy",
-);
-await runStep(process.execPath, ["backend/dist/bootstrap/seed.js"], "Core data bootstrap");
-if (process.env.DEMO_SEED === "true") {
-  await runStep(process.execPath, ["backend/dist/bootstrap/demo.js"], "Demo seed");
-}
+  // Hostinger starts the Node entry file without guaranteeing `npm` is on PATH.
+  await runStep(
+    process.execPath,
+    [
+      prismaCliPath,
+      "migrate",
+      "deploy",
+      "--schema",
+      resolve(rootDir, "backend", "prisma", "schema.prisma"),
+    ],
+    "Prisma migrate deploy",
+  );
+
+  if (process.env.DEMO_SEED === "true") {
+    await runStep(process.execPath, ["backend/dist/bootstrap/demo.js"], "Demo seed");
+  }
+};
+
+// Bind Express first: Hostinger marks applications unhealthy if they do not
+// listen quickly. The server's readiness worker waits for migrations and seeds.
+void runProductionBootstrap().catch((error) => {
+  console.error("Production database bootstrap failed; the readiness endpoint will remain unavailable.", error);
+});
+
 await runStep(process.execPath, ["backend/dist/server.js"], "Production server");

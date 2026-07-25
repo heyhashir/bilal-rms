@@ -5,6 +5,8 @@ import { env } from './config/env';
 import prisma from './config/prisma';
 import logger from './utils/logger';
 
+const STARTUP_RETRY_DELAY_MS = 5_000;
+
 const registerProcessHandlers = (shutdown: (signal: string) => Promise<void>): void => {
   process.on('SIGTERM', () => {
     void shutdown('SIGTERM');
@@ -29,11 +31,28 @@ const registerProcessHandlers = (shutdown: (signal: string) => Promise<void>): v
   });
 };
 
-const startServer = async (): Promise<void> => {
-  await ensureStartupReadiness();
-  await bootstrapData();
-  await verifySeedState();
+const startReadinessWorker = (): void => {
+  const initialize = async (): Promise<void> => {
+    try {
+      await ensureStartupReadiness();
+      await bootstrapData();
+      await verifySeedState();
+      logger.info('Startup initialization completed.');
+    } catch (error) {
+      // The production launcher applies migrations concurrently so the web
+      // process can satisfy Hostinger's short listen deadline. Retry until the
+      // database and migration state are ready rather than terminating Express.
+      logger.error('Startup initialization is not ready; retrying shortly.', { error });
+      setTimeout(() => {
+        void initialize();
+      }, STARTUP_RETRY_DELAY_MS);
+    }
+  };
 
+  void initialize();
+};
+
+const startServer = (): void => {
   const app = createApp();
   const server = app.listen(env.PORT, () => {
     logger.info(`Bilal RMS Backend listening on port ${env.PORT} [${env.NODE_ENV}]`);
@@ -55,10 +74,14 @@ const startServer = async (): Promise<void> => {
   };
 
   registerProcessHandlers(shutdown);
+  startReadinessWorker();
 };
 
-void startServer().catch(async (error) => {
+try {
+  startServer();
+} catch (error) {
   logger.error('Startup failed', { error });
-  await prisma.$disconnect().catch(() => undefined);
-  process.exit(1);
-});
+  void prisma.$disconnect().finally(() => {
+    process.exit(1);
+  });
+}
