@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
@@ -24,6 +24,9 @@ jobs:
 
       - name: Validate Prisma schema
         run: node scripts/run-backend-command.mjs npx prisma validate --schema backend/prisma/schema.prisma
+        # `prisma validate` parses the datasource but does not contact this database.
+        env:
+          DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/bilal_rms
 
       - name: Build application
         run: npm run build
