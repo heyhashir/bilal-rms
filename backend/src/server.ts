@@ -49,6 +49,13 @@ const startReadinessWorker = (): void => {
     }
   };
 
+  if (env.isProduction) {
+    setTimeout(() => {
+      void initialize();
+    }, STARTUP_RETRY_DELAY_MS);
+    return;
+  }
+
   void initialize();
 };
 
