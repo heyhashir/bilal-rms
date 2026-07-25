@@ -1,7 +1,7 @@
 {
   "name": "bilal-rms-desktop",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Bilal RMS Windows POS desktop runtime",
   "author": "Bilal RMS",
   "main": "src/main.mjs",
@@ -38,6 +38,7 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -50,6 +51,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
       "artifactName": "BilalRMS-Setup-${version}.${ext}"
     }
   }

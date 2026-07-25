@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">BALY by Bilal Garments EST 2001</title>
+  <rect width="512" height="512" rx="72" fill="#f8f6ef"/>
+  <g transform="translate(52 0)">
+    <text
+      x="0"
+      y="238"
+      fill="#080808"
+      font-family="Arial Black, Arial, sans-serif"
+      font-size="112"
+      font-weight="900"
+      letter-spacing="14"
+    >BALY</text>
+    <rect x="357" y="153" width="40" height="40" fill="#f5a000"/>
+    <text
+      x="3"
+      y="301"
+      fill="#080808"
+      font-family="Arial, sans-serif"
+      font-size="20"
+      font-weight="700"
+      letter-spacing="7"
+    >BY BILAL GARMENTS</text>
+    <text
+      x="3"
+      y="351"
+      fill="#f5a000"
+      font-family="Arial, sans-serif"
+      font-size="20"
+      font-weight="700"
+      letter-spacing="10"
+    >EST 2001</text>
+  </g>
+</svg>
