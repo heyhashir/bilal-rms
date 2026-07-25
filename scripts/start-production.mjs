@@ -11,6 +11,13 @@ if (databaseParts.user && databaseParts.password && databaseParts.database) {
     `mysql://${encodeURIComponent(databaseParts.user)}:${encodeURIComponent(databaseParts.password)}` +
     `@${databaseParts.host || "127.0.0.1"}:${databaseParts.port}/${encodeURIComponent(databaseParts.database)}`;
   console.log("Configured DATABASE_URL from separate Hostinger DB_* variables.");
+} else if (process.env.DATABASE_URL) {
+  const databaseUrl = new URL(process.env.DATABASE_URL);
+  if (databaseUrl.hostname === "localhost") {
+    databaseUrl.hostname = "127.0.0.1";
+    process.env.DATABASE_URL = databaseUrl.toString();
+    console.log("Normalized DATABASE_URL to use IPv4 for Hostinger MySQL.");
+  }
 }
 
 // Hostinger monitors the entry process itself and expects it to bind promptly.
