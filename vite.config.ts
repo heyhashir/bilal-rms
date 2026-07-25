@@ -1,18 +1,19 @@
 import react from "@vitejs/plugin-react";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   build: {
     outDir: "backend/public",
     emptyOutDir: true,
   },
-  plugins: [
-    tanstackRouter({ target: "react", autoCodeSplitting: true }),
-    react(),
-    tsconfigPaths(),
-  ],
+  plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react()],
   server: {
     port: 3000,
     allowedHosts: [".ngrok-free.dev", ".ngrok.io"],

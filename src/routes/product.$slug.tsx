@@ -13,10 +13,7 @@ import { getEffectiveAmount } from "@/lib/format";
 
 export const Route = createFileRoute("/product/$slug")({
   head: ({ params }) => ({
-    meta: [
-      { title: `${params.slug} - BALY by Bilal Garments EST 2001.` },
-      { name: "description", content: "Premium product details, sizing, and styling notes." },
-    ],
+    meta: [{ title: `${params.slug} - BALY by Bilal Garments EST 2001.` }, { name: "description", content: "Premium product details, sizing, and styling notes." }],
   }),
   component: ProductPage,
 });
@@ -43,16 +40,7 @@ function ProductPage() {
   const [qty, setQty] = useState(1);
   const [showChart, setShowChart] = useState(false);
 
-  const gallery = useMemo(
-    () =>
-      product
-        ? [
-            ...product.images.map((src) => ({ type: "image" as const, src })),
-            ...(product.video ? [{ type: "video" as const, src: product.video }] : []),
-          ]
-        : [],
-    [product],
-  );
+  const gallery = useMemo(() => (product ? [...product.images.map((src) => ({ type: "image" as const, src })), ...(product.video ? [{ type: "video" as const, src: product.video }] : [])] : []), [product]);
 
   useEffect(() => {
     if (!product) {
@@ -62,10 +50,8 @@ function ProductPage() {
     setImg(0);
     setQty(1);
     setSize((current) => (current && product.sizes.includes(current) ? current : (product.sizes[0] ?? "")));
-    setColor((current) =>
-      current && product.colors.some((entry) => entry.name === current) ? current : (product.colors[0]?.name ?? ""),
-    );
-  }, [product?.id]);
+    setColor((current) => (current && product.colors.some((entry) => entry.name === current) ? current : (product.colors[0]?.name ?? "")));
+  }, [product]);
 
   useEffect(() => {
     if (!showChart) {
@@ -142,28 +128,12 @@ function ProductPage() {
         <div className="grid grid-cols-[80px_1fr] gap-4">
           <div className="flex flex-col gap-3">
             {gallery.map((media, i) => (
-              <button
-                key={`${media.type}-${media.src}`}
-                onClick={() => setImg(i)}
-                className={`aspect-[4/5] overflow-hidden border bg-secondary ${img === i ? "border-foreground" : "border-border"}`}
-              >
-                {media.type === "image" ? (
-                  <img src={media.src} alt="" loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                    Video
-                  </div>
-                )}
+              <button key={`${media.type}-${media.src}`} onClick={() => setImg(i)} className={`aspect-[4/5] overflow-hidden border bg-secondary ${img === i ? "border-foreground" : "border-border"}`}>
+                {media.type === "image" ? <img src={media.src} alt="" loading="lazy" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Video</div>}
               </button>
             ))}
           </div>
-          <div className="aspect-[4/5] overflow-hidden bg-secondary">
-            {gallery[img]?.type === "video" ? (
-              <video src={gallery[img].src} controls className="h-full w-full object-contain" />
-            ) : (
-              <img src={gallery[img]?.src ?? product.images[0]} alt={product.name} className="h-full w-full object-cover" />
-            )}
-          </div>
+          <div className="aspect-[4/5] overflow-hidden bg-secondary">{gallery[img]?.type === "video" ? <video src={gallery[img].src} controls className="h-full w-full object-contain" /> : <img src={gallery[img]?.src ?? product.images[0]} alt={product.name} className="h-full w-full object-cover" />}</div>
         </div>
 
         <div>
@@ -180,13 +150,7 @@ function ProductPage() {
               </div>
               <div className="flex gap-2">
                 {product.colors.map((entry) => (
-                  <button
-                    key={entry.name}
-                    onClick={() => setColor(entry.name)}
-                    title={entry.name}
-                    className={`h-10 w-10 rounded-full border-2 transition ${color === entry.name ? "scale-110 border-foreground" : "border-border"}`}
-                    style={{ background: entry.hex }}
-                  />
+                  <button key={entry.name} onClick={() => setColor(entry.name)} title={entry.name} className={`h-10 w-10 rounded-full border-2 transition ${color === entry.name ? "scale-110 border-foreground" : "border-border"}`} style={{ background: entry.hex }} />
                 ))}
               </div>
             </div>
@@ -204,11 +168,7 @@ function ProductPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {product.sizes.map((entry) => (
-                  <button
-                    key={entry}
-                    onClick={() => setSize(entry)}
-                    className={`min-w-12 h-11 border px-3 text-sm ${size === entry ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-foreground"}`}
-                  >
+                  <button key={entry} onClick={() => setSize(entry)} className={`min-w-12 h-11 border px-3 text-sm ${size === entry ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-foreground"}`}>
                     {entry}
                   </button>
                 ))}
@@ -218,26 +178,25 @@ function ProductPage() {
 
           <div className="mt-8 flex items-center gap-3">
             <div className="flex h-12 items-center border border-border">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="h-full px-3"><Minus className="h-4 w-4" /></button>
+              <button onClick={() => setQty(Math.max(1, qty - 1))} className="h-full px-3">
+                <Minus className="h-4 w-4" />
+              </button>
               <span className="w-10 text-center">{qty}</span>
-              <button onClick={() => setQty(qty + 1)} className="h-full px-3"><Plus className="h-4 w-4" /></button>
+              <button onClick={() => setQty(qty + 1)} className="h-full px-3">
+                <Plus className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              onClick={addToCart}
-              disabled={!inStock}
-              className="h-12 flex-1 bg-primary text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-foreground/85 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <button onClick={addToCart} disabled={!inStock} className="h-12 flex-1 bg-primary text-xs font-medium uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-foreground/85 disabled:cursor-not-allowed disabled:opacity-50">
               {inStock ? "Add to cart" : "Sold out"}
             </button>
-            <button
-              onClick={buyNow}
-              disabled={!inStock}
-              className="h-12 flex-1 border border-primary bg-background text-xs font-medium uppercase tracking-[0.2em] text-primary transition hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <button onClick={buyNow} disabled={!inStock} className="h-12 flex-1 border border-primary bg-background text-xs font-medium uppercase tracking-[0.2em] text-primary transition hover:bg-primary hover:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">
               Buy now
             </button>
             <button
-              onClick={() => { wish.toggle(product.id); toast.success(fav ? "Removed from wishlist" : "Added to wishlist"); }}
+              onClick={() => {
+                wish.toggle(product.id);
+                toast.success(fav ? "Removed from wishlist" : "Added to wishlist");
+              }}
               className="grid h-12 w-12 place-items-center border border-border hover:border-foreground"
               aria-label="Wishlist"
             >
@@ -247,7 +206,9 @@ function ProductPage() {
 
           <div className="mt-3 text-sm">
             {inStock ? (
-              <span className="text-muted-foreground">In stock · <span className="text-foreground">{activeVariant?.stock ?? product.stock} available</span></span>
+              <span className="text-muted-foreground">
+                In stock · <span className="text-foreground">{activeVariant?.stock ?? product.stock} available</span>
+              </span>
             ) : (
               <span className="font-medium text-sale">Currently sold out</span>
             )}
@@ -261,7 +222,9 @@ function ProductPage() {
           {product.tags.length > 0 && (
             <div className="mt-8 flex flex-wrap gap-2">
               {product.tags.map((tag) => (
-                <span key={tag} className="bg-secondary px-2 py-1 text-xs text-muted-foreground">{tag}</span>
+                <span key={tag} className="bg-secondary px-2 py-1 text-xs text-muted-foreground">
+                  {tag}
+                </span>
               ))}
             </div>
           )}
@@ -272,7 +235,9 @@ function ProductPage() {
         <section className="mt-24">
           <h2 className="display mb-8 text-3xl md:text-4xl">You may also like.</h2>
           <div className="grid grid-cols-2 gap-5 md:grid-cols-4 md:gap-8">
-            {related.map((entry) => <ProductCard key={entry.id} product={entry} />)}
+            {related.map((entry) => (
+              <ProductCard key={entry.id} product={entry} />
+            ))}
           </div>
         </section>
       )}
@@ -285,35 +250,41 @@ function ProductPage() {
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Size guide</div>
                 <h3 className="display mt-1 text-2xl">{sizeCharts[product.sizeChart].label}</h3>
               </div>
-              <button onClick={() => setShowChart(false)}><X className="h-5 w-5" /></button>
+              <button onClick={() => setShowChart(false)}>
+                <X className="h-5 w-5" />
+              </button>
             </div>
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[420px] text-sm">
-              <thead className="text-xs uppercase tracking-widest text-muted-foreground">
-                <tr>
-                  {sizeCharts[product.sizeChart].columns.map((column) => (
-                    <th key={column.key} className="py-2 text-left">{column.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sizeCharts[product.sizeChart].rows.map((row) => (
-                  <tr key={row.size} className="border-t border-border">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead className="text-xs uppercase tracking-widest text-muted-foreground">
+                  <tr>
                     {sizeCharts[product.sizeChart].columns.map((column) => (
-                      <td key={column.key} className={`py-2 ${column.key === "size" ? "font-medium" : ""}`}>
-                        {row[column.key] ?? "-"}
-                      </td>
+                      <th key={column.key} className="py-2 text-left">
+                        {column.label}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sizeCharts[product.sizeChart].rows.map((row) => (
+                    <tr key={row.size} className="border-t border-border">
+                      {sizeCharts[product.sizeChart].columns.map((column) => (
+                        <td key={column.key} className={`py-2 ${column.key === "size" ? "font-medium" : ""}`}>
+                          {row[column.key] ?? "-"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       )}
 
-      <Link to="/shop" className="sr-only">Back to shop</Link>
+      <Link to="/shop" className="sr-only">
+        Back to shop
+      </Link>
     </div>
   );
 }

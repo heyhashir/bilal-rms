@@ -22,6 +22,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm audit --audit-level=low
+
+      - name: Lint application
+        run: npm run lint && npm run lint:backend
+
       - name: Validate Prisma schema
         run: node scripts/run-backend-command.mjs npx prisma validate --schema backend/prisma/schema.prisma
         # `prisma validate` parses the datasource but does not contact this database.

@@ -29,7 +29,7 @@ function Checkout() {
     queryKey: queryKeys.catalog.bootstrap,
     queryFn: catalogApi.bootstrap,
   });
-  const shippingZones = data?.shippingZones ?? [];
+  const shippingZones = useMemo(() => data?.shippingZones ?? [], [data?.shippingZones]);
   const defaultAddress = user?.addresses.find((entry) => entry.isDefault) ?? user?.addresses[0] ?? null;
   const [confirmed, setConfirmed] = useState<Order | null>(null);
   const [proof, setProof] = useState<File | null>(null);
@@ -62,9 +62,7 @@ function Checkout() {
       return null;
     }
 
-    const exactMatch = shippingZones.find(
-      (entry) => !entry.isUniversal && entry.city.trim().toLowerCase() === normalizedCity,
-    );
+    const exactMatch = shippingZones.find((entry) => !entry.isUniversal && entry.city.trim().toLowerCase() === normalizedCity);
 
     return exactMatch ?? shippingZones.find((entry) => entry.isUniversal) ?? null;
   }, [form.city, shippingZones]);
@@ -79,7 +77,9 @@ function Checkout() {
     return (
       <div className="container-bg py-24 text-center">
         <h1 className="display mb-3 text-4xl">Nothing to checkout.</h1>
-        <Link to="/shop" className="text-xs uppercase tracking-widest underline">Browse products</Link>
+        <Link to="/shop" className="text-xs uppercase tracking-widest underline">
+          Browse products
+        </Link>
       </div>
     );
   }
@@ -161,32 +161,29 @@ function Checkout() {
               <div className="grid gap-3 md:grid-cols-3">
                 <Input label="City" value={form.city} onChange={(v) => upd("city", v)} listId="shipping-city-suggestions" />
                 <datalist id="shipping-city-suggestions">
-                  {shippingZones.filter((entry) => !entry.isUniversal).map((entry) => (
-                    <option key={entry.id} value={entry.city} />
-                  ))}
+                  {shippingZones
+                    .filter((entry) => !entry.isUniversal)
+                    .map((entry) => (
+                      <option key={entry.id} value={entry.city} />
+                    ))}
                 </datalist>
                 <Input label="Postal code" value={form.postal} onChange={(v) => upd("postal", v)} />
                 <Input label="Phone" value={form.phone} onChange={(v) => upd("phone", v)} />
               </div>
-              {zone && (
-                <p className="text-sm text-muted-foreground">
-                  Shipping via {zone.isUniversal ? "All cities fallback" : zone.label ?? zone.name}.
-                </p>
-              )}
+              {zone && <p className="text-sm text-muted-foreground">Shipping via {zone.isUniversal ? "All cities fallback" : (zone.label ?? zone.name)}.</p>}
             </div>
           </Section>
 
           <Section title="Payment method">
             <div className="grid gap-3 sm:grid-cols-2">
-              {([
-                ["cod", "Cash on Delivery"],
-                ["jazzcash", "JazzCash"],
-                ["easypaisa", "EasyPaisa"],
-              ] as [Method, string][]).map(([value, label]) => (
-                <label
-                  key={value}
-                  className={`flex cursor-pointer items-center gap-3 border p-4 ${form.payment === value ? "border-foreground bg-secondary" : "border-border"}`}
-                >
+              {(
+                [
+                  ["cod", "Cash on Delivery"],
+                  ["jazzcash", "JazzCash"],
+                  ["easypaisa", "EasyPaisa"],
+                ] as [Method, string][]
+              ).map(([value, label]) => (
+                <label key={value} className={`flex cursor-pointer items-center gap-3 border p-4 ${form.payment === value ? "border-foreground bg-secondary" : "border-border"}`}>
                   <input type="radio" name="pay" checked={form.payment === value} onChange={() => upd("payment", value)} />
                   <span className="text-sm font-medium">{label}</span>
                 </label>
@@ -200,13 +197,7 @@ function Checkout() {
                 <Input label="Wallet transaction reference" value={form.walletReference} onChange={(v) => upd("walletReference", v)} />
                 <label className="block">
                   <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Payment screenshot</span>
-                  <input
-                    required
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) => setProof(event.target.files?.[0] ?? null)}
-                    className="w-full border border-border bg-background px-3 py-3 text-sm outline-none focus:border-foreground"
-                  />
+                  <input required type="file" accept="image/*" onChange={(event) => setProof(event.target.files?.[0] ?? null)} className="w-full border border-border bg-background px-3 py-3 text-sm outline-none focus:border-foreground" />
                 </label>
               </div>
             )}
@@ -215,12 +206,7 @@ function Checkout() {
           <Section title="Order notes">
             <label className="block">
               <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Notes</span>
-              <textarea
-                rows={3}
-                value={form.notes}
-                onChange={(event) => upd("notes", event.target.value)}
-                className="w-full border border-border bg-background px-3 py-3 text-sm outline-none focus:border-foreground"
-              />
+              <textarea rows={3} value={form.notes} onChange={(event) => upd("notes", event.target.value)} className="w-full border border-border bg-background px-3 py-3 text-sm outline-none focus:border-foreground" />
             </label>
           </Section>
         </div>
@@ -230,13 +216,7 @@ function Checkout() {
           <div className="max-h-72 space-y-3 overflow-auto pr-1">
             {checkoutLines.map((line) => (
               <div key={line.id} className="flex gap-3">
-                <div className="aspect-[4/5] w-14 shrink-0 overflow-hidden bg-background">
-                  {line.image ? (
-                    <img src={line.image} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-end p-1 text-[9px] text-muted-foreground">{line.name}</div>
-                  )}
-                </div>
+                <div className="aspect-[4/5] w-14 shrink-0 overflow-hidden bg-background">{line.image ? <img src={line.image} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-end p-1 text-[9px] text-muted-foreground">{line.name}</div>}</div>
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-1 text-sm">{line.name}</div>
                   <div className="text-xs text-muted-foreground">{[line.color, line.size, `x${line.qty}`].filter(Boolean).join(" · ")}</div>
@@ -249,7 +229,8 @@ function Checkout() {
             <Row label="Subtotal" value={formatPrice(sub)} />
             <Row label="Shipping" value={zone ? (ship === 0 ? "Free" : formatPrice(ship)) : "Enter city"} />
             <div className="flex justify-between pt-2 text-base font-semibold">
-              <span>Total</span><span>{formatPrice(total)}</span>
+              <span>Total</span>
+              <span>{formatPrice(total)}</span>
             </div>
           </div>
           <button type="submit" disabled={isSubmitting} className="w-full bg-primary py-4 text-xs uppercase tracking-[0.2em] text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60">
@@ -273,38 +254,22 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Input({
-  label,
-  value,
-  onChange,
-  type = "text",
-  required = true,
-  listId,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  required?: boolean;
-  listId?: string;
-}) {
+function Input({ label, value, onChange, type = "text", required = true, listId }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean; listId?: string }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">{label}</span>
-      <input
-        required={required}
-        type={type}
-        value={value}
-        list={listId}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-border bg-background px-3 py-3 text-sm outline-none focus:border-foreground"
-      />
+      <input required={required} type={type} value={value} list={listId} onChange={(e) => onChange(e.target.value)} className="w-full border border-border bg-background px-3 py-3 text-sm outline-none focus:border-foreground" />
     </label>
   );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
-  return <div className="flex justify-between"><span className="text-muted-foreground">{label}</span><span>{value}</span></div>;
+  return (
+    <div className="flex justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span>{value}</span>
+    </div>
+  );
 }
 
 function Confirmation({ order }: { order: Order }) {
@@ -320,21 +285,31 @@ function Confirmation({ order }: { order: Order }) {
         </p>
       </div>
       <div className="mt-10 space-y-2 bg-secondary p-6 text-sm">
-        <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-semibold">{formatPrice(order.total)}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><span className="uppercase">{order.payment}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Ships to</span><span>{order.shipping.address}, {order.shipping.city}</span></div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Total</span>
+          <span className="font-semibold">{formatPrice(order.total)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Payment</span>
+          <span className="uppercase">{order.payment}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Ships to</span>
+          <span>
+            {order.shipping.address}, {order.shipping.city}
+          </span>
+        </div>
       </div>
       <div className="mt-8 flex justify-center gap-3">
-        <Link
-          to="/invoice/$orderNumber"
-          params={{ orderNumber: order.id }}
-          search={{ token: order.token }}
-          className="border border-foreground px-6 py-3 text-xs uppercase tracking-widest"
-        >
+        <Link to="/invoice/$orderNumber" params={{ orderNumber: order.id }} search={{ token: order.token }} className="border border-foreground px-6 py-3 text-xs uppercase tracking-widest">
           Print invoice
         </Link>
-        <Link to="/track-order" className="bg-primary px-6 py-3 text-xs uppercase tracking-widest text-primary-foreground">Track order</Link>
-        <Link to="/shop" className="border border-foreground px-6 py-3 text-xs uppercase tracking-widest">Keep shopping</Link>
+        <Link to="/track-order" className="bg-primary px-6 py-3 text-xs uppercase tracking-widest text-primary-foreground">
+          Track order
+        </Link>
+        <Link to="/shop" className="border border-foreground px-6 py-3 text-xs uppercase tracking-widest">
+          Keep shopping
+        </Link>
       </div>
     </div>
   );

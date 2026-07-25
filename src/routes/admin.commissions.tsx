@@ -22,7 +22,7 @@ function AdminCommissions() {
     queryKey: queryKeys.admin.commissionsList({ page, query }),
     queryFn: async () => adminCommissionsApi.commissions({ page, pageSize: 20, query }),
   });
-  const entries = data?.commissions ?? [];
+  const entries = useMemo(() => data?.commissions ?? [], [data?.commissions]);
   const meta = data?.meta;
 
   const markPaid = useMutation({

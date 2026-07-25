@@ -22,8 +22,13 @@ const flattenCategories = (categories: Awaited<ReturnType<typeof catalogApi.cate
 export const Route = createFileRoute("/category/$slug")({
   head: ({ params }) => ({
     meta: [
-      { title: `${params.slug.charAt(0).toUpperCase() + params.slug.slice(1)} - BALY by Bilal Garments EST 2001.` },
-      { name: "description", content: `Shop the ${params.slug} collection at BALY by Bilal Garments EST 2001.` },
+      {
+        title: `${params.slug.charAt(0).toUpperCase() + params.slug.slice(1)} - BALY by Bilal Garments EST 2001.`,
+      },
+      {
+        name: "description",
+        content: `Shop the ${params.slug} collection at BALY by Bilal Garments EST 2001.`,
+      },
     ],
   }),
   component: CategoryPage,
@@ -44,13 +49,10 @@ function CategoryPage() {
     enabled: Boolean(bootstrap),
   });
 
-  const products = data?.products ?? [];
+  const products = useMemo(() => data?.products ?? [], [data?.products]);
   const pageSize = 12;
   const pageCount = Math.max(1, Math.ceil(products.length / pageSize));
-  const visibleProducts = useMemo(
-    () => products.slice((page - 1) * pageSize, page * pageSize),
-    [page, products],
-  );
+  const visibleProducts = useMemo(() => products.slice((page - 1) * pageSize, page * pageSize), [page, products]);
 
   useEffect(() => {
     setPage(1);
@@ -79,12 +81,7 @@ function CategoryPage() {
       <div className="mb-6 flex justify-end">
         <label className="flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
           Sort
-          <select
-            aria-label="Sort category products"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as CategorySort)}
-            className="border border-border bg-background px-3 py-2 text-xs uppercase tracking-widest text-foreground"
-          >
+          <select aria-label="Sort category products" value={sort} onChange={(event) => setSort(event.target.value as CategorySort)} className="border border-border bg-background px-3 py-2 text-xs uppercase tracking-widest text-foreground">
             <option value="newest">Newest</option>
             <option value="popular">Popular</option>
             <option value="price-asc">Price up</option>
@@ -107,21 +104,13 @@ function CategoryPage() {
           </div>
           {pageCount > 1 && (
             <div className="mt-10 flex items-center justify-center gap-4 text-xs uppercase tracking-widest">
-              <button
-                type="button"
-                disabled={page === 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                className="border border-border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-40"
-              >
+              <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="border border-border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-40">
                 Previous
               </button>
-              <span className="text-muted-foreground">Page {page} of {pageCount}</span>
-              <button
-                type="button"
-                disabled={page === pageCount}
-                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
-                className="border border-border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-40"
-              >
+              <span className="text-muted-foreground">
+                Page {page} of {pageCount}
+              </span>
+              <button type="button" disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} className="border border-border px-4 py-3 disabled:cursor-not-allowed disabled:opacity-40">
                 Next
               </button>
             </div>

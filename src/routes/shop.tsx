@@ -9,10 +9,7 @@ import { queryKeys } from "@/lib/query-keys";
 
 export const Route = createFileRoute("/shop")({
   head: () => ({
-    meta: [
-      { title: "Shop - Bilal Garments" },
-      { name: "description", content: "Browse the entire Bilal Garments collection." },
-    ],
+    meta: [{ title: "Shop - Bilal Garments" }, { name: "description", content: "Browse the entire Bilal Garments collection." }],
   }),
   component: Shop,
 });
@@ -28,12 +25,9 @@ function Shop() {
   const categories = bootstrap?.categories ?? [];
   const categoryOptions = categories.flatMap((entry) => [entry, ...entry.children]);
   const brands = bootstrap?.brands ?? [];
-  const seedProducts = bootstrap?.products ?? [];
+  const seedProducts = useMemo(() => bootstrap?.products ?? [], [bootstrap?.products]);
   const allSizes = useMemo(() => Array.from(new Set(seedProducts.flatMap((product) => product.sizes))), [seedProducts]);
-  const allColors = useMemo(
-    () => Array.from(new Map(seedProducts.flatMap((product) => product.colors).map((color) => [color.name, color])).values()),
-    [seedProducts],
-  );
+  const allColors = useMemo(() => Array.from(new Map(seedProducts.flatMap((product) => product.colors).map((color) => [color.name, color])).values()), [seedProducts]);
   const initialMax = useMemo(() => Math.max(...seedProducts.map((product) => product.effectivePrice), 0), [seedProducts]);
 
   const [category, setCategory] = useState<string>("");
@@ -57,13 +51,7 @@ function Shop() {
     [brand, category, color, price, size, sort],
   );
 
-  const {
-    data,
-    isLoading,
-    isError,
-    isFetching,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: queryKeys.catalog.productsList(params),
     queryFn: async () => catalogApi.products(params),
     enabled: Boolean(bootstrap),
@@ -99,30 +87,19 @@ function Shop() {
           <div className="mb-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">Collection</div>
           <h1 className="display text-4xl md:text-5xl">Shop everything.</h1>
         </div>
-        <div className="hidden text-xs uppercase tracking-widest text-muted-foreground md:block">
-          {data?.meta.total ?? products.length} items
-        </div>
+        <div className="hidden text-xs uppercase tracking-widest text-muted-foreground md:block">{data?.meta.total ?? products.length} items</div>
       </div>
 
       <div className="grid gap-10 md:grid-cols-[240px_1fr]">
         <aside className="space-y-8 text-sm">
           <FilterGroup title="Category">
             {categoryOptions.map((entry) => (
-              <Check
-                key={entry.slug}
-                label={entry.parentId ? `— ${entry.name}` : entry.name}
-                checked={category === entry.slug}
-                onChange={() => setCategory((current) => (current === entry.slug ? "" : entry.slug))}
-              />
+              <Check key={entry.slug} label={entry.parentId ? `— ${entry.name}` : entry.name} checked={category === entry.slug} onChange={() => setCategory((current) => (current === entry.slug ? "" : entry.slug))} />
             ))}
           </FilterGroup>
 
           <FilterGroup title="Brand">
-            <select
-              value={brand}
-              onChange={(event) => setBrand(event.target.value)}
-              className="w-full border border-border bg-background px-3 py-2 text-sm"
-            >
+            <select value={brand} onChange={(event) => setBrand(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm">
               <option value="">All brands</option>
               {brands.map((entry) => (
                 <option key={entry.slug} value={entry.slug}>
@@ -135,11 +112,7 @@ function Shop() {
           <FilterGroup title="Size">
             <div className="flex flex-wrap gap-1.5">
               {allSizes.map((entry) => (
-                <button
-                  key={entry}
-                  onClick={() => setSize((current) => (current === entry ? "" : entry))}
-                  className={`min-w-9 border px-2 text-xs ${size === entry ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-foreground"} h-9`}
-                >
+                <button key={entry} onClick={() => setSize((current) => (current === entry ? "" : entry))} className={`min-w-9 border px-2 text-xs ${size === entry ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-foreground"} h-9`}>
                   {entry}
                 </button>
               ))}
@@ -150,30 +123,13 @@ function Shop() {
             <div className="flex flex-wrap gap-2">
               {allColors.map((entry) => {
                 const active = color === entry.name;
-                return (
-                  <button
-                    key={entry.name}
-                    title={entry.name}
-                    onClick={() => setColor((current) => (current === entry.name ? "" : entry.name))}
-                    className={`h-7 w-7 rounded-full border-2 transition ${active ? "scale-110 border-foreground" : "border-border"}`}
-                    style={{ background: entry.hex }}
-                  />
-                );
+                return <button key={entry.name} title={entry.name} onClick={() => setColor((current) => (current === entry.name ? "" : entry.name))} className={`h-7 w-7 rounded-full border-2 transition ${active ? "scale-110 border-foreground" : "border-border"}`} style={{ background: entry.hex }} />;
               })}
             </div>
           </FilterGroup>
 
           <FilterGroup title="Max price">
-            <input
-              type="range"
-              min={0}
-              max={max}
-              step={500}
-              value={price}
-              onChange={(event) => setPrice(Number(event.target.value))}
-              disabled={max === 0}
-              className="w-full"
-            />
+            <input type="range" min={0} max={max} step={500} value={price} onChange={(event) => setPrice(Number(event.target.value))} disabled={max === 0} className="w-full" />
             <div className="mt-1 text-xs text-muted-foreground">Up to Rs. {price.toLocaleString()}</div>
           </FilterGroup>
 
@@ -196,11 +152,7 @@ function Shop() {
           <div className="mb-6 flex items-center justify-between">
             <div className="text-sm text-muted-foreground md:hidden">{data?.meta.total ?? products.length} items</div>
             <div className="ml-auto flex items-center gap-3">
-              <select
-                value={sort}
-                onChange={(event) => setSort(event.target.value as Sort)}
-                className="border border-border bg-background px-3 py-2 text-xs uppercase tracking-widest"
-              >
+              <select value={sort} onChange={(event) => setSort(event.target.value as Sort)} className="border border-border bg-background px-3 py-2 text-xs uppercase tracking-widest">
                 <option value="newest">Newest</option>
                 <option value="popular">Popular</option>
                 <option value="price-asc">Price ↑</option>
@@ -209,27 +161,17 @@ function Shop() {
                 <option value="name-desc">Name Z-A</option>
               </select>
               <div className="hidden border border-border md:flex">
-                <button
-                  className={`p-2 ${view === "grid" ? "bg-primary text-primary-foreground" : ""}`}
-                  onClick={() => setView("grid")}
-                  aria-label="Grid"
-                >
+                <button className={`p-2 ${view === "grid" ? "bg-primary text-primary-foreground" : ""}`} onClick={() => setView("grid")} aria-label="Grid">
                   <Grid2x2 className="h-4 w-4" />
                 </button>
-                <button
-                  className={`p-2 ${view === "list" ? "bg-primary text-primary-foreground" : ""}`}
-                  onClick={() => setView("list")}
-                  aria-label="List"
-                >
+                <button className={`p-2 ${view === "list" ? "bg-primary text-primary-foreground" : ""}`} onClick={() => setView("list")} aria-label="List">
                   <ListIcon className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
 
-          {isFetching && !isLoading && (
-            <div className="mb-4 text-xs uppercase tracking-widest text-muted-foreground">Refreshing catalog...</div>
-          )}
+          {isFetching && !isLoading && <div className="mb-4 text-xs uppercase tracking-widest text-muted-foreground">Refreshing catalog...</div>}
 
           {!bootstrap || isLoading ? (
             <div className="py-24 text-center text-muted-foreground">Loading collection...</div>
@@ -270,15 +212,7 @@ function FilterGroup({ title, children }: { title: string; children: React.React
   );
 }
 
-function Check({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
+function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
   return (
     <label className="flex cursor-pointer items-center gap-2">
       <input type="checkbox" checked={checked} onChange={onChange} className="accent-foreground" />

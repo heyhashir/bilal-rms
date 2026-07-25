@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import type { User } from "@/lib/account-types";
@@ -10,15 +10,11 @@ type UseProtectedUserOptions = {
   unauthorizedRedirectTo?: string;
 };
 
-export function useProtectedUser({
-  role,
-  redirectTo = "/login",
-  unauthorizedRedirectTo = "/",
-}: UseProtectedUserOptions = {}) {
+export function useProtectedUser({ role, redirectTo = "/login", unauthorizedRedirectTo = "/" }: UseProtectedUserOptions = {}) {
   const auth = useAuth();
   const { data: user, isLoading: userLoading } = useCurrentUser();
   const navigate = useNavigate();
-  const allowedRoles = Array.isArray(role) ? role : role ? [role] : [];
+  const allowedRoles = useMemo(() => (Array.isArray(role) ? role : role ? [role] : []), [role]);
 
   const isPending = !auth.hydrated || auth.loading || userLoading;
   const isAuthorized = !isPending && Boolean(user) && (allowedRoles.length === 0 || allowedRoles.includes(user!.role));

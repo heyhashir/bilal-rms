@@ -11,25 +11,7 @@ import { adminPosApi } from "@/lib/admin-pos-api";
 import { adminSettingsApi } from "@/lib/admin-settings-api";
 import type { Employee, PosSale, PosSaleInput } from "@/lib/admin-types";
 import type { DesktopUpdateManifest } from "@/lib/desktop-bridge";
-import {
-  applySaleToCachedStock,
-  findOfflineReceipt,
-  getPosDeviceKey,
-  loadPosCache,
-  loadOfflineReceipts,
-  loadQueuedRefunds,
-  loadPosSyncState,
-  loadQueuedSales,
-  patchPosSyncState,
-  persistOfflineSale,
-  persistOfflineRefund,
-  type PosRefundQueueItem,
-  rememberReceipt,
-  removeQueuedRefund,
-  removeQueuedSale,
-  savePosCache,
-  type PosSyncState,
-} from "@/lib/pos-local";
+import { applySaleToCachedStock, findOfflineReceipt, getPosDeviceKey, loadPosCache, loadOfflineReceipts, loadQueuedRefunds, loadPosSyncState, loadQueuedSales, patchPosSyncState, persistOfflineSale, persistOfflineRefund, type PosRefundQueueItem, rememberReceipt, removeQueuedRefund, removeQueuedSale, savePosCache, type PosSyncState } from "@/lib/pos-local";
 import { getDesktopBridge } from "@/lib/desktop-bridge";
 import { formatPrice } from "@/lib/format";
 import { getEffectiveAmount } from "@/lib/format";
@@ -99,18 +81,19 @@ function PosTerminal() {
   const [offlineMode, setOfflineMode] = useState(false);
   const [initialCache] = useState(() => loadPosCache());
   const deviceKey = useMemo(() => getPosDeviceKey(), []);
-  const [syncState, setSyncState] = useState<PosSyncState>(() =>
-    loadPosSyncState() ?? {
-      deviceKey,
-      lastCursor: null,
-      lastBootstrapAt: null,
-      lastSyncAttemptAt: null,
-      lastSuccessfulSyncAt: null,
-      lastSyncError: "",
-      retryCount: 0,
-      failedJobs: 0,
-      queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
-    },
+  const [syncState, setSyncState] = useState<PosSyncState>(
+    () =>
+      loadPosSyncState() ?? {
+        deviceKey,
+        lastCursor: null,
+        lastBootstrapAt: null,
+        lastSyncAttemptAt: null,
+        lastSuccessfulSyncAt: null,
+        lastSyncError: "",
+        retryCount: 0,
+        failedJobs: 0,
+        queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
+      },
   );
   const canLoadPos = !isPending && Boolean(user) && ["admin", "manager", "staff"].includes(user.role);
 
@@ -177,16 +160,8 @@ function PosTerminal() {
     },
   });
 
-  const products = useMemo(
-    () =>
-      (productsQuery.data?.products ?? []).filter((product) => product.stock > 0 || product.stockMode === "variant"),
-    [productsQuery.data],
-  );
-  const employees = useMemo(
-    () =>
-      (employeesQuery.data?.employees ?? []).filter((employee) => employee.status === "active"),
-    [employeesQuery.data],
-  );
+  const products = useMemo(() => (productsQuery.data?.products ?? []).filter((product) => product.stock > 0 || product.stockMode === "variant"), [productsQuery.data]);
+  const employees = useMemo(() => (employeesQuery.data?.employees ?? []).filter((employee) => employee.status === "active"), [employeesQuery.data]);
   const settings = settingsQuery.data?.settings ?? null;
 
   const syncQueuedSales = async () => {
@@ -273,14 +248,7 @@ function PosTerminal() {
       lastSyncError: failed > 0 ? lastError : "",
     });
     if (synced > 0) {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
-      ]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }), queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.products })]);
       toast.success(`Synced ${synced} queued item${synced === 1 ? "" : "s"}`);
     }
   };
@@ -296,9 +264,18 @@ function PosTerminal() {
           updatedAt: Date.now(),
         };
         savePosCache(nextCache);
-        queryClient.setQueryData(queryKeys.pos.products, { products: bootstrap.products, source: "live" as PosQuerySource });
-        queryClient.setQueryData(queryKeys.pos.employees, { employees: bootstrap.employees, source: "live" as PosQuerySource });
-        queryClient.setQueryData(queryKeys.pos.settings, { settings: bootstrap.settings, source: "live" as PosQuerySource });
+        queryClient.setQueryData(queryKeys.pos.products, {
+          products: bootstrap.products,
+          source: "live" as PosQuerySource,
+        });
+        queryClient.setQueryData(queryKeys.pos.employees, {
+          employees: bootstrap.employees,
+          source: "live" as PosQuerySource,
+        });
+        queryClient.setQueryData(queryKeys.pos.settings, {
+          settings: bootstrap.settings,
+          source: "live" as PosQuerySource,
+        });
         updateSyncState({
           lastCursor: bootstrap.cursor,
           lastBootstrapAt: Date.now(),
@@ -315,11 +292,7 @@ function PosTerminal() {
             })
             .then((update) => {
               setDesktopUpdate(update);
-              setUpdateMessage(
-                update.available
-                  ? `Desktop update ${update.latestVersion} is available.`
-                  : `Desktop app is up to date (${update.latestVersion}).`,
-              );
+              setUpdateMessage(update.available ? `Desktop update ${update.latestVersion} is available.` : `Desktop app is up to date (${update.latestVersion}).`);
             })
             .catch(() => undefined);
         }
@@ -339,6 +312,9 @@ function PosTerminal() {
     if (canLoadPos) {
       void bootstrapPos();
     }
+    // Device/bootstrap changes are the intended triggers; queue helpers use the
+    // latest persisted queue state internally and must not restart bootstrap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canLoadPos, deviceKey]);
 
   const installDesktopUpdate = async () => {
@@ -365,10 +341,7 @@ function PosTerminal() {
       return;
     }
 
-    const usingCachedSource =
-      productsQuery.data?.source === "cache" ||
-      employeesQuery.data?.source === "cache" ||
-      settingsQuery.data?.source === "cache";
+    const usingCachedSource = productsQuery.data?.source === "cache" || employeesQuery.data?.source === "cache" || settingsQuery.data?.source === "cache";
 
     setOfflineMode(usingCachedSource);
   }, [canLoadPos, employeesQuery.data, productsQuery.data, settingsQuery.data]);
@@ -422,14 +395,8 @@ function PosTerminal() {
     return rows;
   }, [products]);
 
-  const brandOptions = useMemo(
-    () => Array.from(new Set(choices.map((choice) => choice.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right)),
-    [choices],
-  );
-  const categoryOptions = useMemo(
-    () => Array.from(new Set(choices.map((choice) => choice.category).filter(Boolean))).sort((left, right) => left.localeCompare(right)),
-    [choices],
-  );
+  const brandOptions = useMemo(() => Array.from(new Set(choices.map((choice) => choice.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right)), [choices]);
+  const categoryOptions = useMemo(() => Array.from(new Set(choices.map((choice) => choice.category).filter(Boolean))).sort((left, right) => left.localeCompare(right)), [choices]);
 
   const filteredChoices = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -448,9 +415,7 @@ function PosTerminal() {
           return true;
         }
 
-        return `${choice.label} ${choice.subtitle} ${choice.barcode} ${choice.qrCode} ${choice.brand} ${choice.category} ${choice.size} ${choice.color}`
-          .toLowerCase()
-          .includes(term);
+        return `${choice.label} ${choice.subtitle} ${choice.barcode} ${choice.qrCode} ${choice.brand} ${choice.category} ${choice.size} ${choice.color}`.toLowerCase().includes(term);
       })
       .slice(0, 8);
   }, [brandFilter, categoryFilter, choices, search]);
@@ -466,11 +431,7 @@ function PosTerminal() {
     setCart((current) => {
       const existing = current.find((entry) => entry.productId === choice.productId && entry.variantId === choice.variantId);
       if (existing) {
-        return current.map((entry) =>
-          entry.productId === choice.productId && entry.variantId === choice.variantId
-            ? { ...entry, qty: Math.min(entry.qty + 1, choice.stock) }
-            : entry,
-        );
+        return current.map((entry) => (entry.productId === choice.productId && entry.variantId === choice.variantId ? { ...entry, qty: Math.min(entry.qty + 1, choice.stock) } : entry));
       }
 
       return [...current, { ...choice, qty: 1, employeeId: "" }];
@@ -592,14 +553,7 @@ function PosTerminal() {
           },
         ],
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
-      ]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }), queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.products })]);
       toast.success("Refund processed");
     } catch (error) {
       toast.error(getErrorMessage(error, "Unable to process refund"));
@@ -648,14 +602,7 @@ function PosTerminal() {
       setNotes("");
       toast.success("POS sale saved");
       setOfflineMode(false);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
-      ]);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }), queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.products })]);
     } catch (error) {
       toast.error(getErrorMessage(error, "Unable to save sale"));
     }
@@ -681,10 +628,10 @@ function PosTerminal() {
               {offlineMode ? <WifiOff className="h-3.5 w-3.5" /> : <Wifi className="h-3.5 w-3.5" />}
               {offlineMode ? "Offline cache" : "Live sync"}
             </div>
-            <div className="inline-flex items-center gap-2 border border-border px-3 py-2 text-xs uppercase tracking-widest">
-              Queue {queueCount}
-            </div>
-            <ActionButton onClick={() => void syncQueuedSales()} variant="ghost"><RefreshCcw className="h-3.5 w-3.5" /> Sync queued</ActionButton>
+            <div className="inline-flex items-center gap-2 border border-border px-3 py-2 text-xs uppercase tracking-widest">Queue {queueCount}</div>
+            <ActionButton onClick={() => void syncQueuedSales()} variant="ghost">
+              <RefreshCcw className="h-3.5 w-3.5" /> Sync queued
+            </ActionButton>
             <Link to="/admin" className="inline-flex items-center gap-2 border border-border px-4 py-2.5 text-xs uppercase tracking-widest hover:bg-secondary">
               <ArrowLeft className="h-3.5 w-3.5" /> Management dashboard
             </Link>
@@ -715,11 +662,7 @@ function PosTerminal() {
                 />
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
-                <select
-                  value={brandFilter}
-                  onChange={(event) => setBrandFilter(event.target.value)}
-                  className="border border-border bg-background px-3 py-2 text-sm"
-                >
+                <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} className="border border-border bg-background px-3 py-2 text-sm">
                   <option value="">All brands</option>
                   {brandOptions.map((brand) => (
                     <option key={brand} value={brand}>
@@ -727,11 +670,7 @@ function PosTerminal() {
                     </option>
                   ))}
                 </select>
-                <select
-                  value={categoryFilter}
-                  onChange={(event) => setCategoryFilter(event.target.value)}
-                  className="border border-border bg-background px-3 py-2 text-sm"
-                >
+                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="border border-border bg-background px-3 py-2 text-sm">
                   <option value="">All categories</option>
                   {categoryOptions.map((category) => (
                     <option key={category} value={category}>
@@ -743,11 +682,7 @@ function PosTerminal() {
               {filteredChoices.length > 0 && (
                 <div className="mt-3 grid gap-2">
                   {filteredChoices.map((choice) => (
-                    <button
-                      key={choice.key}
-                      onClick={() => addChoice(choice)}
-                      className="flex items-center justify-between border border-border px-3 py-3 text-left hover:bg-secondary"
-                    >
+                    <button key={choice.key} onClick={() => addChoice(choice)} className="flex items-center justify-between border border-border px-3 py-3 text-left hover:bg-secondary">
                       <div>
                         <div className="font-medium">{choice.label}</div>
                         <div className="text-xs text-muted-foreground">{choice.subtitle || choice.barcode || choice.qrCode}</div>
@@ -777,7 +712,9 @@ function PosTerminal() {
                 <tbody>
                   {cart.length === 0 ? (
                     <tr>
-                      <td className="p-6 text-center text-muted-foreground" colSpan={6}>No items added yet.</td>
+                      <td className="p-6 text-center text-muted-foreground" colSpan={6}>
+                        No items added yet.
+                      </td>
                     </tr>
                   ) : (
                     cart.map((line) => (
@@ -787,18 +724,12 @@ function PosTerminal() {
                           <div className="text-xs text-muted-foreground">{[line.subtitle, line.barcode || line.qrCode].filter(Boolean).join(" | ")}</div>
                         </td>
                         <td className="p-3 min-w-[180px]">
-                          <select
-                            value={line.employeeId}
-                            onChange={(event) =>
-                              setCart((current) =>
-                                current.map((entry) => (entry.key === line.key ? { ...entry, employeeId: event.target.value } : entry)),
-                              )
-                            }
-                            className="w-full border border-border bg-background px-2 py-2 text-sm"
-                          >
+                          <select value={line.employeeId} onChange={(event) => setCart((current) => current.map((entry) => (entry.key === line.key ? { ...entry, employeeId: event.target.value } : entry)))} className="w-full border border-border bg-background px-2 py-2 text-sm">
                             <option value="">No attribution</option>
                             {employees.map((employee) => (
-                              <option key={employee.id} value={employee.id}>{employee.name}</option>
+                              <option key={employee.id} value={employee.id}>
+                                {employee.name}
+                              </option>
                             ))}
                           </select>
                         </td>
@@ -811,7 +742,12 @@ function PosTerminal() {
                             onChange={(event) =>
                               setCart((current) =>
                                 current.map((entry) =>
-                                  entry.key === line.key ? { ...entry, qty: Math.max(1, Number(event.target.value) || 1) } : entry,
+                                  entry.key === line.key
+                                    ? {
+                                        ...entry,
+                                        qty: Math.max(1, Number(event.target.value) || 1),
+                                      }
+                                    : entry,
                                 ),
                               )
                             }
@@ -826,7 +762,12 @@ function PosTerminal() {
                             onChange={(event) =>
                               setCart((current) =>
                                 current.map((entry) =>
-                                  entry.key === line.key ? { ...entry, unitPrice: Math.max(0, Number(event.target.value) || 0) } : entry,
+                                  entry.key === line.key
+                                    ? {
+                                        ...entry,
+                                        unitPrice: Math.max(0, Number(event.target.value) || 0),
+                                      }
+                                    : entry,
                                 ),
                               )
                             }
@@ -835,10 +776,7 @@ function PosTerminal() {
                         </td>
                         <td className="p-3 font-semibold">{formatPrice(line.unitPrice * line.qty)}</td>
                         <td className="p-3">
-                          <button
-                            onClick={() => setCart((current) => current.filter((entry) => entry.key !== line.key))}
-                            className="p-2 hover:bg-sale hover:text-primary-foreground"
-                          >
+                          <button onClick={() => setCart((current) => current.filter((entry) => entry.key !== line.key))} className="p-2 hover:bg-sale hover:text-primary-foreground">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </td>
@@ -871,26 +809,48 @@ function PosTerminal() {
                 <StatusPill status={offlineMode ? "pending" : "synced"} />
               </div>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <div>{cart.length} item line{cart.length === 1 ? "" : "s"} in cart</div>
-                <div>{queueCount} queued offline sale{queueCount === 1 ? "" : "s"}</div>
+                <div>
+                  {cart.length} item line{cart.length === 1 ? "" : "s"} in cart
+                </div>
+                <div>
+                  {queueCount} queued offline sale{queueCount === 1 ? "" : "s"}
+                </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
                 <ActionButton onClick={() => void checkout()}>Finalize bill</ActionButton>
-                <ActionButton variant="ghost" onClick={() => setCart([])}>Clear cart</ActionButton>
+                <ActionButton variant="ghost" onClick={() => setCart([])}>
+                  Clear cart
+                </ActionButton>
               </div>
             </div>
 
             <div className="border border-border p-5">
               <div className="mb-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">Sync diagnostics</div>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <div>Device: <span className="font-medium text-foreground">{deviceKey}</span></div>
-                <div>Last bootstrap: <span className="text-foreground">{syncState.lastBootstrapAt ? new Date(syncState.lastBootstrapAt).toLocaleString() : "Never"}</span></div>
-                <div>Last sync attempt: <span className="text-foreground">{syncState.lastSyncAttemptAt ? new Date(syncState.lastSyncAttemptAt).toLocaleString() : "Never"}</span></div>
-                <div>Last successful sync: <span className="text-foreground">{syncState.lastSuccessfulSyncAt ? new Date(syncState.lastSuccessfulSyncAt).toLocaleString() : "Never"}</span></div>
-                <div>Cursor: <span className="font-mono text-foreground">{syncState.lastCursor ?? "Not synced yet"}</span></div>
-                <div>Backlog: <span className="text-foreground">{syncState.queueSize}</span></div>
-                <div>Retry count: <span className="text-foreground">{syncState.retryCount}</span></div>
-                <div>Failed syncs: <span className="text-foreground">{syncState.failedJobs}</span></div>
+                <div>
+                  Device: <span className="font-medium text-foreground">{deviceKey}</span>
+                </div>
+                <div>
+                  Last bootstrap: <span className="text-foreground">{syncState.lastBootstrapAt ? new Date(syncState.lastBootstrapAt).toLocaleString() : "Never"}</span>
+                </div>
+                <div>
+                  Last sync attempt: <span className="text-foreground">{syncState.lastSyncAttemptAt ? new Date(syncState.lastSyncAttemptAt).toLocaleString() : "Never"}</span>
+                </div>
+                <div>
+                  Last successful sync: <span className="text-foreground">{syncState.lastSuccessfulSyncAt ? new Date(syncState.lastSuccessfulSyncAt).toLocaleString() : "Never"}</span>
+                </div>
+                <div>
+                  Cursor: <span className="font-mono text-foreground">{syncState.lastCursor ?? "Not synced yet"}</span>
+                </div>
+                <div>
+                  Backlog: <span className="text-foreground">{syncState.queueSize}</span>
+                </div>
+                <div>
+                  Retry count: <span className="text-foreground">{syncState.retryCount}</span>
+                </div>
+                <div>
+                  Failed syncs: <span className="text-foreground">{syncState.failedJobs}</span>
+                </div>
                 {updateMessage && <div className="text-foreground">{updateMessage}</div>}
                 {desktopUpdate?.available && desktopUpdate.windows && (
                   <div className="pt-2">
@@ -906,12 +866,7 @@ function PosTerminal() {
             <div className="border border-border p-5">
               <div className="mb-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">Receipt lookup</div>
               <div className="flex gap-3">
-                <input
-                  value={receiptLookup}
-                  onChange={(event) => setReceiptLookup(event.target.value)}
-                  placeholder="Receipt or sale number"
-                  className="flex-1 border border-border bg-background px-3 py-2 text-sm"
-                />
+                <input value={receiptLookup} onChange={(event) => setReceiptLookup(event.target.value)} placeholder="Receipt or sale number" className="flex-1 border border-border bg-background px-3 py-2 text-sm" />
                 <ActionButton
                   variant="ghost"
                   onClick={() => {
@@ -928,11 +883,7 @@ function PosTerminal() {
               </div>
               <div className="mt-3 space-y-2">
                 {storedReceipts.slice(0, 5).map((sale) => (
-                  <button
-                    key={sale.saleNumber}
-                    onClick={() => setReceipt(sale)}
-                    className="flex w-full items-center justify-between border border-border px-3 py-2 text-left hover:bg-secondary"
-                  >
+                  <button key={sale.saleNumber} onClick={() => setReceipt(sale)} className="flex w-full items-center justify-between border border-border px-3 py-2 text-left hover:bg-secondary">
                     <div>
                       <div className="text-sm font-medium">{sale.receipt?.receiptNumber ?? sale.saleNumber}</div>
                       <div className="text-xs text-muted-foreground">{sale.customerName || "Walk-in customer"}</div>
@@ -953,7 +904,9 @@ function PosTerminal() {
           wide
           footer={
             <>
-              <ActionButton variant="ghost" onClick={() => setReceipt(null)}>Close</ActionButton>
+              <ActionButton variant="ghost" onClick={() => setReceipt(null)}>
+                Close
+              </ActionButton>
               <ActionButton
                 onClick={async () => {
                   const bridge = getDesktopBridge();
@@ -1044,7 +997,9 @@ function PosTerminal() {
                 <Field label="Refund reason" value={refundReason} onChange={setRefundReason} />
                 <Field label="Refund note" value={refundNote} onChange={setRefundNote} textarea />
                 <div className="flex justify-end">
-                  <ActionButton variant="ghost" onClick={() => void processRefund()}>Process refund</ActionButton>
+                  <ActionButton variant="ghost" onClick={() => void processRefund()}>
+                    Process refund
+                  </ActionButton>
                 </div>
               </div>
             </div>
