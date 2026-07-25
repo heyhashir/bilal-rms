@@ -1,16 +1,32 @@
-const databaseParts = {
-  host: process.env.DB_HOST === "localhost" ? "127.0.0.1" : process.env.DB_HOST,
-  port: process.env.DB_PORT || "3306",
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+const hostingerDefaults = {
+  NODE_ENV: "production",
+  APP_URL: "https://balybybilalgarments.com",
+  SESSION_COOKIE_NAME: "bilal_rms_session",
+  SESSION_TTL_DAYS: "30",
+  UPLOAD_DIR: "storage/uploads",
+  IMPORT_DIR: "storage/runtime-imports",
+  PUBLIC_DIR: "backend/public",
+  MAX_UPLOAD_MB: "10",
+  DESKTOP_UPDATE_BASE_URL: "https://balybybilalgarments.com",
+  DESKTOP_RELEASE_DIR: "storage/desktop",
 };
 
-if (databaseParts.user && databaseParts.password && databaseParts.database) {
+for (const [key, value] of Object.entries(hostingerDefaults)) {
+  process.env[key] ||= value;
+}
+
+const hostingerDatabase = {
+  host: "127.0.0.1",
+  port: "3306",
+  user: "u216146629_baly_app",
+  database: "u216146629_baly_rms",
+};
+
+if (process.env.DB_PASSWORD) {
   process.env.DATABASE_URL =
-    `mysql://${encodeURIComponent(databaseParts.user)}:${encodeURIComponent(databaseParts.password)}` +
-    `@${databaseParts.host || "127.0.0.1"}:${databaseParts.port}/${encodeURIComponent(databaseParts.database)}`;
-  console.log("Configured DATABASE_URL from separate Hostinger DB_* variables.");
+    `mysql://${encodeURIComponent(hostingerDatabase.user)}:${encodeURIComponent(process.env.DB_PASSWORD)}` +
+    `@${hostingerDatabase.host}:${hostingerDatabase.port}/${encodeURIComponent(hostingerDatabase.database)}`;
+  console.log("Configured Hostinger MySQL from the production DB password.");
 } else if (process.env.DATABASE_URL) {
   const databaseUrl = new URL(process.env.DATABASE_URL);
   if (databaseUrl.hostname === "localhost") {
@@ -18,6 +34,8 @@ if (databaseParts.user && databaseParts.password && databaseParts.database) {
     process.env.DATABASE_URL = databaseUrl.toString();
     console.log("Normalized DATABASE_URL to use IPv4 for Hostinger MySQL.");
   }
+} else {
+  throw new Error("DB_PASSWORD is required for the Hostinger MySQL connection.");
 }
 
 // Hostinger monitors the entry process itself and expects it to bind promptly.

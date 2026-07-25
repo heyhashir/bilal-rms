@@ -216,27 +216,15 @@ https://github.com/heyhashir/bilal-rms.git
 | Application port | `3000` |
 | Health endpoint | `/api/v1/health/ready` |
 
-Create a Hostinger MySQL database first, then set the required environment variables in hPanel:
+The production startup script contains the stable Hostinger configuration: domain, database host/port/user/name, storage paths, cookie behavior, upload limits, and desktop update paths. Create the Hostinger MySQL database first, then set only the credentials in hPanel:
 
 ```env
-NODE_ENV=production
-PORT=3000
-APP_URL=https://your-domain.example
-DATABASE_URL=mysql://DB_USER:DB_PASSWORD@DB_HOST:3306/DB_NAME
-SESSION_COOKIE_NAME=bilal_rms_session
-SESSION_TTL_DAYS=30
-UPLOAD_DIR=storage/uploads
-IMPORT_DIR=storage/runtime-imports
-PUBLIC_DIR=backend/public
-MAX_UPLOAD_MB=10
-ADMIN_EMAIL=owner@example.com
+DB_PASSWORD=the-current-hostinger-mysql-password
 ADMIN_PASSWORD=use-a-strong-unique-password
-DESKTOP_APP_VERSION=0.1.1
-DESKTOP_UPDATE_BASE_URL=https://your-domain.example
-DESKTOP_UPDATE_NOTES=Production release
+ADMIN_EMAIL=admin@bilalgarments.pk
 ```
 
-Copy `.env.hostinger.example` as the reference, never upload real environment files to GitHub.
+`ADMIN_EMAIL` is optional and defaults to `admin@bilalgarments.pk`. Hostinger may still inject its own `PORT`; the application otherwise defaults to port `3000`. Copy `.env.hostinger.example` as the reference, and never upload real credentials to GitHub.
 
 ### What Happens On Each Deploy
 
