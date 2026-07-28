@@ -1,7 +1,7 @@
 {
   "name": "bilal-rms-desktop",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Bilal RMS Windows POS desktop runtime",
   "author": "Bilal RMS",
   "main": "src/main.mjs",

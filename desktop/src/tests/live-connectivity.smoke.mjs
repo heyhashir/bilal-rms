@@ -125,10 +125,25 @@ try {
       (version) => document.body.innerText.includes(`Latest version: ${version}`),
       expectedLatestVersion,
     );
-    if (expectedLatestVersion !== context.appVersion) {
-      await window
-        .getByRole("button", { name: `Install ${expectedLatestVersion}` })
-        .waitFor({ timeout: 15_000 });
+    const expectedUpdateAvailable = process.env.BILAL_RMS_EXPECTED_UPDATE_AVAILABLE?.trim();
+    if (expectedUpdateAvailable === "true" || (!expectedUpdateAvailable && expectedLatestVersion !== context.appVersion)) {
+      try {
+        await window
+          .getByRole("button", { name: `Install ${expectedLatestVersion}` })
+          .waitFor({ timeout: 15_000 });
+      } catch (error) {
+        const diagnostics = await window.evaluate(() => ({
+          text: document.body.innerText,
+          buttons: Array.from(document.querySelectorAll("button")).map((button) => button.innerText),
+        }));
+        console.error("Desktop update diagnostics:", JSON.stringify(diagnostics, null, 2));
+        throw error;
+      }
+    } else if (expectedUpdateAvailable === "false") {
+      assert.equal(
+        await window.getByRole("button", { name: `Install ${expectedLatestVersion}` }).count(),
+        0,
+      );
     }
 
     await window.waitForFunction(

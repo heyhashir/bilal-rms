@@ -693,7 +693,7 @@ reporting, and Administrator-only invoice void/reversal.
 
 Windows installer:
 
-`desktop/dist/BilalRMS-Setup-0.2.5.exe`
+`desktop/dist/BilalRMS-Setup-0.2.6.exe`
 
 Generated size: approximately 100.3 MB.
 

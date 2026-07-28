@@ -376,9 +376,17 @@ const registerIpc = () => {
       };
     }
 
-    const manifestUrl = `${baseUrl.replace(/\/+$/, "")}/api/v1/sync/updates/${encodeURIComponent(payload.deviceKey)}${payload.currentVersion ? `?currentVersion=${encodeURIComponent(payload.currentVersion)}` : ""}`;
+    const manifestUrl = new URL(
+      `${baseUrl.replace(/\/+$/, "")}/api/v1/sync/updates/${encodeURIComponent(payload.deviceKey)}`,
+    );
+    if (payload.currentVersion) {
+      manifestUrl.searchParams.set("currentVersion", payload.currentVersion);
+    }
+    manifestUrl.searchParams.set("_ts", String(Date.now()));
     const response = await fetch(manifestUrl, {
+      cache: "no-store",
       headers: {
+        "Cache-Control": "no-cache",
         "X-Requested-With": "XMLHttpRequest",
       },
     });

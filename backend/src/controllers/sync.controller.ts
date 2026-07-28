@@ -55,6 +55,12 @@ export const getDesktopUpdateManifest = async (req: Request, res: Response) => {
   const currentVersion = typeof req.query.currentVersion === 'string' ? req.query.currentVersion : undefined;
   const payload = await syncService.getUpdateManifest(deviceKey, currentVersion);
 
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
+    'Surrogate-Control': 'no-store',
+  });
   res.status(200).json(
     ApiResponse.success('Desktop update manifest loaded', {
       manifest: payload,
