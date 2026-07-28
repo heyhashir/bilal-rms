@@ -66,7 +66,7 @@ const installer = fs.readFileSync(installerPath);
 const sha256 = createHash("sha256").update(installer).digest("hex");
 const chunkSize = 4 * 1024 * 1024;
 const totalChunks = Math.ceil(installer.length / chunkSize);
-const uploadId = `desktop-${version}-${randomUUID()}`;
+const uploadId = `desktop-${version.replaceAll(".", "-")}-${randomUUID()}`;
 let finalRelease = null;
 
 console.log(`Publishing desktop ${version}: ${totalChunks} chunks, ${installer.length} bytes`);
@@ -103,7 +103,10 @@ for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
       break;
     }
     if (attempt === 3) {
-      throw new Error(body?.message || `Chunk ${chunkIndex + 1} failed (${response.status})`);
+      const details = body ? `: ${JSON.stringify(body)}` : "";
+      throw new Error(
+        `${body?.message || `Chunk ${chunkIndex + 1} failed (${response.status})`}${details}`,
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
   }

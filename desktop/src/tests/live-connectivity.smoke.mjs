@@ -39,6 +39,10 @@ try {
   const context = await window.evaluate(() => window.bilalDesktop.getDesktopContext());
   assert.match(context.cloudApiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
   assert.equal(context.cloudOrigin, "https://balybybilalgarments.com");
+  const expectedCurrentVersion = process.env.BILAL_RMS_EXPECTED_CURRENT_VERSION?.trim();
+  if (expectedCurrentVersion) {
+    assert.equal(context.appVersion, expectedCurrentVersion);
+  }
 
   const health = await window.evaluate(async () => {
     const response = await fetch("/api/v1/health");
@@ -121,6 +125,11 @@ try {
       (version) => document.body.innerText.includes(`Latest version: ${version}`),
       expectedLatestVersion,
     );
+    if (expectedLatestVersion !== context.appVersion) {
+      await window
+        .getByRole("button", { name: `Install ${expectedLatestVersion}` })
+        .waitFor({ timeout: 15_000 });
+    }
 
     await window.waitForFunction(
       ({ productCount, cursor }) => {
