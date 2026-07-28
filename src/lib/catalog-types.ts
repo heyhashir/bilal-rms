@@ -112,6 +112,7 @@ export type StorefrontSettings = {
   receiptNotes: string;
   barcodePrefix: string;
   qrPrefix: string;
+  barcodeLabelTemplate: "branded" | "compact";
   instagram: string;
   facebook: string;
   tiktok: string;

@@ -122,6 +122,32 @@ export const orderRepository = {
       include: orderInclude,
     });
   },
+  findForVoid(tx: Prisma.TransactionClient, orderNumber: string) {
+    return tx.order.findUniqueOrThrow({
+      where: { orderNumber },
+      include: {
+        items: true,
+        returns: true,
+        ledgerEntries: true,
+      },
+    });
+  },
+  markVoided(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+    data: { reason: string; adminAccountId: string },
+  ) {
+    return tx.order.update({
+      where: { id: orderId },
+      data: {
+        orderStatus: 'CANCELLED',
+        voidReason: data.reason,
+        voidedAt: new Date(),
+        voidedById: data.adminAccountId,
+      },
+      include: orderInclude,
+    });
+  },
   findAdminReturns() {
     return prisma.returnRequest.findMany({
       orderBy: { createdAt: 'desc' },

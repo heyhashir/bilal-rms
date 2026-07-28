@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { X } from "lucide-react";
+import { Ban } from "lucide-react";
+import { toast } from "sonner";
 import { adminOrdersApi } from "@/lib/admin-orders-api";
+import { getErrorMessage } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
@@ -13,13 +15,14 @@ export const Route = createFileRoute("/admin/orders")({
   component: AdminOrders,
 });
 
-const statuses = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+const statuses = ["pending", "confirmed", "processing", "shipped", "delivered"];
 const paymentStatuses = ["pending", "proof_uploaded", "verified", "rejected", "cod_due", "refunded"];
 
 function AdminOrders() {
   const [view, setView] = useState<Order | null>(null);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
+  const [voidReason, setVoidReason] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.admin.ordersList({ page, query }),
     queryFn: async () => adminOrdersApi.orders({ page, pageSize: 20, query }),
@@ -36,6 +39,21 @@ function AdminOrders() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.orders });
     },
+  });
+  const voidOrder = useMutation({
+    mutationFn: ({ orderNumber, reason }: { orderNumber: string; reason: string }) =>
+      adminOrdersApi.voidOrder(orderNumber, reason),
+    onSuccess: async ({ order }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.orders }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboard }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] }),
+      ]);
+      setView(order);
+      setVoidReason("");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to void order")),
   });
 
   return (
@@ -89,7 +107,7 @@ function AdminOrders() {
                       }
                       className="border border-border bg-background px-2 py-1 text-xs uppercase tracking-widest"
                     >
-                      {statuses.map((status) => <option key={status}>{status}</option>)}
+                      {(order.status === "cancelled" ? [...statuses, "cancelled"] : statuses).map((status) => <option key={status}>{status}</option>)}
                     </select>
                   </td>
                   <td className="p-3">
@@ -138,6 +156,34 @@ function AdminOrders() {
             <div className="flex justify-between border-t border-border pt-3 font-semibold">
               <span>Total</span><span>{formatPrice(view.total)}</span>
             </div>
+            {view.status === "cancelled" ? (
+              <div className="border border-sale/40 bg-sale/10 p-3 text-sm">
+                <div className="font-semibold">Voided order</div>
+                <div className="mt-1 text-muted-foreground">{view.voidReason || "Cancelled before correction tracking was enabled."}</div>
+              </div>
+            ) : (
+              <div className="space-y-2 border-t border-border pt-4">
+                <div className="text-xs uppercase tracking-widest text-muted-foreground">Administrator correction</div>
+                <textarea
+                  value={voidReason}
+                  onChange={(event) => setVoidReason(event.target.value)}
+                  placeholder="Required reason, for example QA order or duplicate checkout"
+                  className="min-h-20 w-full border border-border bg-background px-3 py-2 text-sm"
+                />
+                <ActionButton
+                  variant="danger"
+                  disabled={voidOrder.isPending}
+                  onClick={() => {
+                    const reason = voidReason.trim();
+                    if (reason.length < 3) return;
+                    if (!confirm(`Void ${view.id}? Stock will be restored and this order will leave revenue reports.`)) return;
+                    voidOrder.mutate({ orderNumber: view.id, reason });
+                  }}
+                >
+                  <Ban className="h-3.5 w-3.5" /> Void order and reverse effects
+                </ActionButton>
+              </div>
+            )}
           </div>
         </Modal>
       )}

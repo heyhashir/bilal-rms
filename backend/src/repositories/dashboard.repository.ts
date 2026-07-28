@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 export const dashboardRepository = {
   getOrderAggregate() {
     return prisma.order.aggregate({
+      where: { orderStatus: { notIn: ['CANCELLED', 'RETURNED'] } },
       _count: { _all: true },
       _sum: { total: true },
     });
@@ -67,6 +68,7 @@ export const dashboardRepository = {
   },
   listRecentOrders() {
     return prisma.order.findMany({
+      where: { orderStatus: { notIn: ['CANCELLED', 'RETURNED'] } },
       orderBy: { createdAt: 'desc' },
       take: 8,
       select: {

@@ -45,6 +45,7 @@ const settingsSchema = z.object({
   receiptNotes: z.string().max(2000).optional(),
   barcodePrefix: z.string().min(1),
   qrPrefix: z.string().min(1),
+  barcodeLabelTemplate: z.enum(['branded', 'compact']).default('branded'),
   instagram: z.string().optional().or(z.literal('')),
   facebook: z.string().optional().or(z.literal('')),
   tiktok: z.string().optional().or(z.literal('')),

@@ -24,12 +24,14 @@ export function BarcodeStickerModal({
   });
   const labels = data?.labels;
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [template, setTemplate] = useState<"branded" | "compact">("branded");
 
   useEffect(() => {
     if (!labels || labels.length === 0) return;
     setQuantities(
       Object.fromEntries(labels.map((label) => [label.variantId || label.productId, Math.max(0, label.stock)])),
     );
+    setTemplate(labels[0].labelTemplate);
   }, [labels]);
 
   const printable = useMemo(
@@ -83,6 +85,17 @@ export function BarcodeStickerModal({
         <p className="text-sm text-muted-foreground">
           Labels print at 1.50 x 1.00 inches in landscape. Quantities default to current stock and can be changed without affecting inventory.
         </p>
+        <label className="block max-w-md">
+          <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Label template for this print job</span>
+          <select
+            value={template}
+            onChange={(event) => setTemplate(event.target.value as "branded" | "compact")}
+            className="w-full border border-border bg-background px-3 py-2.5 text-sm"
+          >
+            <option value="branded">BALY branded with size and color</option>
+            <option value="compact">Compact retail label</option>
+          </select>
+        </label>
         {isLoading ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Preparing barcode labels...</div>
         ) : (
@@ -133,7 +146,7 @@ export function BarcodeStickerModal({
           <div>
             <div className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">Print preview</div>
             <div className="inline-block border border-border bg-neutral-200 p-5">
-              <BarcodeSticker label={labels[0]} />
+              <BarcodeSticker label={labels[0]} template={template} />
             </div>
           </div>
         )}
@@ -141,14 +154,31 @@ export function BarcodeStickerModal({
 
       <div className="barcode-sticker-print hidden">
         {printable.map(({ label, index }) => (
-          <BarcodeSticker key={`${label.variantId || label.productId}-${index}`} label={label} />
+          <BarcodeSticker key={`${label.variantId || label.productId}-${index}`} label={label} template={template} />
         ))}
       </div>
     </Modal>
   );
 }
 
-function BarcodeSticker({ label }: { label: Label }) {
+function BarcodeSticker({ label, template }: { label: Label; template: "branded" | "compact" }) {
+  if (template === "compact") {
+    return (
+      <article className="barcode-sticker flex h-[1in] w-[1.5in] flex-col overflow-hidden bg-white px-1.5 py-1 text-center font-sans text-black">
+        <div className="truncate text-[8px] font-black uppercase tracking-wide">{label.name}</div>
+        <div className="mt-0.5 flex justify-center gap-2 text-[6px] font-semibold uppercase">
+          {label.size && <span>Size {label.size}</span>}
+          {label.color && <span>{label.color}</span>}
+        </div>
+        <div className="text-[8px] font-black">{formatPrice(label.price)}</div>
+        <div className="mt-auto">
+          <Barcode value={label.barcode} height={8} scale={1} className="mx-auto max-h-[12mm] max-w-full" />
+          <div className="truncate font-mono text-[5px] font-bold leading-none">{label.barcode}</div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="barcode-sticker flex h-[1in] w-[1.5in] overflow-hidden bg-white font-sans text-black">
       <div className="flex w-[34%] flex-col items-center justify-center bg-black px-1 text-center text-white">

@@ -7,6 +7,8 @@ export const adminOrdersApi = {
     api.get<{ orders: Order[]; meta: ListMeta }>(`/admin/orders${toQueryString(params ?? {})}`),
   updateOrderStatus: (orderNumber: string, payload: { orderStatus?: string; paymentStatus?: string }) =>
     api.patch<{ order: Order }>(`/admin/orders/${orderNumber}/status`, payload),
+  voidOrder: (orderNumber: string, reason: string) =>
+    api.post<{ order: Order }>(`/admin/orders/${orderNumber}/void`, { reason }),
   returns: () => api.get<{ returns: ReturnRequest[] }>("/admin/returns"),
   updateReturn: (id: string, payload: { status: string; refundAmount?: number | null; note?: string }) =>
     api.patch<{ request: ReturnRequest }>(`/admin/returns/${id}`, payload),

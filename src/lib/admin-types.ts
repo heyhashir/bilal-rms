@@ -279,6 +279,9 @@ export type VendorPurchase = {
   unitCost: number;
   purchasedAt: number;
   note: string;
+  reversedAt: number | null;
+  reversalReason: string;
+  reversedById: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -294,6 +297,7 @@ export type LedgerEntry = {
   posSaleId: string | null;
   vendorPurchaseId: string | null;
   adminAccountId: string | null;
+  isManual: boolean;
   createdAt: number;
   updatedAt: number;
 };

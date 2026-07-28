@@ -28,6 +28,22 @@ export const catalogAdminService = {
             colorName: variant.colorName.trim(),
           }))
         : [];
+    const activeVariantStock = normalizedVariants
+      .filter((variant) => variant.isActive)
+      .reduce((sum, variant) => sum + variant.stock, 0);
+
+    if (input.stockMode === 'variant' && normalizedVariants.length === 0) {
+      throw new ApiError(400, 'Generate at least one size/color variant before saving');
+    }
+
+    if (
+      existingProduct?.stockMode === 'SIMPLE' &&
+      existingProduct.stock > 0 &&
+      input.stockMode === 'variant' &&
+      activeVariantStock === 0
+    ) {
+      throw new ApiError(400, `Allocate the existing ${existingProduct.stock} units across variants before saving`);
+    }
 
     const data: Prisma.ProductUncheckedCreateInput = {
       slug: input.slug,
@@ -41,7 +57,7 @@ export const catalogAdminService = {
       costPrice: input.costPrice ?? null,
       stock:
         input.stockMode === 'variant'
-          ? normalizedVariants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
+          ? activeVariantStock
           : input.stock,
       sizeChart: normalizedSizeChart,
       sizesJson: normalizedSizes,
@@ -65,6 +81,9 @@ export const catalogAdminService = {
 
       await catalogRepository.replaceProductImages(tx, savedProduct.id, input.images);
       await catalogRepository.deleteCommissionRulesForProduct(tx, savedProduct.id);
+      if (input.commissionRate !== null && input.commissionRate !== undefined) {
+        await catalogRepository.upsertCommissionRuleForProduct(tx, savedProduct.id, input.commissionRate);
+      }
 
       if (input.stockMode === 'simple') {
         const previousStock = existingProduct?.stockMode === 'SIMPLE' ? existingProduct.stock : 0;
@@ -114,6 +133,10 @@ export const catalogAdminService = {
             ? await catalogRepository.updateProductVariant(tx, matching.id, variantData)
             : await catalogRepository.createProductVariant(tx, variantData);
           retainedIds.push(savedVariant.id);
+          await catalogRepository.deleteCommissionRulesForVariant(tx, savedVariant.id);
+          if (variant.commissionRate !== null && variant.commissionRate !== undefined) {
+            await catalogRepository.upsertCommissionRuleForVariant(tx, savedVariant.id, variant.commissionRate);
+          }
           const previousStock = matching?.stock ?? 0;
           const delta = variant.stock - previousStock;
           if (delta !== 0) {
@@ -309,6 +332,7 @@ export const catalogAdminService = {
       stock: variant?.stock ?? product.stock,
       barcode,
       qrCode,
+      labelTemplate: settings.barcodeLabelTemplate,
     };
   },
   async getBarcodeLabels(input: { productId: string; variantId?: string | null }) {

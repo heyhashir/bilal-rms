@@ -34,6 +34,8 @@ export const adminBackofficeApi = {
     purchasedAt?: string;
     note?: string;
   }) => api.post<{ purchase: VendorPurchase }>("/admin/vendor-purchases", payload),
+  reverseVendorPurchase: (id: string, reason: string) =>
+    api.post<{ purchase: VendorPurchase }>(`/admin/vendor-purchases/${id}/reverse`, { reason }),
   ledgerEntries: (params?: { from?: string; to?: string }) => {
     const query = new URLSearchParams();
     if (params?.from) query.set("from", params.from);
@@ -48,4 +50,12 @@ export const adminBackofficeApi = {
     reference?: string;
     note?: string;
   }) => api.post<{ entry: LedgerEntry }>("/admin/ledger", payload),
+  updateLedgerEntry: (id: string, payload: {
+    type: "expense" | "adjustment";
+    direction: "credit" | "debit";
+    amount: number;
+    reference?: string;
+    note?: string;
+  }) => api.patch<{ entry: LedgerEntry }>(`/admin/ledger/${id}`, payload),
+  deleteLedgerEntry: (id: string) => api.delete<{ ok: boolean }>(`/admin/ledger/${id}`),
 };

@@ -232,6 +232,7 @@ export const serializeSettings = (settings: StoreSetting) => ({
   receiptNotes: settings.receiptNotes,
   barcodePrefix: settings.barcodePrefix,
   qrPrefix: settings.qrPrefix,
+  barcodeLabelTemplate: settings.barcodeLabelTemplate,
   instagram: settings.instagram ?? '',
   facebook: settings.facebook ?? '',
   tiktok: settings.tiktok ?? '',
@@ -342,6 +343,9 @@ export const serializeOrder = (order: OrderWithRelations) => ({
   status: order.orderStatus.toLowerCase(),
   walletReference: order.walletReference ?? '',
   paymentProof: order.paymentProof?.filePath ?? '',
+  voidReason: order.voidReason ?? '',
+  voidedAt: order.voidedAt?.getTime() ?? null,
+  voidedById: order.voidedById ?? '',
   createdAt: order.createdAt.getTime(),
 });
 
@@ -521,6 +525,9 @@ export const serializeVendorPurchase = (
   unitCost: Number(purchase.unitCost),
   purchasedAt: purchase.purchasedAt.getTime(),
   note: purchase.note,
+  reversedAt: purchase.reversedAt?.getTime() ?? null,
+  reversalReason: purchase.reversalReason ?? '',
+  reversedById: purchase.reversedById ?? '',
   createdAt: purchase.createdAt.getTime(),
   updatedAt: purchase.updatedAt.getTime(),
 });
@@ -536,6 +543,7 @@ export const serializeLedgerEntry = (entry: LedgerEntry) => ({
   posSaleId: entry.posSaleId,
   vendorPurchaseId: entry.vendorPurchaseId,
   adminAccountId: entry.adminAccountId,
+  isManual: entry.isManual,
   createdAt: entry.createdAt.getTime(),
   updatedAt: entry.updatedAt.getTime(),
 });

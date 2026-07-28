@@ -58,5 +58,8 @@ export type Order = {
   status: string;
   walletReference: string;
   paymentProof: string;
+  voidReason?: string;
+  voidedAt?: number | null;
+  voidedById?: string;
   createdAt: number;
 };

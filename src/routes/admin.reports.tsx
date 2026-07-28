@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Pencil, Trash2, X } from "lucide-react";
 import { ActionButton, EmptyState, Field, PageHeader, SelectField, StatCard } from "@/components/admin/primitives";
 import { getErrorMessage } from "@/lib/api";
 import { adminBackofficeApi } from "@/lib/admin-backoffice-api";
@@ -25,6 +26,7 @@ function AdminReports() {
     reference: "",
     note: "",
   });
+  const [editingLedgerId, setEditingLedgerId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.admin.reports({ from, to }),
@@ -52,6 +54,31 @@ function AdminReports() {
       toast.success("Ledger entry saved");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Unable to save ledger entry")),
+  });
+  const updateLedgerEntry = useMutation({
+    mutationFn: ({ id, ...payload }: { id: string; type: "expense" | "adjustment"; direction: "credit" | "debit"; amount: number; reference?: string; note?: string }) =>
+      adminBackofficeApi.updateLedgerEntry(id, payload),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "ledger"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
+      ]);
+      setEditingLedgerId(null);
+      setLedgerDraft({ type: "expense", direction: "debit", amount: "0", reference: "", note: "" });
+      toast.success("Ledger entry updated");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to update ledger entry")),
+  });
+  const deleteLedgerEntry = useMutation({
+    mutationFn: adminBackofficeApi.deleteLedgerEntry,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "ledger"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
+      ]);
+      toast.success("Manual ledger entry deleted");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to delete ledger entry")),
   });
 
   const summary = data?.summary;
@@ -255,18 +282,34 @@ function AdminReports() {
                 <Field label="Reference" value={ledgerDraft.reference} onChange={(value) => setLedgerDraft((current) => ({ ...current, reference: value }))} />
                 <Field label="Note" value={ledgerDraft.note} onChange={(value) => setLedgerDraft((current) => ({ ...current, note: value }))} textarea />
                 <ActionButton
-                  onClick={() =>
-                    createLedgerEntry.mutate({
+                  onClick={() => {
+                    const payload = {
                       type: ledgerDraft.type,
                       direction: ledgerDraft.direction,
                       amount: Number(ledgerDraft.amount),
                       reference: ledgerDraft.reference || undefined,
                       note: ledgerDraft.note || undefined,
-                    })
-                  }
+                    };
+                    if (editingLedgerId) {
+                      updateLedgerEntry.mutate({ id: editingLedgerId, ...payload });
+                    } else {
+                      createLedgerEntry.mutate(payload);
+                    }
+                  }}
                 >
-                  Save ledger entry
+                  {editingLedgerId ? "Update ledger entry" : "Save ledger entry"}
                 </ActionButton>
+                {editingLedgerId && (
+                  <ActionButton
+                    variant="ghost"
+                    onClick={() => {
+                      setEditingLedgerId(null);
+                      setLedgerDraft({ type: "expense", direction: "debit", amount: "0", reference: "", note: "" });
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" /> Cancel edit
+                  </ActionButton>
+                )}
               </div>
             </section>
 
@@ -290,6 +333,7 @@ function AdminReports() {
                         <th className="p-3 text-left">Reference</th>
                         <th className="p-3 text-left">Note</th>
                         <th className="p-3 text-left">Amount</th>
+                        <th className="p-3" />
                       </tr>
                     </thead>
                     <tbody>
@@ -301,6 +345,41 @@ function AdminReports() {
                           <td className="p-3">{entry.reference || "-"}</td>
                           <td className="p-3">{entry.note || "-"}</td>
                           <td className="p-3">{formatPrice(entry.amount)}</td>
+                          <td className="p-3">
+                            {entry.isManual && (
+                              <div className="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  aria-label="Edit manual ledger entry"
+                                  onClick={() => {
+                                    setEditingLedgerId(entry.id);
+                                    setLedgerDraft({
+                                      type: entry.type as "expense" | "adjustment",
+                                      direction: entry.direction as "credit" | "debit",
+                                      amount: String(entry.amount),
+                                      reference: entry.reference,
+                                      note: entry.note,
+                                    });
+                                  }}
+                                  className="p-2 hover:bg-secondary"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label="Delete manual ledger entry"
+                                  onClick={() => {
+                                    if (confirm("Delete this manual ledger entry? Reports will be recalculated immediately.")) {
+                                      deleteLedgerEntry.mutate(entry.id);
+                                    }
+                                  }}
+                                  className="p-2 hover:bg-sale hover:text-primary-foreground"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

@@ -50,6 +50,54 @@ export const productSchema = z.object({
   supplierBarcode: z.string().optional().or(z.literal('')),
   video: z.string().optional().or(z.literal('')),
   commissionRate: z.coerce.number().min(0).max(100).optional().nullable(),
+}).superRefine((product, context) => {
+  if (product.stockMode !== 'variant') return;
+
+  if (product.variants.length === 0) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['variants'],
+      message: 'Generate at least one size/color variant before saving',
+    });
+    return;
+  }
+
+  const combinations = new Set<string>();
+  const skus = new Set<string>();
+  const barcodes = new Set<string>();
+  product.variants.forEach((variant, index) => {
+    const combination = `${variant.size.trim().toLowerCase()}::${variant.colorName.trim().toLowerCase()}`;
+    if (combinations.has(combination)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variants', index],
+        message: 'Duplicate size/color combination',
+      });
+    }
+    combinations.add(combination);
+
+    const sku = variant.sku.trim().toLowerCase();
+    if (skus.has(sku)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['variants', index, 'sku'],
+        message: 'Every variant must have a unique SKU',
+      });
+    }
+    skus.add(sku);
+
+    const barcode = variant.barcode?.trim().toLowerCase();
+    if (barcode) {
+      if (barcodes.has(barcode)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['variants', index, 'barcode'],
+          message: 'Every variant must have a unique barcode',
+        });
+      }
+      barcodes.add(barcode);
+    }
+  });
 });
 
 export const categorySchema = z.object({

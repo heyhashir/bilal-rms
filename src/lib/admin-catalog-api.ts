@@ -59,6 +59,7 @@ export const adminCatalogApi = {
         stock: number;
         barcode: string;
         qrCode: string;
+        labelTemplate: "branded" | "compact";
       }>;
     }>("/admin/barcodes/labels", payload),
 };

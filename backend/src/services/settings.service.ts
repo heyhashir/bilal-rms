@@ -35,6 +35,7 @@ export const settingsService = {
     receiptNotes?: string;
     barcodePrefix: string;
     qrPrefix: string;
+    barcodeLabelTemplate: 'branded' | 'compact';
     instagram?: string;
     facebook?: string;
     tiktok?: string;
@@ -68,6 +69,7 @@ export const settingsService = {
         receiptNotes: input.receiptNotes ?? existing.receiptNotes,
         barcodePrefix: input.barcodePrefix,
         qrPrefix: input.qrPrefix,
+        barcodeLabelTemplate: input.barcodeLabelTemplate,
         instagram: input.instagram || null,
         facebook: input.facebook || null,
         tiktok: input.tiktok || null,

@@ -20,7 +20,10 @@ const toCreatedAtRange = (range: DateRange): Prisma.DateTimeFilter | undefined =
 export const reportRepository = {
   listOrders(range: DateRange) {
     return prisma.order.findMany({
-      where: { createdAt: toCreatedAtRange(range) },
+      where: {
+        createdAt: toCreatedAtRange(range),
+        orderStatus: { notIn: ['CANCELLED', 'RETURNED'] },
+      },
       include: {
         items: {
           include: {

@@ -5,6 +5,9 @@ import { catalogAdminService } from '../services/catalog-admin.service';
 import { inventoryService } from '../services/inventory.service';
 import { orderService } from '../services/order.service';
 import { posService } from '../services/pos.service';
+import { backofficeService } from '../services/backoffice.service';
+import { dashboardService } from '../services/dashboard.service';
+import { reportService } from '../services/report.service';
 import { formatInvoiceNumber } from '../services/receipt.service';
 import { syncService } from '../services/sync.service';
 import { ApiError } from '../types/ApiError';
@@ -13,6 +16,14 @@ import { compareVersions, newestVersion } from '../utils/versions';
 const prefix = `svc-${Date.now().toString(36)}`;
 
 const cleanup = async () => {
+  await prisma.ledgerEntry.deleteMany({
+    where: {
+      OR: [
+        { note: { contains: prefix } },
+        { reference: { startsWith: prefix.toUpperCase() } },
+      ],
+    },
+  });
   await prisma.ledgerEntry.deleteMany({
     where: { reference: { startsWith: prefix.toUpperCase() } },
   });
@@ -274,7 +285,60 @@ const run = async () => {
     deviceName: 'Service Smoke POS',
     lines: [{ productId: product.id, employeeId: employee.id, qty: 1 }],
   });
+  await prisma.vendorPurchase.deleteMany({
+    where: { vendor: { name: { startsWith: prefix } } },
+  });
+  await prisma.vendor.deleteMany({
+    where: { name: { startsWith: prefix } },
+  });
   const admin = await prisma.adminAccount.findFirstOrThrow({ where: { role: 'ADMIN', isActive: true } });
+  const correctionOrder = await orderService.checkout({
+    input: {
+      email: `${prefix}-void@example.com`,
+      customerName: `${prefix} QA Order`,
+      phone: '03001234567',
+      address: 'QA correction address',
+      city: shippingZone.city,
+      postal: '54000',
+      country: 'Pakistan',
+      shippingZoneId: shippingZone.id,
+      payment: 'cod',
+      lines: [{ productId: product.id, qty: 2 }],
+    },
+  });
+  const stockAfterCorrectionOrder = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock;
+  const dashboardBeforeOrderVoid = await dashboardService.getStats();
+  const reportBeforeOrderVoid = await reportService.getSummary({});
+  const correctedOrder = await orderService.voidOrder({
+    orderNumber: correctionOrder.orderNumber,
+    reason: `${prefix} QA correction`,
+    adminAccountId: admin.id,
+  });
+  assert.equal(correctedOrder.orderStatus, 'CANCELLED', 'void should preserve an online order as cancelled history');
+  assert.equal(correctedOrder.voidedById, admin.id, 'online-order void should retain the responsible admin');
+  assert.equal(
+    (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock,
+    stockAfterCorrectionOrder + 2,
+    'online-order void should restore exact stock',
+  );
+  assert.ok(
+    await prisma.inventoryMovement.findFirst({
+      where: { orderId: correctionOrder.id, reason: 'ORDER_VOID' },
+    }),
+    'online-order void should create a compensating stock movement',
+  );
+  const dashboardAfterOrderVoid = await dashboardService.getStats();
+  const reportAfterOrderVoid = await reportService.getSummary({});
+  assert.equal(
+    dashboardAfterOrderVoid.revenue,
+    dashboardBeforeOrderVoid.revenue - Number(correctionOrder.total),
+    'voided online orders should leave dashboard revenue',
+  );
+  assert.equal(
+    reportAfterOrderVoid.overview.onlineRevenue,
+    reportBeforeOrderVoid.overview.onlineRevenue - Number(correctionOrder.total),
+    'voided online orders should leave report revenue',
+  );
   assert.notEqual(
     voidCandidate.receipt?.receiptNumber,
     sale.receipt?.receiptNumber,
@@ -442,7 +506,7 @@ const run = async () => {
         barcode: variant.barcode ?? '',
         qrCode: variant.qrCode ?? '',
         supplierBarcode: variant.supplierBarcode ?? '',
-        commissionRate: null,
+        commissionRate: variant.size === 'S' ? 4 : 5,
       })),
     },
     variantProduct.id,
@@ -456,6 +520,53 @@ const run = async () => {
     regeneratedVariantProduct.variants.find((variant) => variant.size === 'M')?.id,
     originalVariantIds.get('M'),
     'matrix regeneration should preserve every matching variant ID',
+  );
+  assert.equal(regeneratedVariantProduct.stock, 13, 'variant product stock should remain the sum of active variant stock');
+  assert.equal(
+    regeneratedVariantProduct.variants.find((variant) => variant.size === 'S')?.stock,
+    6,
+    'variant update should preserve independently edited stock',
+  );
+  assert.equal(
+    Number(regeneratedVariantProduct.variants.find((variant) => variant.size === 'M')?.commissionRule?.rate),
+    5,
+    'variant-specific commission details should be persisted independently',
+  );
+  await assert.rejects(
+    () =>
+      catalogAdminService.saveProduct(
+        {
+          slug: regeneratedVariantProduct.slug,
+          name: regeneratedVariantProduct.name,
+          description: regeneratedVariantProduct.description,
+          categorySlug: category.slug,
+          brandSlug: '',
+          stockMode: 'variant',
+          price: Number(regeneratedVariantProduct.price),
+          salePrice: null,
+          costPrice: Number(regeneratedVariantProduct.costPrice),
+          stock: 0,
+          sizeChart: 'apparel',
+          sizes: ['S', 'M'],
+          colors: [{ name: 'Black', hex: '#000000' }],
+          tags: [],
+          seoTitle: '',
+          seoDescription: '',
+          featured: false,
+          trending: false,
+          isActive: true,
+          images: [],
+          barcode: '',
+          qrCode: '',
+          supplierBarcode: '',
+          video: '',
+          commissionRate: null,
+          variants: [],
+        },
+        regeneratedVariantProduct.id,
+      ),
+    (error: unknown) => error instanceof ApiError && error.statusCode === 400,
+    'an empty variant payload must not reset an existing variant product to zero stock',
   );
 
   const soldVariant = regeneratedVariantProduct.variants.find((variant) => variant.size === 'S')!;
@@ -502,6 +613,77 @@ const run = async () => {
     },
   });
   assert.ok(adjustmentMovement, 'inventory adjustment should create an adjustment movement');
+
+  const vendor = await prisma.vendor.create({
+    data: { name: `${prefix} Vendor`, notes: prefix },
+  });
+  const stockBeforePurchase = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock;
+  const vendorPurchase = await backofficeService.createVendorPurchase({
+    vendorId: vendor.id,
+    productId: product.id,
+    quantity: 3,
+    unitCost: 700,
+    note: `${prefix} purchase`,
+    adminAccountId: admin.id,
+  });
+  assert.equal(
+    (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock,
+    stockBeforePurchase + 3,
+    'vendor purchase should add stock',
+  );
+  const reversedPurchase = await backofficeService.reverseVendorPurchase({
+    purchaseId: vendorPurchase.id,
+    reason: `${prefix} QA purchase`,
+    adminAccountId: admin.id,
+  });
+  assert.ok(reversedPurchase.reversedAt, 'purchase reversal should retain correction metadata');
+  assert.equal(
+    (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock,
+    stockBeforePurchase,
+    'purchase reversal should remove only the purchased stock',
+  );
+  assert.ok(
+    await prisma.inventoryMovement.findFirst({
+      where: { vendorPurchaseId: vendorPurchase.id, reason: 'PURCHASE_VOID' },
+    }),
+    'purchase reversal should create a compensating inventory movement',
+  );
+  const purchaseReversalLedger = await prisma.ledgerEntry.findFirst({
+      where: { reference: vendorPurchase.id, direction: 'CREDIT', type: 'ADJUSTMENT' },
+    });
+  assert.ok(purchaseReversalLedger, 'purchase reversal should create a compensating ledger credit');
+  assert.equal(purchaseReversalLedger.isManual, false, 'purchase reversal ledger entries must be immutable');
+  await assert.rejects(
+    () =>
+      backofficeService.deleteManualLedgerEntry(purchaseReversalLedger.id),
+    /Generated business ledger entries cannot be deleted/,
+    'generated purchase reversals must not be deletable as manual ledger entries',
+  );
+
+  const manualLedger = await backofficeService.createLedgerEntry({
+    type: 'expense',
+    direction: 'debit',
+    amount: 100,
+    reference: `${prefix.toUpperCase()}-MANUAL`,
+    note: `${prefix} manual ledger`,
+    adminAccountId: admin.id,
+  });
+  assert.equal(manualLedger.isManual, true, 'manual ledger entries should retain their editable origin');
+  const updatedLedger = await backofficeService.updateManualLedgerEntry({
+    id: manualLedger.id,
+    type: 'expense',
+    direction: 'debit',
+    amount: 125,
+    reference: `${prefix.toUpperCase()}-MANUAL`,
+    note: `${prefix} corrected manual ledger`,
+  });
+  assert.equal(Number(updatedLedger.amount), 125, 'manual ledger entries should be editable');
+  await backofficeService.deleteManualLedgerEntry(manualLedger.id);
+  assert.equal(
+    await prisma.ledgerEntry.count({ where: { id: manualLedger.id } }),
+    0,
+    'manual ledger entries should be deletable',
+  );
 
   const syncDevice = await syncService.registerDevice(`${prefix}-sync-device`, 'Service Smoke Sync Device', 'Service smoke');
   assert.equal(newestVersion('0.1.1', '0.2.4'), '0.2.4', 'stale configured releases must not override a newer bundled app');

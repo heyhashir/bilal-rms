@@ -42,6 +42,7 @@ const emptySettings: StorefrontSettings = {
   receiptNotes: "Please keep this receipt for exchange or warranty.",
   barcodePrefix: "BALY",
   qrPrefix: "BALYQ",
+  barcodeLabelTemplate: "branded",
   instagram: "",
   facebook: "",
   tiktok: "",
@@ -129,6 +130,7 @@ function AdminSettings() {
       receiptNotes: settings.receiptNotes,
       barcodePrefix: settings.barcodePrefix,
       qrPrefix: settings.qrPrefix,
+      barcodeLabelTemplate: settings.barcodeLabelTemplate,
       instagram: settings.instagram,
       facebook: settings.facebook,
       tiktok: settings.tiktok,
@@ -180,6 +182,17 @@ function AdminSettings() {
           <Field label="Receipt prefix" value={settings.receiptPrefix} onChange={(v) => setSettings({ ...settings, receiptPrefix: v })} />
           <Field label="Barcode prefix" value={settings.barcodePrefix} onChange={(v) => setSettings({ ...settings, barcodePrefix: v })} />
           <Field label="QR prefix" value={settings.qrPrefix} onChange={(v) => setSettings({ ...settings, qrPrefix: v })} />
+          <label className="block">
+            <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Default barcode label template</span>
+            <select
+              value={settings.barcodeLabelTemplate}
+              onChange={(event) => setSettings({ ...settings, barcodeLabelTemplate: event.target.value as StorefrontSettings["barcodeLabelTemplate"] })}
+              className="w-full border border-border bg-background px-3 py-2.5 text-sm"
+            >
+              <option value="branded">BALY branded 1.50 x 1.00 in</option>
+              <option value="compact">Compact retail 1.50 x 1.00 in</option>
+            </select>
+          </label>
           <Field label="Thermal header" value={settings.thermalHeader} onChange={(v) => setSettings({ ...settings, thermalHeader: v })} className="md:col-span-2" textarea />
           <Field label="Thermal footer" value={settings.thermalFooter} onChange={(v) => setSettings({ ...settings, thermalFooter: v })} className="md:col-span-2" textarea />
           <Field label="Receipt thank-you message" value={settings.receiptThankYou} onChange={(v) => setSettings({ ...settings, receiptThankYou: v })} className="md:col-span-2" />

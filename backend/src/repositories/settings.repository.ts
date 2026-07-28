@@ -34,6 +34,7 @@ export const settingsRepository = {
       receiptNotes: string;
       barcodePrefix: string;
       qrPrefix: string;
+      barcodeLabelTemplate: string;
       instagram?: string | null;
       facebook?: string | null;
       tiktok?: string | null;

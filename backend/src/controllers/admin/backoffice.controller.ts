@@ -80,6 +80,21 @@ export const createVendorPurchase = async (req: Request, res: Response) => {
   res.status(201).json(ApiResponse.success('Vendor purchase saved', { purchase: serializeVendorPurchase(purchase) }));
 };
 
+export const reverseVendorPurchase = async (req: Request, res: Response) => {
+  const purchase = await backofficeService.reverseVendorPurchase({
+    purchaseId: req.params.id,
+    reason: req.body.reason,
+    adminAccountId: req.currentUser!.id,
+  });
+  logAdminAudit(req, {
+    action: 'vendor-purchase.reversed',
+    targetType: 'vendor-purchase',
+    targetId: purchase.id,
+    details: { reason: req.body.reason, quantity: purchase.quantity, productId: purchase.productId },
+  });
+  res.status(200).json(ApiResponse.success('Purchase reversed and stock corrected', { purchase: serializeVendorPurchase(purchase) }));
+};
+
 export const listLedgerEntries = async (req: Request, res: Response) => {
   const from = typeof req.query.from === 'string' ? req.query.from : undefined;
   const to = typeof req.query.to === 'string' ? req.query.to : undefined;
@@ -99,4 +114,26 @@ export const createLedgerEntry = async (req: Request, res: Response) => {
     details: { type: entry.type, direction: entry.direction, amount: Number(entry.amount) },
   });
   res.status(201).json(ApiResponse.success('Ledger entry saved', { entry: serializeLedgerEntry(entry) }));
+};
+
+export const updateLedgerEntry = async (req: Request, res: Response) => {
+  const entry = await backofficeService.updateManualLedgerEntry({ id: req.params.id, ...req.body });
+  logAdminAudit(req, {
+    action: 'ledger-entry.updated',
+    targetType: 'ledger-entry',
+    targetId: entry.id,
+    details: { type: entry.type, direction: entry.direction, amount: Number(entry.amount) },
+  });
+  res.status(200).json(ApiResponse.success('Ledger entry updated', { entry: serializeLedgerEntry(entry) }));
+};
+
+export const deleteLedgerEntry = async (req: Request, res: Response) => {
+  const entry = await backofficeService.deleteManualLedgerEntry(req.params.id);
+  logAdminAudit(req, {
+    action: 'ledger-entry.deleted',
+    targetType: 'ledger-entry',
+    targetId: entry.id,
+    details: { type: entry.type, direction: entry.direction, amount: Number(entry.amount) },
+  });
+  res.status(200).json(ApiResponse.success('Manual ledger entry deleted', { ok: true }));
 };

@@ -66,8 +66,10 @@ enum InventoryReason {
   IMPORT
   ADJUSTMENT
   ORDER
+  ORDER_VOID
   RETURN
   RESTOCK
+  PURCHASE_VOID
   MANUAL
   POS_SALE
   POS_REFUND
@@ -142,19 +144,21 @@ model User {
 }
 
 model AdminAccount {
-  id           String         @id @default(cuid())
-  email        String         @unique
-  name         String
-  phone        String?
-  passwordHash String
-  role         AdminRole      @default(STAFF)
-  isActive     Boolean        @default(true)
-  lastLoginAt  DateTime?
-  sessions     AdminSession[]
-  ledgerEntries LedgerEntry[]
-  voidedPosSales PosSale[]       @relation("PosSaleVoidedBy")
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                      String           @id @default(cuid())
+  email                   String           @unique
+  name                    String
+  phone                   String?
+  passwordHash            String
+  role                    AdminRole        @default(STAFF)
+  isActive                Boolean          @default(true)
+  lastLoginAt             DateTime?
+  sessions                AdminSession[]
+  ledgerEntries           LedgerEntry[]
+  voidedPosSales          PosSale[]        @relation("PosSaleVoidedBy")
+  voidedOrders            Order[]          @relation("OrderVoidedBy")
+  reversedVendorPurchases VendorPurchase[] @relation("VendorPurchaseReversedBy")
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 
   @@map("admin_accounts")
 }
@@ -172,12 +176,12 @@ model Session {
 }
 
 model AdminSession {
-  id         String       @id @default(cuid())
-  token      String       @unique
-  accountId  String
-  expiresAt  DateTime
-  createdAt  DateTime     @default(now())
-  account    AdminAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String       @id @default(cuid())
+  token     String       @unique
+  accountId String
+  expiresAt DateTime
+  createdAt DateTime     @default(now())
+  account   AdminAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
   @@map("admin_sessions")
@@ -204,17 +208,17 @@ model Address {
 }
 
 model Category {
-  id          String    @id @default(cuid())
-  slug        String    @unique
+  id          String     @id @default(cuid())
+  slug        String     @unique
   name        String
-  description String    @default("")
+  description String     @default("")
   parentId    String?
-  isActive    Boolean   @default(true)
-  parent      Category? @relation("CategoryToSubcategories", fields: [parentId], references: [id], onDelete: SetNull)
+  isActive    Boolean    @default(true)
+  parent      Category?  @relation("CategoryToSubcategories", fields: [parentId], references: [id], onDelete: SetNull)
   children    Category[] @relation("CategoryToSubcategories")
   products    Product[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([parentId])
   @@map("categories")
@@ -235,42 +239,42 @@ model Brand {
 }
 
 model Product {
-  id             String              @id @default(cuid())
-  slug           String              @unique
-  name           String
-  description    String              @db.Text
-  categoryId     String
-  brandId        String?
-  stockMode      ProductStockMode    @default(SIMPLE)
-  price          Decimal             @db.Decimal(10, 2)
-  salePrice      Decimal?            @db.Decimal(10, 2)
-  costPrice      Decimal?            @db.Decimal(10, 2)
-  stock          Int                 @default(0)
-  sizeChart      String              @default("apparel")
-  sizesJson      Json?
-  colorsJson     Json?
-  tagsJson       Json?
-  seoTitle       String?
-  seoDescription String?             @db.Text
-  featured       Boolean             @default(false)
-  trending       Boolean             @default(false)
-  isActive       Boolean             @default(true)
-  barcode        String?             @unique
-  qrCode         String?             @unique
+  id              String              @id @default(cuid())
+  slug            String              @unique
+  name            String
+  description     String              @db.Text
+  categoryId      String
+  brandId         String?
+  stockMode       ProductStockMode    @default(SIMPLE)
+  price           Decimal             @db.Decimal(10, 2)
+  salePrice       Decimal?            @db.Decimal(10, 2)
+  costPrice       Decimal?            @db.Decimal(10, 2)
+  stock           Int                 @default(0)
+  sizeChart       String              @default("apparel")
+  sizesJson       Json?
+  colorsJson      Json?
+  tagsJson        Json?
+  seoTitle        String?
+  seoDescription  String?             @db.Text
+  featured        Boolean             @default(false)
+  trending        Boolean             @default(false)
+  isActive        Boolean             @default(true)
+  barcode         String?             @unique
+  qrCode          String?             @unique
   supplierBarcode String?
-  videoPath      String?
-  images         ProductImage[]
-  variants       ProductVariant[]
-  orderItems     OrderItem[]
-  inventory      InventoryMovement[]
+  videoPath       String?
+  images          ProductImage[]
+  variants        ProductVariant[]
+  orderItems      OrderItem[]
+  inventory       InventoryMovement[]
   vendorPurchases VendorPurchase[]
-  posSaleItems   PosSaleItem[]
-  posCommissions CommissionEntry[]
-  commissionRule CommissionRule?
-  category       Category            @relation(fields: [categoryId], references: [id])
-  brand          Brand?              @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  posSaleItems    PosSaleItem[]
+  posCommissions  CommissionEntry[]
+  commissionRule  CommissionRule?
+  category        Category            @relation(fields: [categoryId], references: [id])
+  brand           Brand?              @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([categoryId])
   @@index([brandId])
@@ -278,40 +282,40 @@ model Product {
 }
 
 model ProductImage {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   productId String
   path      String
   altText   String?
-  sortOrder Int      @default(0)
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sortOrder Int     @default(0)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
   @@map("product_images")
 }
 
 model ProductVariant {
-  id            String              @id @default(cuid())
-  productId     String
-  sku           String              @unique
-  size          String
-  colorName     String
-  colorHex      String
-  stock         Int                 @default(0)
-  priceOverride Decimal?            @db.Decimal(10, 2)
-  costPrice     Decimal?            @db.Decimal(10, 2)
-  isActive      Boolean             @default(true)
-  barcode       String?             @unique
-  qrCode        String?             @unique
+  id              String              @id @default(cuid())
+  productId       String
+  sku             String              @unique
+  size            String
+  colorName       String
+  colorHex        String
+  stock           Int                 @default(0)
+  priceOverride   Decimal?            @db.Decimal(10, 2)
+  costPrice       Decimal?            @db.Decimal(10, 2)
+  isActive        Boolean             @default(true)
+  barcode         String?             @unique
+  qrCode          String?             @unique
   supplierBarcode String?
-  product       Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-  orderItems    OrderItem[]
-  inventory     InventoryMovement[]
+  product         Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems      OrderItem[]
+  inventory       InventoryMovement[]
   vendorPurchases VendorPurchase[]
-  posSaleItems  PosSaleItem[]
-  posCommissions CommissionEntry[]
-  commissionRule CommissionRule?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  posSaleItems    PosSaleItem[]
+  posCommissions  CommissionEntry[]
+  commissionRule  CommissionRule?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@index([productId])
   @@map("product_variants")
@@ -332,25 +336,25 @@ model CommissionRule {
 }
 
 model InventoryMovement {
-  id        String          @id @default(cuid())
-  productId String
-  variantId String?
-  delta     Int
-  reason    InventoryReason
-  note      String          @default("")
-  source    SaleSource?
-  reference String?
-  orderId   String?
-  posSaleId String?
-  posReturnId String?
+  id               String          @id @default(cuid())
+  productId        String
+  variantId        String?
+  delta            Int
+  reason           InventoryReason
+  note             String          @default("")
+  source           SaleSource?
+  reference        String?
+  orderId          String?
+  posSaleId        String?
+  posReturnId      String?
   vendorPurchaseId String?
-  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  order     Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  posSale   PosSale?        @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
-  posReturn PosReturn?      @relation(fields: [posReturnId], references: [id], onDelete: SetNull)
-  vendorPurchase VendorPurchase? @relation(fields: [vendorPurchaseId], references: [id], onDelete: SetNull)
-  createdAt DateTime        @default(now())
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  order            Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  posSale          PosSale?        @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
+  posReturn        PosReturn?      @relation(fields: [posReturnId], references: [id], onDelete: SetNull)
+  vendorPurchase   VendorPurchase? @relation(fields: [vendorPurchaseId], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
 
   @@index([productId])
   @@index([variantId])
@@ -376,10 +380,10 @@ model ShippingZone {
 }
 
 model Order {
-  id               String         @id @default(cuid())
-  orderNumber      String         @unique
-  publicToken      String         @unique
-  checkoutKey      String?        @unique
+  id               String              @id @default(cuid())
+  orderNumber      String              @unique
+  publicToken      String              @unique
+  checkoutKey      String?             @unique
   userId           String?
   customerName     String
   email            String
@@ -388,29 +392,34 @@ model Order {
   addressLine2     String?
   city             String
   postalCode       String
-  country          String         @default("Pakistan")
+  country          String              @default("Pakistan")
   paymentMethod    PaymentMethod
-  paymentStatus    PaymentStatus  @default(PENDING)
-  orderStatus      OrderStatus    @default(PENDING)
+  paymentStatus    PaymentStatus       @default(PENDING)
+  orderStatus      OrderStatus         @default(PENDING)
   shippingZoneId   String?
   shippingZoneName String
-  shippingFee      Decimal        @db.Decimal(10, 2)
-  subtotal         Decimal        @db.Decimal(10, 2)
-  total            Decimal        @db.Decimal(10, 2)
+  shippingFee      Decimal             @db.Decimal(10, 2)
+  subtotal         Decimal             @db.Decimal(10, 2)
+  total            Decimal             @db.Decimal(10, 2)
   walletReference  String?
-  notes            String?        @db.Text
+  notes            String?             @db.Text
+  voidReason       String?             @db.Text
+  voidedAt         DateTime?
+  voidedById       String?
   items            OrderItem[]
   paymentProof     PaymentProof?
   returns          ReturnRequest[]
   inventory        InventoryMovement[]
   ledgerEntries    LedgerEntry[]
-  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
-  shippingZone     ShippingZone?  @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  user             User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  shippingZone     ShippingZone?       @relation(fields: [shippingZoneId], references: [id], onDelete: SetNull)
+  voidedBy         AdminAccount?       @relation("OrderVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([userId])
   @@index([shippingZoneId])
+  @@index([voidedById])
   @@map("orders")
 }
 
@@ -438,34 +447,34 @@ model OrderItem {
 }
 
 model PaymentProof {
-  id           String   @id @default(cuid())
-  orderId       String   @unique
-  filePath      String
-  originalName  String
-  mimeType      String
-  size          Int
-  reviewNote    String?
-  reviewedAt    DateTime?
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
+  id           String    @id @default(cuid())
+  orderId      String    @unique
+  filePath     String
+  originalName String
+  mimeType     String
+  size         Int
+  reviewNote   String?
+  reviewedAt   DateTime?
+  order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
 
   @@map("payment_proofs")
 }
 
 model ReturnRequest {
   id           String        @id @default(cuid())
-  orderId       String
-  userId        String?
-  reason        String
-  details       String        @default("")
-  status        ReturnStatus  @default(REQUESTED)
-  refundAmount  Decimal?      @db.Decimal(10, 2)
-  note          String        @default("")
-  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  refundRecord  RefundRecord?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  orderId      String
+  userId       String?
+  reason       String
+  details      String        @default("")
+  status       ReturnStatus  @default(REQUESTED)
+  refundAmount Decimal?      @db.Decimal(10, 2)
+  note         String        @default("")
+  order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  refundRecord RefundRecord?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@index([orderId])
   @@index([userId])
@@ -484,55 +493,55 @@ model RefundRecord {
 }
 
 model Employee {
-  id               String            @id @default(cuid())
-  name             String
-  phone            String?
-  commissionRate   Decimal           @default(0) @db.Decimal(5, 2)
-  status           EmployeeStatus    @default(ACTIVE)
-  notes            String            @default("")
-  saleItems        PosSaleItem[]
+  id                String            @id @default(cuid())
+  name              String
+  phone             String?
+  commissionRate    Decimal           @default(0) @db.Decimal(5, 2)
+  status            EmployeeStatus    @default(ACTIVE)
+  notes             String            @default("")
+  saleItems         PosSaleItem[]
   commissionEntries CommissionEntry[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@map("employees")
 }
 
 model PosSale {
-  id            String            @id @default(cuid())
-  saleNumber    String            @unique
-  source        SaleSource        @default(POS)
-  status        PosSaleStatus     @default(DRAFT)
-  customerName  String?
-  customerPhone String?
-  customerEmail String?
-  subtotal      Decimal           @db.Decimal(10, 2)
-  retailSubtotal Decimal          @default(0) @db.Decimal(10, 2)
-  discountTotal Decimal           @default(0) @db.Decimal(10, 2)
-  total         Decimal           @db.Decimal(10, 2)
-  paidAmount    Decimal           @db.Decimal(10, 2)
-  changeAmount  Decimal           @default(0) @db.Decimal(10, 2)
-  paymentMethod PosPaymentMethod?
-  notes         String?           @db.Text
-  syncedStatus  SyncStatus        @default(PENDING)
-  syncedAt      DateTime?
-  finalizedAt   DateTime?
-  deviceId      String?
-  deviceName    String?
-  voidReason    String?           @db.Text
-  voidedAt      DateTime?
-  voidedById    String?
-  items         PosSaleItem[]
-  payments      PosPayment[]
-  returns       PosReturn[]
-  receipt       Receipt?
-  commissions   CommissionEntry[]
-  inventory     InventoryMovement[]
-  ledgerEntries LedgerEntry[]
-  device        RegisterDevice?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
-  voidedBy      AdminAccount?     @relation("PosSaleVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id             String              @id @default(cuid())
+  saleNumber     String              @unique
+  source         SaleSource          @default(POS)
+  status         PosSaleStatus       @default(DRAFT)
+  customerName   String?
+  customerPhone  String?
+  customerEmail  String?
+  subtotal       Decimal             @db.Decimal(10, 2)
+  retailSubtotal Decimal             @default(0) @db.Decimal(10, 2)
+  discountTotal  Decimal             @default(0) @db.Decimal(10, 2)
+  total          Decimal             @db.Decimal(10, 2)
+  paidAmount     Decimal             @db.Decimal(10, 2)
+  changeAmount   Decimal             @default(0) @db.Decimal(10, 2)
+  paymentMethod  PosPaymentMethod?
+  notes          String?             @db.Text
+  syncedStatus   SyncStatus          @default(PENDING)
+  syncedAt       DateTime?
+  finalizedAt    DateTime?
+  deviceId       String?
+  deviceName     String?
+  voidReason     String?             @db.Text
+  voidedAt       DateTime?
+  voidedById     String?
+  items          PosSaleItem[]
+  payments       PosPayment[]
+  returns        PosReturn[]
+  receipt        Receipt?
+  commissions    CommissionEntry[]
+  inventory      InventoryMovement[]
+  ledgerEntries  LedgerEntry[]
+  device         RegisterDevice?     @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  voidedBy       AdminAccount?       @relation("PosSaleVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   @@index([deviceId])
   @@index([voidedById])
@@ -540,7 +549,7 @@ model PosSale {
 }
 
 model PosSaleItem {
-  id               String          @id @default(cuid())
+  id               String            @id @default(cuid())
   saleId           String
   productId        String
   variantId        String?
@@ -553,18 +562,18 @@ model PosSaleItem {
   qrCode           String?
   size             String?
   colorName        String?
-  unitPrice        Decimal         @db.Decimal(10, 2)
-  retailPrice      Decimal         @default(0) @db.Decimal(10, 2)
-  unitCost         Decimal?        @db.Decimal(10, 2)
+  unitPrice        Decimal           @db.Decimal(10, 2)
+  retailPrice      Decimal           @default(0) @db.Decimal(10, 2)
+  unitCost         Decimal?          @db.Decimal(10, 2)
   qty              Int
-  refundedQty      Int             @default(0)
-  lineTotal        Decimal         @db.Decimal(10, 2)
-  commissionRate   Decimal?        @db.Decimal(5, 2)
-  commissionAmount Decimal?        @db.Decimal(10, 2)
-  sale             PosSale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product          Product         @relation(fields: [productId], references: [id])
-  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  employee         Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  refundedQty      Int               @default(0)
+  lineTotal        Decimal           @db.Decimal(10, 2)
+  commissionRate   Decimal?          @db.Decimal(5, 2)
+  commissionAmount Decimal?          @db.Decimal(10, 2)
+  sale             PosSale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product          Product           @relation(fields: [productId], references: [id])
+  variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  employee         Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   returns          PosReturn[]
   commissions      CommissionEntry[]
 
@@ -577,29 +586,29 @@ model PosSaleItem {
 
 model PosPayment {
   id        String           @id @default(cuid())
-  saleId     String
-  method     PosPaymentMethod
-  amount     Decimal         @db.Decimal(10, 2)
-  reference  String?
-  sale       PosSale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  createdAt  DateTime        @default(now())
+  saleId    String
+  method    PosPaymentMethod
+  amount    Decimal          @db.Decimal(10, 2)
+  reference String?
+  sale      PosSale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
 
   @@index([saleId])
   @@map("pos_payments")
 }
 
 model PosReturn {
-  id         String         @id @default(cuid())
-  saleId      String
-  saleItemId  String?
-  reason      String
-  note        String        @default("")
-  qty         Int
-  amount      Decimal       @db.Decimal(10, 2)
-  sale        PosSale       @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  saleItem    PosSaleItem?  @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
-  inventory   InventoryMovement[]
-  createdAt   DateTime      @default(now())
+  id         String              @id @default(cuid())
+  saleId     String
+  saleItemId String?
+  reason     String
+  note       String              @default("")
+  qty        Int
+  amount     Decimal             @db.Decimal(10, 2)
+  sale       PosSale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleItem   PosSaleItem?        @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
+  inventory  InventoryMovement[]
+  createdAt  DateTime            @default(now())
 
   @@index([saleId])
   @@index([saleItemId])
@@ -634,96 +643,97 @@ model CommissionEntry {
 }
 
 model Receipt {
-  id            String    @id @default(cuid())
-  saleId         String    @unique
-  receiptNumber  String    @unique
-  invoiceNumber  String    @unique
-  invoiceSequence Int?     @unique
+  id               String    @id @default(cuid())
+  saleId           String    @unique
+  receiptNumber    String    @unique
+  invoiceNumber    String    @unique
+  invoiceSequence  Int?      @unique
   documentSnapshot Json?
-  reprintCount   Int       @default(0)
-  lastPrintedAt  DateTime?
-  sale           PosSale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  reprintCount     Int       @default(0)
+  lastPrintedAt    DateTime?
+  sale             PosSale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@map("receipts")
 }
 
 model RegisterDevice {
-  id          String      @id @default(cuid())
-  name        String
-  deviceKey   String      @unique
-  syncStatus  SyncStatus  @default(PENDING)
-  lastSeenAt  DateTime?
-  lastSyncAt  DateTime?
+  id              String     @id @default(cuid())
+  name            String
+  deviceKey       String     @unique
+  syncStatus      SyncStatus @default(PENDING)
+  lastSeenAt      DateTime?
+  lastSyncAt      DateTime?
   lastBootstrapAt DateTime?
-  lastCursor  String?
-  lastSyncError String?
-  notes       String      @default("")
-  sales       PosSale[]
-  syncJobs    SyncJob[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  lastCursor      String?
+  lastSyncError   String?
+  notes           String     @default("")
+  sales           PosSale[]
+  syncJobs        SyncJob[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   @@map("register_devices")
 }
 
 model SyncJob {
-  id         String        @id @default(cuid())
+  id         String          @id @default(cuid())
   deviceId   String?
   jobKey     String?
   direction  SyncDirection
   entityType String
   entityId   String?
   payload    Json
-  status     SyncStatus    @default(PENDING)
-  attempts   Int           @default(0)
+  status     SyncStatus      @default(PENDING)
+  attempts   Int             @default(0)
   lastError  String?
   device     RegisterDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
+  @@unique([deviceId, jobKey])
   @@index([deviceId])
   @@index([status])
-  @@unique([deviceId, jobKey])
   @@map("sync_jobs")
 }
 
 model StoreSetting {
-  id              String   @id @default(cuid())
-  storeName       String
-  logoPrimaryText String   @default("BALY")
-  logoSecondaryText String @default("By Bilal Garments")
-  logoTertiaryText String @default("EST 2001")
-  promoRibbonText String   @default("Free shipping over Rs. 6,000\nNew drop\nAW26 collection live now\nCOD available across Pakistan\nEasy 7-day returns") @db.VarChar(1000)
-  tagline         String
-  description     String   @db.Text
-  email           String
-  phone           String
-  address         String
-  taxNumber       String?
-  receiptLogoPath String?
-  currencyCode    String   @default("PKR")
-  currencySymbol  String   @default("Rs.")
-  invoicePrefix   String   @default("BG")
-  receiptPrefix   String   @default("REC")
-  thermalHeader   String   @default("")
-  thermalFooter   String   @default("")
-  receiptThankYou String   @default("Thank you for shopping with us!")
-  guaranteePolicy String   @default("Due items will be replaced within 2 days.") @db.Text
-  exchangePolicy  String   @default("") @db.Text
-  returnPolicy    String   @default("") @db.Text
-  saleItemPolicy  String   @default("No Return - No Exchange on Sale Items") @db.Text
-  receiptNotes    String   @default("Please keep this receipt for exchange or warranty.") @db.Text
-  barcodePrefix   String   @default("BG")
-  qrPrefix        String   @default("BGQR")
-  metaTitle       String
-  metaDescription String   @db.Text
-  instagram       String?
-  facebook        String?
-  tiktok          String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  storeName            String
+  logoPrimaryText      String   @default("BALY")
+  logoSecondaryText    String   @default("By Bilal Garments")
+  logoTertiaryText     String   @default("EST 2001")
+  promoRibbonText      String   @default("Free shipping over Rs. 6,000\nNew drop\nAW26 collection live now\nCOD available across Pakistan\nEasy 7-day returns") @db.VarChar(1000)
+  tagline              String
+  description          String   @db.Text
+  email                String
+  phone                String
+  address              String
+  taxNumber            String?
+  receiptLogoPath      String?
+  currencyCode         String   @default("PKR")
+  currencySymbol       String   @default("Rs.")
+  invoicePrefix        String   @default("BG")
+  receiptPrefix        String   @default("REC")
+  thermalHeader        String   @default("")
+  thermalFooter        String   @default("")
+  receiptThankYou      String   @default("Thank you for shopping with us!")
+  guaranteePolicy      String   @default("Due items will be replaced within 2 days.") @db.Text
+  exchangePolicy       String   @default("") @db.Text
+  returnPolicy         String   @default("") @db.Text
+  saleItemPolicy       String   @default("No Return - No Exchange on Sale Items") @db.Text
+  receiptNotes         String   @default("Please keep this receipt for exchange or warranty.") @db.Text
+  barcodePrefix        String   @default("BG")
+  qrPrefix             String   @default("BGQR")
+  barcodeLabelTemplate String   @default("branded")
+  metaTitle            String
+  metaDescription      String   @db.Text
+  instagram            String?
+  facebook             String?
+  tiktok               String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@map("store_settings")
 }
@@ -752,47 +762,53 @@ model Vendor {
 }
 
 model VendorPurchase {
-  id          String              @id @default(cuid())
-  vendorId    String
-  productId   String
-  variantId   String?
-  quantity    Int
-  unitCost    Decimal             @db.Decimal(10, 2)
-  purchasedAt DateTime            @default(now())
-  note        String              @default("")
-  ledgerEntryId String?             @unique
-  vendor      Vendor              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
-  product     Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
-  variant     ProductVariant?     @relation(fields: [variantId], references: [id], onDelete: SetNull)
-  movements   InventoryMovement[]
-  ledgerEntry LedgerEntry?        @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  vendorId       String
+  productId      String
+  variantId      String?
+  quantity       Int
+  unitCost       Decimal             @db.Decimal(10, 2)
+  purchasedAt    DateTime            @default(now())
+  note           String              @default("")
+  reversedAt     DateTime?
+  reversalReason String?             @db.Text
+  reversedById   String?
+  ledgerEntryId  String?             @unique
+  vendor         Vendor              @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant        ProductVariant?     @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  movements      InventoryMovement[]
+  ledgerEntry    LedgerEntry?        @relation(fields: [ledgerEntryId], references: [id], onDelete: SetNull)
+  reversedBy     AdminAccount?       @relation("VendorPurchaseReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   @@index([vendorId])
   @@index([productId])
   @@index([variantId])
   @@index([purchasedAt])
+  @@index([reversedById])
   @@map("vendor_purchases")
 }
 
 model LedgerEntry {
-  id               String                @id @default(cuid())
+  id               String               @id @default(cuid())
   type             LedgerEntryType
   direction        LedgerEntryDirection
-  amount           Decimal               @db.Decimal(10, 2)
+  amount           Decimal              @db.Decimal(10, 2)
   reference        String?
-  note             String                @default("")
+  note             String               @default("")
   orderId          String?
   posSaleId        String?
-  vendorPurchaseId String?               @unique
+  vendorPurchaseId String?              @unique
   adminAccountId   String?
-  order            Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  posSale          PosSale?              @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
+  isManual         Boolean              @default(false)
+  order            Order?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  posSale          PosSale?             @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
   vendorPurchase   VendorPurchase?
-  adminAccount     AdminAccount?         @relation(fields: [adminAccountId], references: [id], onDelete: SetNull)
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
+  adminAccount     AdminAccount?        @relation(fields: [adminAccountId], references: [id], onDelete: SetNull)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@index([type])
   @@index([direction])

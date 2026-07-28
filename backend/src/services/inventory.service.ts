@@ -9,7 +9,16 @@ type StockMutationInput = {
   productId: string;
   variantId?: string | null;
   delta: number;
-  reason: 'ORDER' | 'RETURN' | 'ADJUSTMENT' | 'RESTOCK' | 'POS_SALE' | 'POS_REFUND' | 'POS_VOID';
+  reason:
+    | 'ORDER'
+    | 'ORDER_VOID'
+    | 'RETURN'
+    | 'ADJUSTMENT'
+    | 'RESTOCK'
+    | 'PURCHASE_VOID'
+    | 'POS_SALE'
+    | 'POS_REFUND'
+    | 'POS_VOID';
   source?: 'ONLINE' | 'POS';
   reference?: string | null;
   orderId?: string | null;
@@ -97,6 +106,18 @@ export const inventoryService = {
       posReturnId: input.posReturnId,
       reference: input.reference,
       note: input.note ?? input.reference,
+    });
+  },
+  recordOrderVoid(db: DbClient, input: { productId: string; variantId?: string | null; qty: number; orderId: string; reference: string; note: string }) {
+    return inventoryService.applyStockMutation(db, {
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+      delta: input.qty,
+      reason: 'ORDER_VOID',
+      source: 'ONLINE',
+      orderId: input.orderId,
+      reference: input.reference,
+      note: input.note,
     });
   },
   recordPosVoid(db: DbClient, input: { productId: string; variantId?: string | null; qty: number; posSaleId: string; reference: string; note: string }) {

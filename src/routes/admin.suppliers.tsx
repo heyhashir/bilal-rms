@@ -28,6 +28,7 @@ type VendorDraft = {
 function AdminSuppliers() {
   const [tab, setTab] = useState("vendors");
   const [editingVendor, setEditingVendor] = useState<VendorDraft | null>(null);
+  const [purchaseReversal, setPurchaseReversal] = useState<{ id: string; label: string; reason: string } | null>(null);
   const [purchase, setPurchase] = useState({
     vendorId: "",
     productId: "",
@@ -82,6 +83,21 @@ function AdminSuppliers() {
       setPurchase((current) => ({ ...current, quantity: "1", unitCost: "0", note: "" }));
     },
     onError: (error) => toast.error(getErrorMessage(error, "Unable to record vendor purchase")),
+  });
+  const reversePurchase = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      adminBackofficeApi.reverseVendorPurchase(id, reason),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "vendor-purchases"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] }),
+      ]);
+      setPurchaseReversal(null);
+      toast.success("Purchase reversed; stock and ledger were corrected");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to reverse purchase")),
   });
 
   const selectedProduct = useMemo(
@@ -217,6 +233,8 @@ function AdminSuppliers() {
                   <th className="p-3 text-left">Qty</th>
                   <th className="p-3 text-left">Unit cost</th>
                   <th className="p-3 text-left">Date</th>
+                  <th className="p-3 text-left">Status</th>
+                  <th className="p-3" />
                 </tr>
               </thead>
               <tbody>
@@ -230,6 +248,26 @@ function AdminSuppliers() {
                     <td className="p-3">{entry.quantity}</td>
                     <td className="p-3">Rs. {entry.unitCost.toLocaleString()}</td>
                     <td className="p-3">{new Date(entry.purchasedAt).toLocaleDateString()}</td>
+                    <td className="p-3">
+                      <StatusPill status={entry.reversedAt ? "reversed" : "active"} />
+                      {entry.reversalReason && <div className="mt-1 max-w-48 text-xs text-muted-foreground">{entry.reversalReason}</div>}
+                    </td>
+                    <td className="p-3 text-right">
+                      {!entry.reversedAt && (
+                        <ActionButton
+                          variant="danger"
+                          onClick={() =>
+                            setPurchaseReversal({
+                              id: entry.id,
+                              label: `${entry.productName}${entry.variantSku ? ` (${entry.variantSku})` : ""}`,
+                              reason: "",
+                            })
+                          }
+                        >
+                          Reverse
+                        </ActionButton>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -244,6 +282,43 @@ function AdminSuppliers() {
           onClose={() => setEditingVendor(null)}
           onSave={(payload) => saveVendor.mutate(payload)}
         />
+      )}
+
+      {purchaseReversal && (
+        <Modal
+          title="Reverse vendor purchase"
+          onClose={() => setPurchaseReversal(null)}
+          footer={
+            <>
+              <ActionButton variant="ghost" onClick={() => setPurchaseReversal(null)}>Cancel</ActionButton>
+              <ActionButton
+                variant="danger"
+                disabled={purchaseReversal.reason.trim().length < 3 || reversePurchase.isPending}
+                onClick={() =>
+                  reversePurchase.mutate({
+                    id: purchaseReversal.id,
+                    reason: purchaseReversal.reason.trim(),
+                  })
+                }
+              >
+                {reversePurchase.isPending ? "Reversing..." : "Reverse purchase and correct records"}
+              </ActionButton>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This restores the purchase's stock effect and creates a compensating ledger credit for {purchaseReversal.label}.
+              The original purchase remains visible for audit.
+            </p>
+            <Field
+              label="Reversal reason"
+              value={purchaseReversal.reason}
+              onChange={(reason) => setPurchaseReversal((current) => (current ? { ...current, reason } : current))}
+              textarea
+            />
+          </div>
+        </Modal>
       )}
     </div>
   );

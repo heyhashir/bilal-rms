@@ -54,6 +54,7 @@ type Draft = {
     barcode?: string;
     qrCode?: string;
     supplierBarcode?: string;
+    commissionRate?: number | null;
   }>;
 };
 
@@ -263,11 +264,10 @@ function ProductModal({
   const isAccessory = form.sizeChart === "none" || inferSizeChart(form.categorySlug) === "none";
   const matrixSizes = sizeText.split(",").map((value) => value.trim()).filter(Boolean);
 
-  const generateVariantMatrix = () => {
+  const buildVariantMatrix = () => {
     const sizes = isAccessory ? ["Standard"] : matrixSizes;
     if (sizes.length === 0 || form.colors.length === 0) {
-      toast.error("Add at least one size and one color before generating the matrix");
-      return;
+      return null;
     }
 
     const existingByKey = new Map(
@@ -296,6 +296,15 @@ function ProductModal({
         };
       }),
     );
+    return variants;
+  };
+
+  const generateVariantMatrix = () => {
+    const variants = buildVariantMatrix();
+    if (!variants) {
+      toast.error("Add at least one size and one color before generating the matrix");
+      return;
+    }
     setForm((current) => ({ ...current, variants }));
   };
 
@@ -304,6 +313,23 @@ function ProductModal({
       ...current,
       variants: current.variants.map((variant) =>
         variant.size === size && variant.colorName === color ? { ...variant, stock: Math.max(0, stock) } : variant,
+      ),
+    }));
+  };
+
+  const updateVariant = (
+    variantId: string | undefined,
+    size: string,
+    colorName: string,
+    changes: Partial<Draft["variants"][number]>,
+  ) => {
+    setForm((current) => ({
+      ...current,
+      variants: current.variants.map((variant) =>
+        (variantId && variant.id === variantId) ||
+        (!variantId && variant.size === size && variant.colorName === colorName)
+          ? { ...variant, ...changes }
+          : variant,
       ),
     }));
   };
@@ -326,6 +352,11 @@ function ProductModal({
 
   const submit = async () => {
     try {
+      const variants = form.stockMode === "variant" ? buildVariantMatrix() : [];
+      if (form.stockMode === "variant" && !variants) {
+        toast.error("Add at least one size and color before saving this variant product");
+        return;
+      }
       const result = await adminCatalogApi.saveProduct({
         slug: form.slug,
         name: form.name,
@@ -350,7 +381,7 @@ function ProductModal({
         supplierBarcode: form.supplierBarcode,
         video: form.video,
         images: form.images,
-        variants: form.stockMode === "variant" ? form.variants : [],
+        variants,
       }, form.id);
       toast.success(form.id ? "Product updated" : "Product created");
       await invalidateCatalogAfterMutation();
@@ -465,6 +496,7 @@ function ProductModal({
               <ActionButton variant="ghost" onClick={generateVariantMatrix}>Generate matrix</ActionButton>
             </div>
             {form.variants.length > 0 && (
+              <div className="space-y-5">
               <div className="overflow-x-auto">
                 <table className="min-w-[560px] w-full text-sm">
                   <thead className="bg-secondary text-xs uppercase tracking-widest">
@@ -498,6 +530,71 @@ function ProductModal({
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div>
+                <div className="mb-2 text-xs uppercase tracking-[0.25em] text-muted-foreground">Variant-specific details</div>
+                <div className="overflow-x-auto border border-border">
+                  <table className="min-w-[1180px] w-full text-xs">
+                    <thead className="bg-secondary uppercase tracking-widest">
+                      <tr>
+                        <th className="p-2 text-left">Variant</th>
+                        <th className="p-2 text-left">SKU</th>
+                        <th className="p-2 text-left">Barcode</th>
+                        <th className="p-2 text-left">Supplier code</th>
+                        <th className="p-2 text-left">Sell price</th>
+                        <th className="p-2 text-left">Cost</th>
+                        <th className="p-2 text-left">Commission %</th>
+                        <th className="p-2 text-left">Active</th>
+                        <th className="p-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.variants.map((variant) => (
+                        <tr key={variant.id ?? `${variant.size}-${variant.colorName}`} className="border-t border-border">
+                          <td className="p-2 font-medium">{variant.size} / {variant.colorName}</td>
+                          <td className="p-2">
+                            <input aria-label={`${variant.size} ${variant.colorName} SKU`} value={variant.sku} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { sku: event.target.value })} className="w-40 border border-border bg-background px-2 py-1.5 font-mono" />
+                          </td>
+                          <td className="p-2">
+                            <input aria-label={`${variant.size} ${variant.colorName} barcode`} value={variant.barcode ?? ""} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { barcode: event.target.value })} className="w-44 border border-border bg-background px-2 py-1.5 font-mono" />
+                          </td>
+                          <td className="p-2">
+                            <input aria-label={`${variant.size} ${variant.colorName} supplier code`} value={variant.supplierBarcode ?? ""} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { supplierBarcode: event.target.value })} className="w-36 border border-border bg-background px-2 py-1.5 font-mono" />
+                          </td>
+                          <td className="p-2">
+                            <input aria-label={`${variant.size} ${variant.colorName} sell price`} type="number" min={0} value={variant.priceOverride ?? ""} placeholder={String(form.salePrice ?? form.price)} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { priceOverride: event.target.value === "" ? null : Number(event.target.value) })} className="w-24 border border-border bg-background px-2 py-1.5" />
+                          </td>
+                          <td className="p-2">
+                            <input aria-label={`${variant.size} ${variant.colorName} cost`} type="number" min={0} value={variant.costPrice ?? ""} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { costPrice: event.target.value === "" ? null : Number(event.target.value) })} className="w-24 border border-border bg-background px-2 py-1.5" />
+                          </td>
+                          <td className="p-2">
+                            <input aria-label={`${variant.size} ${variant.colorName} commission`} type="number" min={0} max={100} value={variant.commissionRate ?? ""} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { commissionRate: event.target.value === "" ? null : Number(event.target.value) })} className="w-20 border border-border bg-background px-2 py-1.5" />
+                          </td>
+                          <td className="p-2 text-center">
+                            <input aria-label={`${variant.size} ${variant.colorName} active`} type="checkbox" checked={variant.isActive} onChange={(event) => updateVariant(variant.id, variant.size, variant.colorName, { isActive: event.target.checked })} />
+                          </td>
+                          <td className="p-2">
+                            <button
+                              type="button"
+                              className="underline underline-offset-2"
+                              onClick={async () => {
+                                try {
+                                  const payload = await adminCatalogApi.generateCodes({ seed: variant.sku });
+                                  updateVariant(variant.id, variant.size, variant.colorName, { barcode: payload.barcode, qrCode: payload.qrCode });
+                                } catch (error) {
+                                  toast.error(getErrorMessage(error, "Unable to generate variant codes"));
+                                }
+                              }}
+                            >
+                              Generate codes
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
               </div>
             )}
           </section>

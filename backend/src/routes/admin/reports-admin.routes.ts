@@ -7,6 +7,9 @@ import {
   listVendors as listVendorsController,
   saveVendor as saveVendorController,
   archiveVendor as archiveVendorController,
+  reverseVendorPurchase as reverseVendorPurchaseController,
+  updateLedgerEntry as updateLedgerEntryController,
+  deleteLedgerEntry as deleteLedgerEntryController,
 } from '../../controllers/admin/backoffice.controller';
 import { getReportSummary } from '../../controllers/admin/report.controller';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -67,11 +70,29 @@ router.post(
 );
 
 router.post(
+  '/vendor-purchases/:id/reverse',
+  asyncHandler(async (req, res) => {
+    req.body = z.object({ reason: z.string().trim().min(3).max(500) }).parse(req.body);
+    await reverseVendorPurchaseController(req, res);
+  }),
+);
+
+router.post(
   '/ledger',
   asyncHandler(async (req, res) => {
     req.body = ledgerEntrySchema.parse(req.body);
     await createLedgerEntryController(req, res);
   }),
 );
+
+router.patch(
+  '/ledger/:id',
+  asyncHandler(async (req, res) => {
+    req.body = ledgerEntrySchema.parse(req.body);
+    await updateLedgerEntryController(req, res);
+  }),
+);
+
+router.delete('/ledger/:id', asyncHandler(deleteLedgerEntryController));
 
 export default router;

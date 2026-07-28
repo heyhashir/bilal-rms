@@ -76,3 +76,18 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
   });
   res.status(200).json(ApiResponse.success('Order updated', { order: serializeOrder(order) }));
 };
+
+export const voidOrder = async (req: Request, res: Response) => {
+  const order = await orderService.voidOrder({
+    orderNumber: req.params.orderNumber,
+    reason: req.body.reason,
+    adminAccountId: req.currentUser!.id,
+  });
+  logAdminAudit(req, {
+    action: 'order.voided',
+    targetType: 'order',
+    targetId: order.orderNumber,
+    details: { reason: req.body.reason },
+  });
+  res.status(200).json(ApiResponse.success('Order voided and inventory restored', { order: serializeOrder(order) }));
+};

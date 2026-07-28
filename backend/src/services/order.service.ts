@@ -40,9 +40,56 @@ export const orderService = {
     return orderRepository.findAdminReturns();
   },
   updateStatuses(orderNumber: string, data: { orderStatus?: string; paymentStatus?: string }) {
+    if (data.orderStatus?.toLowerCase() === 'cancelled') {
+      throw new ApiError(400, 'Use Void order so inventory and revenue are corrected safely');
+    }
     return orderRepository.updateStatuses(orderNumber, {
       orderStatus: data.orderStatus?.toUpperCase(),
       paymentStatus: data.paymentStatus?.toUpperCase(),
+    });
+  },
+  async voidOrder(input: { orderNumber: string; reason: string; adminAccountId: string }) {
+    return prisma.$transaction(async (tx) => {
+      const order = await orderRepository.findForVoid(tx, input.orderNumber);
+      if (order.voidedAt || order.orderStatus === 'CANCELLED') {
+        throw new ApiError(409, 'This order has already been voided or cancelled');
+      }
+      if (order.returns.some((request) => request.status === 'APPROVED' || request.status === 'REFUNDED')) {
+        throw new ApiError(409, 'Orders with approved returns or refunds cannot be voided');
+      }
+
+      for (const item of order.items) {
+        await inventoryService.recordOrderVoid(tx, {
+          productId: item.productId,
+          variantId: item.variantId,
+          qty: item.qty,
+          orderId: order.id,
+          reference: order.orderNumber,
+          note: `Order void: ${input.reason}`,
+        });
+      }
+
+      const saleCredits = order.ledgerEntries.filter(
+        (entry) => entry.direction === 'CREDIT' && entry.type === 'SALE',
+      );
+      for (const entry of saleCredits) {
+        await tx.ledgerEntry.create({
+          data: {
+            type: 'ADJUSTMENT',
+            direction: 'DEBIT',
+            amount: entry.amount,
+            reference: order.orderNumber,
+            note: `Order void: ${input.reason}`,
+            orderId: order.id,
+            adminAccountId: input.adminAccountId,
+          },
+        });
+      }
+
+      return orderRepository.markVoided(tx, order.id, {
+        reason: input.reason,
+        adminAccountId: input.adminAccountId,
+      });
     });
   },
   async checkout(params: {

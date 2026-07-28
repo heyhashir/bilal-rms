@@ -214,6 +214,67 @@ export const backofficeService = {
       return purchase;
     });
   },
+  async reverseVendorPurchase(input: {
+    purchaseId: string;
+    reason: string;
+    adminAccountId: string;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const purchase = await tx.vendorPurchase.findUniqueOrThrow({
+        where: { id: input.purchaseId },
+        include: {
+          vendor: true,
+          product: true,
+          variant: true,
+        },
+      });
+      if (purchase.reversedAt) {
+        throw new ApiError(409, 'This purchase has already been reversed');
+      }
+
+      await inventoryService.applyStockMutation(tx, {
+        productId: purchase.productId,
+        variantId: purchase.variantId,
+        delta: -purchase.quantity,
+        reason: 'PURCHASE_VOID',
+        reference: purchase.id,
+        note: `Purchase reversal: ${input.reason}`,
+      });
+      await tx.inventoryMovement.updateMany({
+        where: {
+          reference: purchase.id,
+          productId: purchase.productId,
+          variantId: purchase.variantId,
+          reason: 'PURCHASE_VOID',
+        },
+        data: { vendorPurchaseId: purchase.id },
+      });
+      await tx.ledgerEntry.create({
+        data: {
+          type: 'ADJUSTMENT',
+          direction: 'CREDIT',
+          amount: Number(purchase.unitCost) * purchase.quantity,
+          reference: purchase.id,
+          note: `Purchase reversal: ${input.reason}`,
+          adminAccountId: input.adminAccountId,
+        },
+      });
+
+      return tx.vendorPurchase.update({
+        where: { id: purchase.id },
+        data: {
+          reversedAt: new Date(),
+          reversalReason: input.reason,
+          reversedById: input.adminAccountId,
+        },
+        include: {
+          vendor: true,
+          product: true,
+          variant: true,
+        },
+      });
+    });
+  },
   listLedgerEntries(params?: { from?: string; to?: string }) {
     const from = params?.from ? new Date(params.from) : undefined;
     const to = params?.to ? new Date(params.to) : undefined;
@@ -250,7 +311,38 @@ export const backofficeService = {
         reference: normalizeOptional(input.reference),
         note: input.note ?? '',
         adminAccountId: input.adminAccountId ?? null,
+        isManual: true,
       },
     });
+  },
+  async updateManualLedgerEntry(input: {
+    id: string;
+    type: 'expense' | 'adjustment';
+    direction: 'credit' | 'debit';
+    amount: number;
+    reference?: string;
+    note?: string;
+  }) {
+    const existing = await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: input.id } });
+    if (!existing.isManual || !['EXPENSE', 'ADJUSTMENT'].includes(existing.type)) {
+      throw new ApiError(409, 'Generated business ledger entries are immutable; reverse the source transaction instead');
+    }
+    return prisma.ledgerEntry.update({
+      where: { id: input.id },
+      data: {
+        type: input.type.toUpperCase() as 'EXPENSE' | 'ADJUSTMENT',
+        direction: input.direction.toUpperCase() as 'CREDIT' | 'DEBIT',
+        amount: input.amount,
+        reference: normalizeOptional(input.reference),
+        note: input.note ?? '',
+      },
+    });
+  },
+  async deleteManualLedgerEntry(id: string) {
+    const existing = await prisma.ledgerEntry.findUniqueOrThrow({ where: { id } });
+    if (!existing.isManual || !['EXPENSE', 'ADJUSTMENT'].includes(existing.type)) {
+      throw new ApiError(409, 'Generated business ledger entries cannot be deleted; reverse the source transaction instead');
+    }
+    return prisma.ledgerEntry.delete({ where: { id } });
   },
 };

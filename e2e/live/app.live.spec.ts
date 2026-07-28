@@ -90,6 +90,9 @@ test.describe("Bilal RMS live-safe smoke", () => {
     await productRow.getByTitle("Print barcode stickers").click();
     await expect(page.getByRole("heading", { name: `Barcode stickers - ${fixture.productName}` })).toBeVisible();
     await expect(page.getByText("Labels print at 1.50 x 1.00 inches in landscape.")).toBeVisible();
+    await expect(page.getByLabel("Label template for this print job")).toHaveValue(/branded|compact/);
+    await page.getByLabel("Label template for this print job").selectOption("compact");
+    await expect(page.getByLabel("Label template for this print job")).toHaveValue("compact");
     await page.getByRole("button", { name: "Close" }).click();
 
     await page.getByRole("button", { name: "Add product" }).click();
@@ -101,6 +104,10 @@ test.describe("Bilal RMS live-safe smoke", () => {
     await page.getByRole("button", { name: "Generate matrix" }).click();
     await expect(page.getByLabel("S Black stock")).toBeEnabled();
     await expect(page.getByLabel("M Black stock")).toBeEnabled();
+    await expect(page.getByText("Variant-specific details")).toBeVisible();
+    await expect(page.getByLabel("S Black SKU")).toBeEditable();
+    await expect(page.getByLabel("M Black barcode")).toBeEditable();
+    await expect(page.getByLabel("M Black commission")).toBeEditable();
     await page.getByRole("button", { name: "Cancel" }).click();
 
     await page.goto("/shop");

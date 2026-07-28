@@ -50,6 +50,7 @@ const fallbackSettings: StorefrontSettings = {
   receiptNotes: "Please keep this receipt for exchange or warranty.",
   barcodePrefix: "BALY",
   qrPrefix: "BALYQ",
+  barcodeLabelTemplate: "branded",
   instagram: site.social.instagram,
   facebook: site.social.facebook,
   tiktok: site.social.tiktok,
