@@ -176,6 +176,20 @@ function ProductPage() {
             </div>
           )}
 
+          {product.stockMode === "variant" && hasSizes && hasColors && (
+            <VariantStockMatrix
+              sizes={product.sizes}
+              colors={product.colors}
+              variants={product.variants}
+              selectedSize={size}
+              selectedColor={color}
+              onSelect={(nextSize, nextColor) => {
+                setSize(nextSize);
+                setColor(nextColor);
+              }}
+            />
+          )}
+
           <div className="mt-8 flex items-center gap-3">
             <div className="flex h-12 items-center border border-border">
               <button onClick={() => setQty(Math.max(1, qty - 1))} className="h-full px-3">
@@ -295,5 +309,84 @@ function Perk({ icon, label }: { icon: React.ReactNode; label: string }) {
       <span className="text-accent">{icon}</span>
       <span>{label}</span>
     </div>
+  );
+}
+
+function VariantStockMatrix({
+  sizes,
+  colors,
+  variants,
+  selectedSize,
+  selectedColor,
+  onSelect,
+}: {
+  sizes: string[];
+  colors: Array<{ name: string; hex: string }>;
+  variants: Array<{ size: string; colorName: string; stock: number; isActive: boolean }>;
+  selectedSize: string;
+  selectedColor: string;
+  onSelect: (size: string, color: string) => void;
+}) {
+  return (
+    <section className="mt-7" aria-label="Variant stock by size and color">
+      <div className="mb-3 flex items-baseline justify-between gap-4">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.18em]">Available by size and color</h2>
+        <span className="text-xs text-muted-foreground">Select a cell to choose a variant</span>
+      </div>
+      <div className="overflow-x-auto border border-border">
+        <table className="w-full min-w-max border-collapse text-center text-sm" aria-label="Product stock by size and color">
+          <thead className="bg-secondary text-xs uppercase tracking-wider">
+            <tr>
+              <th scope="col" className="sticky left-0 z-10 min-w-20 border-b border-r border-border bg-secondary px-4 py-3 text-left">
+                Size
+              </th>
+              {colors.map((entry) => (
+                <th key={entry.name} scope="col" className="min-w-24 border-b border-border px-3 py-3 font-semibold">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-full border border-black/20" style={{ backgroundColor: entry.hex }} />
+                    {entry.name}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sizes.map((rowSize) => (
+              <tr key={rowSize} className="border-b border-border last:border-b-0">
+                <th scope="row" className="sticky left-0 z-10 border-r border-border bg-background px-4 py-3 text-left font-semibold">
+                  {rowSize}
+                </th>
+                {colors.map((entry) => {
+                  const variant = variants.find((candidate) => candidate.isActive && candidate.size === rowSize && candidate.colorName === entry.name);
+                  const isSelected = selectedSize === rowSize && selectedColor === entry.name;
+                  const stock = variant?.stock ?? 0;
+
+                  return (
+                    <td key={`${rowSize}-${entry.name}`} className="p-1.5">
+                      <button
+                        type="button"
+                        onClick={() => variant && onSelect(rowSize, entry.name)}
+                        disabled={!variant}
+                        aria-pressed={isSelected}
+                        aria-label={`${rowSize}, ${entry.name}: ${stock} available`}
+                        className={`min-h-11 w-full border px-3 py-2 font-semibold transition ${
+                          isSelected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : stock > 0
+                              ? "border-border hover:border-foreground"
+                              : "cursor-not-allowed border-border bg-secondary text-muted-foreground"
+                        } disabled:cursor-not-allowed`}
+                      >
+                        {stock}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

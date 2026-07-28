@@ -258,6 +258,9 @@ function ProductModal({
   // Keep generated slugs in sync with a new product name until an operator edits it.
   const [slugEdited, setSlugEdited] = useState(Boolean(draft.slug));
   const [sizeText, setSizeText] = useState(draft.sizes.join(", "));
+  const [sizeMode, setSizeMode] = useState<"letter" | "numeric">(
+    () => draft.sizes.some((size) => /^\d/.test(size)) ? "numeric" : "letter",
+  );
   const [tagText, setTagText] = useState(draft.tags.join(", "));
   const [colorName, setColorName] = useState("");
   const [colorHex, setColorHex] = useState("#111111");
@@ -271,11 +274,11 @@ function ProductModal({
     }
 
     const existingByKey = new Map(
-      form.variants.map((variant) => [`${variant.size.trim().toLowerCase()}::${variant.colorName.trim().toLowerCase()}`, variant]),
+      form.variants.map((variant) => [variantMatrixKey(variant.size, variant.colorName), variant]),
     );
     const variants = sizes.flatMap((size) =>
       form.colors.map((color) => {
-        const existing = existingByKey.get(`${size.toLowerCase()}::${color.name.trim().toLowerCase()}`);
+        const existing = existingByKey.get(variantMatrixKey(size, color.name));
         if (existing) {
           return { ...existing, size, colorName: color.name, colorHex: color.hex, isActive: true };
         }
@@ -308,14 +311,44 @@ function ProductModal({
     setForm((current) => ({ ...current, variants }));
   };
 
-  const updateVariantStock = (size: string, color: string, stock: number) => {
+  const updateVariantStock = (matrixKey: string, stock: number) => {
     setForm((current) => ({
       ...current,
       variants: current.variants.map((variant) =>
-        variant.size === size && variant.colorName === color ? { ...variant, stock: Math.max(0, stock) } : variant,
+        variantMatrixKey(variant.size, variant.colorName) === matrixKey
+          ? { ...variant, stock: Math.max(0, stock) }
+          : variant,
       ),
     }));
   };
+
+  const selectSizeMode = (nextMode: "letter" | "numeric") => {
+    setSizeMode(nextMode);
+    setSizeText(nextMode === "numeric" ? "28, 30, 32, 34, 36" : "S, M, L, XL");
+  };
+
+  const addColor = () => {
+    const name = colorName.trim();
+    if (!name) return;
+    if (form.colors.some((color) => color.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      toast.error("That color is already added");
+      return;
+    }
+    setForm({ ...form, colors: [...form.colors, { name, hex: colorHex }] });
+    setColorName("");
+  };
+
+  const colorChips = form.colors.length > 0 && (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {form.colors.map((color, index) => (
+        <span key={`${color.name}-${index}`} className="inline-flex items-center gap-2 border border-border px-2 py-1 text-xs">
+          <span className="h-3 w-3 rounded-full" style={{ background: color.hex }} />
+          {color.name}
+          <button type="button" onClick={() => setForm({ ...form, colors: form.colors.filter((_, colorIndex) => colorIndex !== index) })}><X className="h-3 w-3" /></button>
+        </span>
+      ))}
+    </div>
+  );
 
   const updateVariant = (
     variantId: string | undefined,
@@ -327,7 +360,7 @@ function ProductModal({
       ...current,
       variants: current.variants.map((variant) =>
         (variantId && variant.id === variantId) ||
-        (!variantId && variant.size === size && variant.colorName === colorName)
+        (!variantId && variantMatrixKey(variant.size, variant.colorName) === variantMatrixKey(size, colorName))
           ? { ...variant, ...changes }
           : variant,
       ),
@@ -390,6 +423,18 @@ function ProductModal({
       toast.error(getErrorMessage(error, "Unable to save product"));
     }
   };
+
+  const colorEditor = (
+    <div>
+      <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Colors</span>
+      <div className="flex gap-2">
+        <input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Color name" className="flex-1 border border-border bg-background px-3 py-2 text-sm" />
+        <input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} className="h-10 w-12 border border-border bg-background" />
+        <button type="button" onClick={addColor} className="bg-secondary px-4 text-xs uppercase tracking-widest">Add</button>
+      </div>
+      {colorChips}
+    </div>
+  );
 
   return (
     <Modal
@@ -470,7 +515,11 @@ function ProductModal({
           ) : (
             <div className="border border-border bg-secondary px-3 py-2 text-sm">
               <div className="text-xs uppercase tracking-widest text-muted-foreground">Variant stock</div>
-              <div className="mt-1 font-semibold">{form.variants.reduce((sum, variant) => sum + variant.stock, 0)} units</div>
+              <div className="mt-1 font-semibold">
+                {form.variants.length > 0
+                  ? `${form.variants.reduce((sum, variant) => sum + variant.stock, 0)} units`
+                  : "Not configured"}
+              </div>
             </div>
           )}
           <SelectField
@@ -493,36 +542,90 @@ function ProductModal({
                 <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Variant configuration</div>
                 <div className="mt-1 text-sm text-muted-foreground">Sizes are rows, colors are columns, and each cell is independent stock.</div>
               </div>
-              <ActionButton variant="ghost" onClick={generateVariantMatrix}>Generate matrix</ActionButton>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {isAccessory ? (
+                <div className="border border-border bg-secondary px-3 py-2 text-sm">
+                  <div className="text-xs uppercase tracking-widest text-muted-foreground">Size</div>
+                  <div className="mt-1 font-semibold">Standard</div>
+                </div>
+              ) : (
+                <div>
+                  <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">1. Sizes (comma separated)</span>
+                  <input
+                    value={sizeText}
+                    onChange={(event) => setSizeText(event.target.value)}
+                    placeholder="S, M, L, XL or 28, 30, 32, 34, 36"
+                    className="h-10 w-full border border-border bg-background px-3 text-sm outline-none focus:border-foreground"
+                  />
+                  <div className="mt-2 inline-flex overflow-hidden border border-border text-xs uppercase tracking-wider">
+                    <button
+                      type="button"
+                      aria-pressed={sizeMode === "letter"}
+                      onClick={() => selectSizeMode("letter")}
+                      className={`px-3 py-2 ${sizeMode === "letter" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-secondary"}`}
+                    >
+                      Letter: S/M/L
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={sizeMode === "numeric"}
+                      onClick={() => selectSizeMode("numeric")}
+                      className={`border-l border-border px-3 py-2 ${sizeMode === "numeric" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-secondary"}`}
+                    >
+                      Numeric: 28-36
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div>
+                <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">
+                  {isAccessory ? "1. Add colors" : "2. Add colors"}
+                </span>
+                <div className="flex gap-2">
+                  <input value={colorName} onChange={(event) => setColorName(event.target.value)} placeholder="Color name" className="h-10 min-w-0 flex-1 border border-border bg-background px-3 text-sm outline-none focus:border-foreground" />
+                  <input type="color" value={colorHex} onChange={(event) => setColorHex(event.target.value)} className="h-10 w-12 shrink-0 border border-border bg-background" />
+                  <button type="button" onClick={addColor} className="h-10 shrink-0 bg-secondary px-4 text-xs uppercase tracking-widest hover:bg-muted">Add</button>
+                </div>
+                {colorChips}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+              <p className="text-sm text-muted-foreground">
+                Generate the matrix after adding sizes and colors, then enter stock in each cell.
+              </p>
+              <ActionButton variant="ghost" onClick={generateVariantMatrix}>
+                {isAccessory ? "2. Generate matrix" : "3. Generate matrix"}
+              </ActionButton>
             </div>
             {form.variants.length > 0 && (
               <div className="space-y-5">
-              <div className="overflow-x-auto">
-                <table className="min-w-[560px] w-full text-sm">
+              <div className="overflow-x-auto border border-border">
+                <table className="min-w-[520px] w-full table-fixed text-sm">
                   <thead className="bg-secondary text-xs uppercase tracking-widest">
                     <tr>
-                      <th className="p-3 text-left">Size</th>
-                      {form.colors.map((color) => <th key={color.name} className="p-3 text-left">{color.name}</th>)}
+                      <th className="sticky left-0 z-20 w-28 bg-secondary p-3 text-left">Size</th>
+                      {form.colors.map((color) => <th key={color.name} className="min-w-32 p-3 text-center">{color.name}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {(isAccessory ? ["Standard"] : matrixSizes).map((size) => (
                       <tr key={size} className="border-t border-border">
-                        <th className="p-3 text-left font-medium">{size}</th>
+                        <th className="sticky left-0 z-10 w-28 bg-background p-3 text-left font-medium">{size}</th>
                         {form.colors.map((color) => {
-                          const variant = form.variants.find((entry) => entry.size === size && entry.colorName === color.name);
+                          const matrixKey = variantMatrixKey(size, color.name);
+                          const variant = form.variants.find((entry) => variantMatrixKey(entry.size, entry.colorName) === matrixKey);
                           return (
-                            <td key={`${size}-${color.name}`} className="p-2">
+                            <td key={matrixKey} className="p-2 text-center">
                               <input
                                 type="number"
                                 min={0}
                                 value={variant?.stock ?? 0}
                                 disabled={!variant}
-                                onChange={(event) => updateVariantStock(size, color.name, Number(event.target.value) || 0)}
-                                className="w-24 border border-border bg-background px-3 py-2"
+                                onChange={(event) => updateVariantStock(matrixKey, Number(event.target.value) || 0)}
+                                className="w-full max-w-28 border border-border bg-background px-3 py-2 text-center"
                                 aria-label={`${size} ${color.name} stock`}
                               />
-                              {variant && <div className="mt-1 max-w-24 truncate font-mono text-[9px] text-muted-foreground">{variant.sku}</div>}
                             </td>
                           );
                         })}
@@ -599,25 +702,9 @@ function ProductModal({
             )}
           </section>
         )}
-        {!isAccessory && <Field label="Sizes (comma separated)" value={sizeText} onChange={setSizeText} />}
+        {form.stockMode !== "variant" && !isAccessory && <Field label="Sizes (comma separated)" value={sizeText} onChange={setSizeText} />}
         <Field label="Tags (comma separated)" value={tagText} onChange={setTagText} />
-        <div>
-          <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Colors</span>
-          <div className="mb-2 flex flex-wrap gap-2">
-            {form.colors.map((color, index) => (
-              <span key={`${color.name}-${index}`} className="inline-flex items-center gap-2 border border-border px-2 py-1 text-xs">
-                <span className="h-3 w-3 rounded-full" style={{ background: color.hex }} />
-                {color.name}
-                <button type="button" onClick={() => setForm({ ...form, colors: form.colors.filter((_, colorIndex) => colorIndex !== index) })}><X className="h-3 w-3" /></button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Color name" className="flex-1 border border-border bg-background px-3 py-2 text-sm" />
-            <input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} className="h-10 w-12 border border-border bg-background" />
-            <button type="button" onClick={() => { if (!colorName) return; setForm({ ...form, colors: [...form.colors, { name: colorName, hex: colorHex }] }); setColorName(""); }} className="bg-secondary px-4 text-xs uppercase tracking-widest">Add</button>
-          </div>
-        </div>
+        {form.stockMode !== "variant" && colorEditor}
         <div>
           <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Images</span>
           <div className="mb-2 grid grid-cols-4 gap-2">
@@ -672,6 +759,9 @@ const makeVariantSku = (productValue: string, color: string, size: string) => {
   const sizeCode = size.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 5) || "STD";
   return `${base}-${colorCode}-${sizeCode}`;
 };
+
+const variantMatrixKey = (size: string, color: string) =>
+  `${size.trim().toLocaleLowerCase()}::${color.trim().toLocaleLowerCase()}`;
 
 const inferSizeChart = (categorySlug: string): "apparel" | "bottoms" | "kids" | "none" => {
   const slug = categorySlug.toLowerCase();
