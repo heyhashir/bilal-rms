@@ -43,6 +43,7 @@ export type PosSaleItem = {
   qty: number;
   refundedQty: number;
   unitPrice: number;
+  retailPrice: number;
   lineTotal: number;
   commissionRate: number | null;
   commissionAmount: number | null;
@@ -57,8 +58,11 @@ export type PosSale = {
   customerPhone: string;
   customerEmail: string;
   subtotal: number;
+  retailSubtotal: number;
+  discountTotal: number;
   total: number;
   paidAmount: number;
+  changeAmount: number;
   paymentMethod: string;
   notes: string;
   syncedStatus: string;
@@ -66,10 +70,16 @@ export type PosSale = {
   finalizedAt: number | null;
   deviceId: string;
   deviceName: string;
+  voidReason: string;
+  voidedAt: number | null;
+  voidedById: string;
+  voidedByName: string;
   receipt: {
     id: string;
     receiptNumber: string;
     invoiceNumber: string;
+    invoiceSequence: number | null;
+    documentSnapshot: ReceiptDocumentSnapshot | null;
     reprintCount: number;
     lastPrintedAt: number | null;
   } | null;
@@ -92,6 +102,32 @@ export type PosSale = {
   }>;
   createdAt: number;
   updatedAt: number;
+};
+
+export type ReceiptDocumentSnapshot = {
+  version?: number;
+  store?: {
+    name?: string;
+    logoPrimaryText?: string;
+    logoSecondaryText?: string;
+    logoTertiaryText?: string;
+    logoPath?: string;
+    address?: string;
+    phone?: string;
+    taxNumber?: string;
+    currencyCode?: string;
+    currencySymbol?: string;
+  };
+  receipt?: {
+    header?: string;
+    footer?: string;
+    thankYou?: string;
+    guaranteePolicy?: string;
+    exchangePolicy?: string;
+    returnPolicy?: string;
+    saleItemPolicy?: string;
+    notes?: string;
+  };
 };
 
 export type CommissionEntry = {

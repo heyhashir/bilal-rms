@@ -39,7 +39,10 @@ export const catalogAdminService = {
       price: input.price,
       salePrice: input.salePrice ?? null,
       costPrice: input.costPrice ?? null,
-      stock: input.stockMode === 'variant' ? 0 : input.stock,
+      stock:
+        input.stockMode === 'variant'
+          ? normalizedVariants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
+          : input.stock,
       sizeChart: normalizedSizeChart,
       sizesJson: normalizedSizes,
       colorsJson: input.colors,
@@ -63,11 +66,34 @@ export const catalogAdminService = {
       await catalogRepository.replaceProductImages(tx, savedProduct.id, input.images);
       await catalogRepository.deleteCommissionRulesForProduct(tx, savedProduct.id);
 
-      await catalogRepository.deleteProductVariants(tx, savedProduct.id);
+      if (input.stockMode === 'simple') {
+        const previousStock = existingProduct?.stockMode === 'SIMPLE' ? existingProduct.stock : 0;
+        const delta = input.stock - previousStock;
+        if (delta !== 0) {
+          await tx.inventoryMovement.create({
+            data: {
+              productId: savedProduct.id,
+              delta,
+              reason: existingProduct ? 'ADJUSTMENT' : 'IMPORT',
+              reference: savedProduct.slug,
+              note: existingProduct ? 'Stock updated from product editor' : 'Initial product stock',
+            },
+          });
+        }
+      }
 
       if (input.stockMode === 'variant' && normalizedVariants.length > 0) {
+        const existingById = new Map((existingProduct?.variants ?? []).map((variant) => [variant.id, variant]));
+        const existingByCombination = new Map(
+          (existingProduct?.variants ?? []).map((variant) => [
+            `${variant.size.trim().toLowerCase()}::${variant.colorName.trim().toLowerCase()}`,
+            variant,
+          ]),
+        );
+        const retainedIds: string[] = [];
+
         for (const variant of normalizedVariants) {
-          const createdVariant = await catalogRepository.createProductVariant(tx, {
+          const variantData = {
             productId: savedProduct.id,
             sku: variant.sku,
             size: variant.size,
@@ -80,9 +106,33 @@ export const catalogAdminService = {
             barcode: normalizeOptionalString(variant.barcode),
             qrCode: normalizeOptionalString(variant.qrCode),
             supplierBarcode: normalizeOptionalString(variant.supplierBarcode),
-          });
-          await catalogRepository.deleteCommissionRulesForVariant(tx, createdVariant.id);
+          };
+          const matching =
+            (variant.id ? existingById.get(variant.id) : null) ??
+            existingByCombination.get(`${variant.size.toLowerCase()}::${variant.colorName.toLowerCase()}`);
+          const savedVariant = matching
+            ? await catalogRepository.updateProductVariant(tx, matching.id, variantData)
+            : await catalogRepository.createProductVariant(tx, variantData);
+          retainedIds.push(savedVariant.id);
+          const previousStock = matching?.stock ?? 0;
+          const delta = variant.stock - previousStock;
+          if (delta !== 0) {
+            await tx.inventoryMovement.create({
+              data: {
+                productId: savedProduct.id,
+                variantId: savedVariant.id,
+                delta,
+                reason: matching ? 'ADJUSTMENT' : 'IMPORT',
+                reference: savedVariant.sku,
+                note: matching ? 'Variant matrix stock update' : 'Initial variant stock',
+              },
+            });
+          }
         }
+
+        await catalogRepository.archiveProductVariantsExcept(tx, savedProduct.id, retainedIds);
+      } else if (existingProduct?.variants.length) {
+        await catalogRepository.archiveProductVariantsExcept(tx, savedProduct.id, []);
       }
 
       return savedProduct;
@@ -255,9 +305,33 @@ export const catalogAdminService = {
       sku: variant?.sku ?? '',
       size: variant?.size ?? '',
       color: variant?.colorName ?? '',
+      price: Number(variant?.priceOverride ?? product.salePrice ?? product.price),
+      stock: variant?.stock ?? product.stock,
       barcode,
       qrCode,
     };
+  },
+  async getBarcodeLabels(input: { productId: string; variantId?: string | null }) {
+    const product = await catalogRepository.findProductById(input.productId);
+    const variants = input.variantId
+      ? product.variants.filter((variant) => variant.id === input.variantId)
+      : product.stockMode === 'VARIANT'
+        ? product.variants.filter((variant) => variant.isActive)
+        : [];
+
+    if (input.variantId && variants.length === 0) {
+      throw new ApiError(404, 'Variant not found');
+    }
+
+    if (product.stockMode === 'VARIANT') {
+      const labels = [];
+      for (const variant of variants) {
+        labels.push(await catalogAdminService.reprintCodes({ productId: product.id, variantId: variant.id }));
+      }
+      return labels;
+    }
+
+    return [await catalogAdminService.reprintCodes({ productId: product.id })];
   },
   saveCategory: (input: CategoryInput) =>
     catalogRepository.upsertCategory({

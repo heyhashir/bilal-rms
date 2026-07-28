@@ -46,4 +46,19 @@ export const adminCatalogApi = {
     }>("/admin/uploads/diagnostics"),
   generateCodes: (payload?: { prefix?: string; qrPrefix?: string; seed?: string }) =>
     api.post<{ barcode: string; qrCode: string }>("/admin/barcodes/generate", payload ?? {}),
+  barcodeLabels: (payload: { productId: string; variantId?: string | null }) =>
+    api.post<{
+      labels: Array<{
+        productId: string;
+        variantId: string | null;
+        name: string;
+        sku: string;
+        size: string;
+        color: string;
+        price: number;
+        stock: number;
+        barcode: string;
+        qrCode: string;
+      }>;
+    }>("/admin/barcodes/labels", payload),
 };

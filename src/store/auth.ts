@@ -143,7 +143,10 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
   updateCurrent: async (patch) => {
     try {
-      const payload = await accountApi.updateProfile(patch);
+      const payload = await accountApi.updateProfile({
+        name: patch.name ?? get().user?.name ?? "",
+        phone: patch.phone,
+      });
       queryClient.setQueryData(queryKeys.auth.currentUser, payload.user);
       queryClient.setQueryData(queryKeys.account.profile, payload.user);
       setUserState(set, payload.user);

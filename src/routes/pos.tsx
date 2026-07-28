@@ -20,6 +20,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { syncApi } from "@/lib/sync-api";
 import type { Product, ProductVariant, StorefrontSettings } from "@/lib/catalog-types";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, SelectField, StatusPill } from "@/components/admin/primitives";
+import { PosReceipt } from "@/components/pos/PosReceipt";
 
 export const Route = createFileRoute("/pos")({
   component: PosTerminal,
@@ -97,9 +98,32 @@ function PosTerminal() {
         queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
       },
   );
-  const canLoadPos = !isPending && Boolean(user) && ["admin", "manager", "staff"].includes(user.role);
+  const canLoadPos = !isPending && Boolean(user && ["admin", "manager", "staff"].includes(user.role));
   const desktopBridge = getDesktopBridge();
   const desktopContext = desktopBridge?.getDesktopContext() ?? null;
+
+  const openReceiptByIdentifier = async () => {
+    const identifier = receiptLookup.trim();
+    if (!identifier) {
+      toast.error("Enter an invoice number, receipt ID, or sale number");
+      return;
+    }
+
+    const local = findOfflineReceipt(identifier);
+    if (local) {
+      setReceipt(local);
+      return;
+    }
+
+    try {
+      const response = await adminPosApi.findPosSale(identifier);
+      rememberReceipt(response.sale);
+      setStoredReceipts(loadOfflineReceipts());
+      setReceipt(response.sale);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Invoice not found"));
+    }
+  };
 
   const updateSyncState = (patch: Partial<PosSyncState>) => {
     const next = patchPosSyncState(deviceKey, patch);
@@ -361,6 +385,8 @@ function PosTerminal() {
       setIsInstallingUpdate(true);
       await bridge.installUpdate({
         installerUrl: desktopUpdate.windows.installerUrl,
+        expectedSha256: desktopUpdate.windows.sha256,
+        expectedSize: desktopUpdate.windows.size,
       });
       toast.success("Update installer launched. The app will close so Windows can continue the upgrade.");
     } catch (error) {
@@ -931,17 +957,18 @@ function PosTerminal() {
             <div className="border border-border p-5">
               <div className="mb-4 text-xs uppercase tracking-[0.3em] text-muted-foreground">Receipt lookup</div>
               <div className="flex gap-3">
-                <input value={receiptLookup} onChange={(event) => setReceiptLookup(event.target.value)} placeholder="Receipt or sale number" className="flex-1 border border-border bg-background px-3 py-2 text-sm" />
+                <input
+                  value={receiptLookup}
+                  onChange={(event) => setReceiptLookup(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void openReceiptByIdentifier();
+                  }}
+                  placeholder="Invoice number, receipt ID, or scan barcode"
+                  className="flex-1 border border-border bg-background px-3 py-2 text-sm"
+                />
                 <ActionButton
                   variant="ghost"
-                  onClick={() => {
-                    const found = findOfflineReceipt(receiptLookup);
-                    if (!found) {
-                      toast.error("Receipt not found in local history");
-                      return;
-                    }
-                    setReceipt(found);
-                  }}
+                  onClick={() => void openReceiptByIdentifier()}
                 >
                   Open
                 </ActionButton>
@@ -974,10 +1001,19 @@ function PosTerminal() {
               </ActionButton>
               <ActionButton
                 onClick={async () => {
+                  let printableReceipt = receipt;
+                  if (receipt.syncedStatus === "synced") {
+                    try {
+                      printableReceipt = (await adminPosApi.recordReprint(receipt.saleNumber)).sale;
+                      setReceipt(printableReceipt);
+                    } catch {
+                      // Printing remains available if audit tracking is temporarily offline.
+                    }
+                  }
                   const bridge = getDesktopBridge();
                   if (bridge) {
                     try {
-                      await bridge.printReceipt({ sale: receipt, settings });
+                      await bridge.printReceipt({ sale: printableReceipt, settings });
                       toast.success("Receipt sent to printer");
                     } catch (error) {
                       toast.error(getErrorMessage(error, "Unable to print receipt"));
@@ -994,42 +1030,10 @@ function PosTerminal() {
           }
         >
           <div className="mx-auto max-w-xl space-y-4">
-            <div className="text-center">
-              <div className="display text-2xl">{settings?.name}</div>
-              {settings?.thermalHeader && <pre className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{settings.thermalHeader}</pre>}
+            <div className="border border-border bg-white p-3">
+              <PosReceipt sale={receipt} settings={settings} />
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div className="text-xs uppercase tracking-widest text-muted-foreground">Receipt</div>
-                <div>{receipt.receipt?.receiptNumber ?? receipt.saleNumber}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-widest text-muted-foreground">Status</div>
-                <div>{receipt.syncedStatus}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-widest text-muted-foreground">Customer</div>
-                <div>{receipt.customerName || "Walk-in customer"}</div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-widest text-muted-foreground">Payment</div>
-                <div>{receipt.paymentMethod}</div>
-              </div>
-            </div>
-            <div className="border border-border">
-              {receipt.items.map((line) => (
-                <div key={line.id} className="flex items-start justify-between border-b border-border p-3 last:border-0">
-                  <div>
-                    <div className="font-medium">{line.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {[line.size, line.color, line.employeeName].filter(Boolean).join(" | ")} x {line.qty}
-                    </div>
-                  </div>
-                  <div className="font-semibold">{formatPrice(line.lineTotal)}</div>
-                </div>
-              ))}
-            </div>
-            <div className="border border-border p-4">
+            {receipt.status === "finalized" && <div className="border border-border p-4">
               <div className="mb-3 text-xs uppercase tracking-[0.3em] text-muted-foreground">Process refund</div>
               <div className="space-y-3">
                 {receipt.items.map((line) => {
@@ -1067,12 +1071,7 @@ function PosTerminal() {
                   </ActionButton>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center justify-between border-t border-border pt-3 font-semibold">
-              <span>Total</span>
-              <span>{formatPrice(receipt.total)}</span>
-            </div>
-            {settings?.thermalFooter && <pre className="whitespace-pre-wrap text-center text-sm text-muted-foreground">{settings.thermalFooter}</pre>}
+            </div>}
           </div>
         </Modal>
       )}

@@ -26,12 +26,20 @@ const emptySettings: StorefrontSettings = {
   email: "",
   phone: "",
   address: "",
+  taxNumber: "",
+  receiptLogoPath: "",
   currency: "PKR",
   currencySymbol: "Rs.",
   invoicePrefix: "BALY",
   receiptPrefix: "BALY",
   thermalHeader: "",
   thermalFooter: "",
+  receiptThankYou: "Thank you for shopping with us!",
+  guaranteePolicy: "Due items will be replaced within 2 days.",
+  exchangePolicy: "",
+  returnPolicy: "",
+  saleItemPolicy: "No Return - No Exchange on Sale Items",
+  receiptNotes: "Please keep this receipt for exchange or warranty.",
   barcodePrefix: "BALY",
   qrPrefix: "BALYQ",
   instagram: "",
@@ -106,11 +114,19 @@ function AdminSettings() {
       email: settings.email,
       phone: settings.phone,
       address: settings.address,
+      taxNumber: settings.taxNumber,
+      receiptLogoPath: settings.receiptLogoPath,
       currencySymbol: settings.currencySymbol,
       invoicePrefix: settings.invoicePrefix,
       receiptPrefix: settings.receiptPrefix,
       thermalHeader: settings.thermalHeader,
       thermalFooter: settings.thermalFooter,
+      receiptThankYou: settings.receiptThankYou,
+      guaranteePolicy: settings.guaranteePolicy,
+      exchangePolicy: settings.exchangePolicy,
+      returnPolicy: settings.returnPolicy,
+      saleItemPolicy: settings.saleItemPolicy,
+      receiptNotes: settings.receiptNotes,
       barcodePrefix: settings.barcodePrefix,
       qrPrefix: settings.qrPrefix,
       instagram: settings.instagram,
@@ -151,6 +167,8 @@ function AdminSettings() {
           <Field label="Email" value={settings.email} onChange={(v) => setSettings({ ...settings, email: v })} />
           <Field label="Phone" value={settings.phone} onChange={(v) => setSettings({ ...settings, phone: v })} />
           <Field label="Address" value={settings.address} onChange={(v) => setSettings({ ...settings, address: v })} className="md:col-span-2" />
+          <Field label="Tax number (optional)" value={settings.taxNumber} onChange={(v) => setSettings({ ...settings, taxNumber: v })} />
+          <Field label="Receipt logo path (optional)" value={settings.receiptLogoPath} onChange={(v) => setSettings({ ...settings, receiptLogoPath: v })} />
         </div>
       </section>
 
@@ -164,6 +182,12 @@ function AdminSettings() {
           <Field label="QR prefix" value={settings.qrPrefix} onChange={(v) => setSettings({ ...settings, qrPrefix: v })} />
           <Field label="Thermal header" value={settings.thermalHeader} onChange={(v) => setSettings({ ...settings, thermalHeader: v })} className="md:col-span-2" textarea />
           <Field label="Thermal footer" value={settings.thermalFooter} onChange={(v) => setSettings({ ...settings, thermalFooter: v })} className="md:col-span-2" textarea />
+          <Field label="Receipt thank-you message" value={settings.receiptThankYou} onChange={(v) => setSettings({ ...settings, receiptThankYou: v })} className="md:col-span-2" />
+          <Field label="Guarantee policy" value={settings.guaranteePolicy} onChange={(v) => setSettings({ ...settings, guaranteePolicy: v })} className="md:col-span-2" textarea />
+          <Field label="Exchange policy" value={settings.exchangePolicy} onChange={(v) => setSettings({ ...settings, exchangePolicy: v })} className="md:col-span-2" textarea />
+          <Field label="Return policy" value={settings.returnPolicy} onChange={(v) => setSettings({ ...settings, returnPolicy: v })} className="md:col-span-2" textarea />
+          <Field label="Sale-item policy" value={settings.saleItemPolicy} onChange={(v) => setSettings({ ...settings, saleItemPolicy: v })} className="md:col-span-2" textarea />
+          <Field label="Additional receipt notes" value={settings.receiptNotes} onChange={(v) => setSettings({ ...settings, receiptNotes: v })} className="md:col-span-2" textarea />
           <Field label="Meta title" value={settings.metaTitle} onChange={(v) => setSettings({ ...settings, metaTitle: v })} className="md:col-span-2" />
           <Field label="Meta description" value={settings.metaDescription} onChange={(v) => setSettings({ ...settings, metaDescription: v })} className="md:col-span-2" textarea />
         </div>

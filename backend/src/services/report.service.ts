@@ -169,7 +169,10 @@ export const reportService = {
         onlineOrders: orders.length,
         onlineRevenue: orders.reduce((sum, order) => sum + Number(order.total), 0),
         posSales: posSales.length,
-        posRevenue: posSales.reduce((sum, sale) => sum + Number(sale.total), 0),
+        posRevenue: posSales.reduce(
+          (sum, sale) => sum + Number(sale.total) - sale.returns.reduce((returnSum, entry) => returnSum + Number(entry.amount), 0),
+          0,
+        ),
         posRefundAmount,
       },
       profit: {

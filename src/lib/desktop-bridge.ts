@@ -14,6 +14,8 @@ export type DesktopUpdateManifest = {
   windows: {
     installerUrl: string;
     manifestUrl: string;
+    sha256: string | null;
+    size: number | null;
   } | null;
 };
 
@@ -46,7 +48,11 @@ export type DesktopBridge = {
   getCachedCurrentUser: () => User | null;
   printReceipt: (payload: { sale: PosSale; settings: StorefrontSettings | null }) => Promise<void>;
   checkForUpdates: (payload: { deviceKey: string; currentVersion?: string | null; baseUrl?: string | null }) => Promise<DesktopUpdateManifest>;
-  installUpdate: (payload: { installerUrl: string }) => Promise<{ ok: true; installerPath: string }>;
+  installUpdate: (payload: {
+    installerUrl: string;
+    expectedSha256?: string | null;
+    expectedSize?: number | null;
+  }) => Promise<{ ok: true; installerPath: string }>;
   getDesktopContext: () => {
     appVersion: string;
     appName: string;

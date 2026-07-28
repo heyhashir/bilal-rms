@@ -173,6 +173,23 @@ export const catalogRepository = {
     client: CatalogClient,
     data: Prisma.ProductVariantUncheckedCreateInput,
   ) => client.productVariant.create({ data }),
+  updateProductVariant: (
+    client: CatalogClient,
+    id: string,
+    data: Prisma.ProductVariantUncheckedUpdateInput,
+  ) =>
+    client.productVariant.update({
+      where: { id },
+      data,
+    }),
+  archiveProductVariantsExcept: (client: CatalogClient, productId: string, retainedIds: string[]) =>
+    client.productVariant.updateMany({
+      where: {
+        productId,
+        ...(retainedIds.length > 0 ? { id: { notIn: retainedIds } } : {}),
+      },
+      data: { isActive: false },
+    }),
   updateProductCodes: (client: CatalogClient, productId: string, data: { barcode?: string | null; qrCode?: string | null }) =>
     client.product.update({
       where: { id: productId },

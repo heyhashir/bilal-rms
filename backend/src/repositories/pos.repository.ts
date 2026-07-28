@@ -10,6 +10,7 @@ export const posSaleInclude = {
   payments: true,
   returns: true,
   receipt: true,
+  voidedBy: true,
 } satisfies Prisma.PosSaleInclude;
 
 type PosSaleListParams = {
@@ -32,6 +33,7 @@ const posSaleWhere = (query?: string): Prisma.PosSaleWhereInput | undefined => {
       { customerPhone: { contains: query } },
       { customerEmail: { contains: query } },
       { receipt: { is: { receiptNumber: { contains: query } } } },
+      { receipt: { is: { invoiceNumber: { contains: query } } } },
     ],
   };
 };
@@ -82,6 +84,17 @@ export const posRepository = {
   findSaleByNumberOptional: (saleNumber: string) =>
     prisma.posSale.findUnique({
       where: { saleNumber },
+      include: posSaleInclude,
+    }),
+  findSaleByIdentifier: (identifier: string) =>
+    prisma.posSale.findFirst({
+      where: {
+        OR: [
+          { saleNumber: identifier },
+          { receipt: { is: { receiptNumber: identifier } } },
+          { receipt: { is: { invoiceNumber: identifier } } },
+        ],
+      },
       include: posSaleInclude,
     }),
   upsertRegisterDevice: (deviceKey: string, name: string) =>

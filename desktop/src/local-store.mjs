@@ -33,6 +33,7 @@ const buildReceiptFromPayload = ({ sale, employees, settings, cache }) => {
     const product = cachedProducts.find((entry) => entry.id === line.productId);
     const variant = product?.variants.find((entry) => entry.id === line.variantId);
     const unitPrice = line.unitPrice ?? variant?.priceOverride ?? product?.salePrice ?? product?.price ?? 0;
+    const retailPrice = variant?.priceOverride ?? product?.price ?? unitPrice;
     return {
       id: `${saleNumber}-${index}`,
       productId: line.productId,
@@ -50,12 +51,15 @@ const buildReceiptFromPayload = ({ sale, employees, settings, cache }) => {
       qty: line.qty,
       refundedQty: 0,
       unitPrice,
+      retailPrice,
       lineTotal: unitPrice * line.qty,
       commissionRate: null,
       commissionAmount: null,
     };
   });
   const subtotal = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const retailSubtotal = items.reduce((sum, item) => sum + item.retailPrice * item.qty, 0);
+  const paidAmount = sale.paidAmount ?? subtotal;
 
   return {
     id: saleNumber,
@@ -66,8 +70,11 @@ const buildReceiptFromPayload = ({ sale, employees, settings, cache }) => {
     customerPhone: sale.customerPhone ?? "",
     customerEmail: sale.customerEmail ?? "",
     subtotal,
+    retailSubtotal,
+    discountTotal: Math.max(0, retailSubtotal - subtotal),
     total: subtotal,
-    paidAmount: sale.paidAmount ?? subtotal,
+    paidAmount,
+    changeAmount: sale.paymentMethod === "cash" ? Math.max(0, paidAmount - subtotal) : 0,
     paymentMethod: sale.paymentMethod,
     notes: sale.notes ?? "",
     syncedStatus: "pending",
@@ -75,10 +82,42 @@ const buildReceiptFromPayload = ({ sale, employees, settings, cache }) => {
     finalizedAt: createdAt,
     deviceId: sale.deviceKey ?? "",
     deviceName: sale.deviceName ?? "Shop POS",
+    voidReason: "",
+    voidedAt: null,
+    voidedById: "",
+    voidedByName: "",
     receipt: {
       id: saleNumber,
       receiptNumber: `${settings?.receiptPrefix ?? "REC"}-${saleNumber}`,
       invoiceNumber: `${settings?.invoicePrefix ?? "BG"}-${saleNumber}`,
+      invoiceSequence: null,
+      documentSnapshot: settings
+        ? {
+            version: 1,
+            store: {
+              name: settings.name,
+              logoPrimaryText: settings.logoPrimaryText,
+              logoSecondaryText: settings.logoSecondaryText,
+              logoTertiaryText: settings.logoTertiaryText,
+              logoPath: settings.receiptLogoPath,
+              address: settings.address,
+              phone: settings.phone,
+              taxNumber: settings.taxNumber,
+              currencyCode: settings.currency,
+              currencySymbol: settings.currencySymbol,
+            },
+            receipt: {
+              header: settings.thermalHeader,
+              footer: settings.thermalFooter,
+              thankYou: settings.receiptThankYou,
+              guaranteePolicy: settings.guaranteePolicy,
+              exchangePolicy: settings.exchangePolicy,
+              returnPolicy: settings.returnPolicy,
+              saleItemPolicy: settings.saleItemPolicy,
+              notes: settings.receiptNotes,
+            },
+          }
+        : null,
       reprintCount: 0,
       lastPrintedAt: createdAt,
     },

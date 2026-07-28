@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
 import { inventoryRepository } from '../repositories/inventory.repository';
+import { ApiError } from '../types/ApiError';
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -8,7 +9,7 @@ type StockMutationInput = {
   productId: string;
   variantId?: string | null;
   delta: number;
-  reason: 'ORDER' | 'RETURN' | 'ADJUSTMENT' | 'RESTOCK' | 'POS_SALE' | 'POS_REFUND';
+  reason: 'ORDER' | 'RETURN' | 'ADJUSTMENT' | 'RESTOCK' | 'POS_SALE' | 'POS_REFUND' | 'POS_VOID';
   source?: 'ONLINE' | 'POS';
   reference?: string | null;
   orderId?: string | null;
@@ -20,9 +21,15 @@ type StockMutationInput = {
 export const inventoryService = {
   async applyStockMutation(db: DbClient, input: StockMutationInput): Promise<void> {
     if (input.variantId) {
-      await inventoryRepository.adjustVariantStock(db, input.variantId, input.delta);
+      const result = await inventoryRepository.adjustVariantStock(db, input.variantId, input.delta);
+      if (result.count !== 1) {
+        throw new ApiError(409, 'Variant stock changed or is insufficient; refresh and try again');
+      }
     } else {
-      await inventoryRepository.adjustProductStock(db, input.productId, input.delta);
+      const result = await inventoryRepository.adjustProductStock(db, input.productId, input.delta);
+      if (result.count !== 1) {
+        throw new ApiError(409, 'Product stock changed or is insufficient; refresh and try again');
+      }
     }
 
     await inventoryRepository.createMovement(db, input);
@@ -90,6 +97,18 @@ export const inventoryService = {
       posReturnId: input.posReturnId,
       reference: input.reference,
       note: input.note ?? input.reference,
+    });
+  },
+  recordPosVoid(db: DbClient, input: { productId: string; variantId?: string | null; qty: number; posSaleId: string; reference: string; note: string }) {
+    return inventoryService.applyStockMutation(db, {
+      productId: input.productId,
+      variantId: input.variantId ?? null,
+      delta: input.qty,
+      reason: 'POS_VOID',
+      source: 'POS',
+      posSaleId: input.posSaleId,
+      reference: input.reference,
+      note: input.note,
     });
   },
   getInventorySnapshot() {

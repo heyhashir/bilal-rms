@@ -38,7 +38,10 @@ export const reportRepository = {
   },
   listPosSales(range: DateRange) {
     return prisma.posSale.findMany({
-      where: { createdAt: toCreatedAtRange(range) },
+      where: {
+        createdAt: toCreatedAtRange(range),
+        status: { in: ['FINALIZED', 'REFUNDED'] },
+      },
       include: {
         items: {
           include: {

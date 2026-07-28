@@ -50,6 +50,7 @@ type PosSaleWithRelations = PosSale & {
   payments: PosPayment[];
   returns: PosReturn[];
   receipt: Receipt | null;
+  voidedBy: AdminAccount | null;
 };
 
 const decimalToNumber = (value: Prisma.Decimal | null | undefined): number | undefined => {
@@ -215,12 +216,20 @@ export const serializeSettings = (settings: StoreSetting) => ({
   email: settings.email,
   phone: settings.phone,
   address: settings.address,
+  taxNumber: settings.taxNumber ?? '',
+  receiptLogoPath: settings.receiptLogoPath ?? '',
   currency: settings.currencyCode,
   currencySymbol: settings.currencySymbol,
   invoicePrefix: settings.invoicePrefix,
   receiptPrefix: settings.receiptPrefix,
   thermalHeader: settings.thermalHeader,
   thermalFooter: settings.thermalFooter,
+  receiptThankYou: settings.receiptThankYou,
+  guaranteePolicy: settings.guaranteePolicy,
+  exchangePolicy: settings.exchangePolicy,
+  returnPolicy: settings.returnPolicy,
+  saleItemPolicy: settings.saleItemPolicy,
+  receiptNotes: settings.receiptNotes,
   barcodePrefix: settings.barcodePrefix,
   qrPrefix: settings.qrPrefix,
   instagram: settings.instagram ?? '',
@@ -236,11 +245,12 @@ export const serializeProduct = (product: ProductWithRelations) => {
   const colors = normalizeColors(product.colorsJson);
   const sizes = normalizeStrings(product.sizesJson);
   const tags = normalizeStrings(product.tagsJson);
-  const variantColors = product.variants.map((variant) => ({
+  const activeVariants = product.variants.filter((variant) => variant.isActive);
+  const variantColors = activeVariants.map((variant) => ({
     name: variant.colorName,
     hex: variant.colorHex,
   }));
-  const variantSizes = product.variants.map((variant) => variant.size);
+  const variantSizes = activeVariants.map((variant) => variant.size);
 
   return {
     id: product.id,
@@ -263,7 +273,7 @@ export const serializeProduct = (product: ProductWithRelations) => {
       new Map([...colors, ...variantColors].map((color) => [`${color.name}:${color.hex}`, color])).values(),
     ),
     stock: product.stockMode === 'VARIANT'
-      ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+      ? activeVariants.reduce((sum, variant) => sum + variant.stock, 0)
       : product.stock,
     stockMode: product.stockMode.toLowerCase(),
     sizeChart: product.sizeChart,
@@ -366,8 +376,11 @@ export const serializePosSale = (sale: PosSaleWithRelations) => ({
   customerPhone: sale.customerPhone ?? '',
   customerEmail: sale.customerEmail ?? '',
   subtotal: decimalToNumber(sale.subtotal) ?? 0,
+  retailSubtotal: decimalToNumber(sale.retailSubtotal) ?? decimalToNumber(sale.subtotal) ?? 0,
+  discountTotal: decimalToNumber(sale.discountTotal) ?? 0,
   total: decimalToNumber(sale.total) ?? 0,
   paidAmount: decimalToNumber(sale.paidAmount) ?? 0,
+  changeAmount: decimalToNumber(sale.changeAmount) ?? 0,
   paymentMethod: sale.paymentMethod?.toLowerCase() ?? '',
   notes: sale.notes ?? '',
   syncedStatus: sale.syncedStatus.toLowerCase(),
@@ -375,11 +388,17 @@ export const serializePosSale = (sale: PosSaleWithRelations) => ({
   finalizedAt: sale.finalizedAt?.getTime() ?? null,
   deviceId: sale.deviceId ?? '',
   deviceName: sale.deviceName ?? '',
+  voidReason: sale.voidReason ?? '',
+  voidedAt: sale.voidedAt?.getTime() ?? null,
+  voidedById: sale.voidedById ?? '',
+  voidedByName: sale.voidedBy?.name ?? '',
   receipt: sale.receipt
     ? {
         id: sale.receipt.id,
         receiptNumber: sale.receipt.receiptNumber,
         invoiceNumber: sale.receipt.invoiceNumber,
+        invoiceSequence: sale.receipt.invoiceSequence,
+        documentSnapshot: sale.receipt.documentSnapshot,
         reprintCount: sale.receipt.reprintCount,
         lastPrintedAt: sale.receipt.lastPrintedAt?.getTime() ?? null,
       }
@@ -401,6 +420,7 @@ export const serializePosSale = (sale: PosSaleWithRelations) => ({
     qty: item.qty,
     refundedQty: item.refundedQty,
     unitPrice: decimalToNumber(item.unitPrice) ?? 0,
+    retailPrice: decimalToNumber(item.retailPrice) || decimalToNumber(item.unitPrice) || 0,
     lineTotal: decimalToNumber(item.lineTotal) ?? 0,
     commissionRate: decimalToNumber(item.commissionRate) ?? null,
     commissionAmount: decimalToNumber(item.commissionAmount) ?? null,

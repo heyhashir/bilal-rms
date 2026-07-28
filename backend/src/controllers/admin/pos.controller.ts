@@ -5,6 +5,9 @@ import { posService } from '../../services/pos.service';
 import { logAdminAudit } from '../../utils/adminAudit';
 import { buildListMeta, parseListQuery } from '../../utils/list-query';
 import { toCsv } from '../../utils/csv';
+import { settingsRepository } from '../../repositories/settings.repository';
+import { buildPosReceiptPdf } from '../../services/receipt-pdf.service';
+import { ApiError } from '../../types/ApiError';
 
 export const listPosSales = async (req: Request, res: Response) => {
   const query = parseListQuery(req, { defaultSort: 'createdAt', defaultPageSize: 20 });
@@ -20,6 +23,11 @@ export const listPosSales = async (req: Request, res: Response) => {
 export const getPosSale = async (req: Request, res: Response) => {
   const sale = await posService.getSale(req.params.saleNumber);
   res.status(200).json(ApiResponse.success('POS sale loaded', { sale: serializePosSale(sale) }));
+};
+
+export const findPosSale = async (req: Request, res: Response) => {
+  const sale = await posService.findSale(String(req.query.identifier ?? ''));
+  res.status(200).json(ApiResponse.success('Invoice loaded', { sale: serializePosSale(sale) }));
 };
 
 export const createPosSale = async (req: Request, res: Response) => {
@@ -56,9 +64,43 @@ export const refundPosSale = async (req: Request, res: Response) => {
   res.status(200).json(ApiResponse.success('POS refund processed', { sale: serializePosSale(sale) }));
 };
 
+export const voidPosSale = async (req: Request, res: Response) => {
+  const sale = await posService.voidSale({
+    saleNumber: req.params.saleNumber,
+    reason: req.body.reason,
+    adminAccountId: req.currentUser!.id,
+  });
+  logAdminAudit(req, {
+    action: 'pos-sale.voided',
+    targetType: 'pos-sale',
+    targetId: sale.saleNumber,
+    details: {
+      reason: req.body.reason,
+      total: Number(sale.total),
+    },
+  });
+  res.status(200).json(ApiResponse.success('Invoice voided and financial effects reversed', { sale: serializePosSale(sale) }));
+};
+
 export const markPosSaleReprint = async (req: Request, res: Response) => {
   const sale = await posService.recordReceiptReprint(req.params.saleNumber);
   res.status(200).json(ApiResponse.success('Receipt reprint recorded', { sale: serializePosSale(sale) }));
+};
+
+export const downloadPosSalePdf = async (req: Request, res: Response) => {
+  const [sale, settings] = await Promise.all([
+    posService.getSale(req.params.saleNumber),
+    settingsRepository.getSettings(),
+  ]);
+  if (!sale.receipt) {
+    throw new ApiError(404, 'Receipt not found for this sale');
+  }
+  const pdf = await buildPosReceiptPdf(sale, settings);
+  const filename = `receipt-${sale.receipt.invoiceNumber.replace(/[^a-z0-9-]/gi, '')}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Length', String(pdf.length));
+  res.status(200).send(pdf);
 };
 
 export const exportPosSales = async (req: Request, res: Response) => {

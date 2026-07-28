@@ -248,11 +248,13 @@ export function ActionButton({
   onClick,
   variant = "primary",
   type = "button",
+  disabled = false,
 }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: "primary" | "ghost" | "danger";
   type?: "button" | "submit";
+  disabled?: boolean;
 }) {
   const base = "inline-flex items-center gap-2 px-4 py-2.5 text-xs uppercase tracking-widest";
   const cls =
@@ -262,7 +264,7 @@ export function ActionButton({
         ? `${base} bg-sale text-primary-foreground`
         : `${base} border border-border hover:bg-secondary`;
   return (
-    <button type={type} onClick={onClick} className={cls}>
+    <button type={type} onClick={onClick} disabled={disabled} className={`${cls} disabled:cursor-not-allowed disabled:opacity-50`}>
       {children}
     </button>
   );

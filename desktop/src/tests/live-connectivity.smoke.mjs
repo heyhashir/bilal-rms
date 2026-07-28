@@ -116,9 +116,10 @@ try {
     await window.getByText("Desktop updates", { exact: true }).waitFor({ timeout: 15_000 });
     await window.getByRole("button", { name: "Check now" }).click();
     await window.getByRole("button", { name: "Check now" }).waitFor();
+    const expectedLatestVersion = process.env.BILAL_RMS_EXPECTED_LATEST_VERSION?.trim() || context.appVersion;
     await window.waitForFunction(
       (version) => document.body.innerText.includes(`Latest version: ${version}`),
-      context.appVersion,
+      expectedLatestVersion,
     );
 
     await window.waitForFunction(

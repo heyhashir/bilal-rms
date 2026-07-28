@@ -12,6 +12,7 @@ import {
   listBrands,
   listCategories,
   listProducts,
+  listBarcodeLabels,
   reprintBarcodes,
   saveBrand,
   saveCategory,
@@ -104,6 +105,17 @@ router.post(
       variantId: z.string().optional().nullable(),
     }).parse(req.body);
     await reprintBarcodes(req, res);
+  }),
+);
+
+router.post(
+  '/barcodes/labels',
+  asyncHandler(async (req, res) => {
+    req.body = z.object({
+      productId: z.string().min(1),
+      variantId: z.string().optional().nullable(),
+    }).parse(req.body);
+    await listBarcodeLabels(req, res);
   }),
 );
 

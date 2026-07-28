@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/api";
 import { adminInventoryApi } from "@/lib/admin-inventory-api";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, Pagination, SelectField, StatCard, Tabs, Toolbar } from "@/components/admin/primitives";
+import { adminCatalogApi } from "@/lib/admin-catalog-api";
+import type { Product } from "@/lib/catalog-types";
+import { BarcodeStickerModal } from "@/components/admin/BarcodeStickerModal";
 
 export const Route = createFileRoute("/admin/inventory")({
   component: AdminInventory,
@@ -24,10 +27,15 @@ function AdminInventory() {
   const [query, setQuery] = useState("");
   const [ledgerPage, setLedgerPage] = useState(1);
   const [adjustment, setAdjustment] = useState<{ productId: string; variantId?: string; delta: number; note: string } | null>(null);
+  const [printProduct, setPrintProduct] = useState<Product | null>(null);
 
   const { data: products = [] } = useQuery({
     queryKey: queryKeys.admin.inventorySnapshot,
     queryFn: async () => (await adminInventoryApi.inventorySnapshot()).products,
+  });
+  const { data: catalogProducts = [] } = useQuery({
+    queryKey: queryKeys.admin.products,
+    queryFn: async () => (await adminCatalogApi.products()).products,
   });
   const { data: ledgerResponse } = useQuery({
     queryKey: queryKeys.admin.inventoryLedgerList({ page: ledgerPage, query }),
@@ -177,7 +185,18 @@ function AdminInventory() {
                           .join(", ")}
                   </td>
                   <td className="p-3 text-right">
-                    <button onClick={() => setAdjustment({ productId: product.id, variantId: product.variants[0]?.id, delta: 0, note: "" })} className="text-xs uppercase tracking-widest underline">Adjust</button>
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => {
+                          const catalogProduct = catalogProducts.find((entry) => entry.id === product.id);
+                          if (catalogProduct) setPrintProduct(catalogProduct);
+                        }}
+                        className="inline-flex items-center gap-1 text-xs uppercase tracking-widest underline"
+                      >
+                        <Printer className="h-3 w-3" /> Labels
+                      </button>
+                      <button onClick={() => setAdjustment({ productId: product.id, variantId: product.variants[0]?.id, delta: 0, note: "" })} className="text-xs uppercase tracking-widest underline">Adjust</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -239,6 +258,7 @@ function AdminInventory() {
           </div>
         </Modal>
       )}
+      {printProduct && <BarcodeStickerModal product={printProduct} onClose={() => setPrintProduct(null)} />}
     </div>
   );
 }

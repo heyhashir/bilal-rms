@@ -18,6 +18,22 @@ const computeCursor = (input: {
     ].reduce((max, value) => Math.max(max, value), 0),
   );
 
+const readDesktopReleaseMetadata = () => {
+  const metadataPath = path.join(env.DESKTOP_RELEASE_DIR, 'windows', 'latest.json');
+  try {
+    return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as {
+      version?: string;
+      installerFile?: string;
+      sha256?: string;
+      size?: number;
+      notes?: string;
+      publishedAt?: string;
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const syncService = {
   registerDevice(deviceKey: string, name: string, notes: string) {
     return syncRepository.registerDevice(deviceKey, name, notes);
@@ -122,7 +138,11 @@ export const syncService = {
     const latestVersion = newestVersion(env.DESKTOP_APP_VERSION, env.DESKTOP_BUNDLED_VERSION);
     const installerFileName = `BilalRMS-Setup-${latestVersion}.exe`;
     const installerPath = path.join(env.DESKTOP_RELEASE_DIR, 'windows', installerFileName);
-    const hasPublishedBuild = normalizedBaseUrl.length > 0 && latestVersion.length > 0 && fs.existsSync(installerPath);
+    const releaseMetadata = readDesktopReleaseMetadata();
+    const metadataMatches =
+      releaseMetadata?.version === latestVersion && releaseMetadata.installerFile === installerFileName;
+    const hasPublishedBuild =
+      normalizedBaseUrl.length > 0 && latestVersion.length > 0 && metadataMatches && fs.existsSync(installerPath);
     const available = hasPublishedBuild && (!requestedVersion || compareVersions(latestVersion, requestedVersion) > 0);
 
     if (deviceKey) {
@@ -140,12 +160,14 @@ export const syncService = {
       latestVersion,
       available,
       mandatory: false,
-      notes: env.DESKTOP_UPDATE_NOTES?.trim() || '',
-      publishedAt: Date.now(),
+      notes: releaseMetadata?.notes?.trim() || env.DESKTOP_UPDATE_NOTES?.trim() || '',
+      publishedAt: releaseMetadata?.publishedAt ? Date.parse(releaseMetadata.publishedAt) : Date.now(),
       windows: hasPublishedBuild
         ? {
             installerUrl: `${normalizedBaseUrl}/desktop/windows/${installerFileName}`,
             manifestUrl: `${normalizedBaseUrl}/api/v1/sync/updates/${encodeURIComponent(deviceKey)}`,
+            sha256: releaseMetadata?.sha256 ?? null,
+            size: releaseMetadata?.size ?? null,
           }
         : null,
     };

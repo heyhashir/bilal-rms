@@ -41,7 +41,7 @@ export const dashboardService = {
       returns,
       employees,
       posSales,
-      posRevenueAggregate,
+      posRevenueRows,
       pendingCommissionAggregate,
       recentOrders,
       recentPosSales,
@@ -64,7 +64,7 @@ export const dashboardService = {
       .map((product) => {
         const totalStock =
           product.stockMode === 'VARIANT'
-            ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+            ? product.variants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
             : product.stock;
 
         return {
@@ -109,7 +109,10 @@ export const dashboardService = {
       pendingOrders,
       lowStock: lowStockItems.length,
       returns,
-      posRevenue: Number(posRevenueAggregate._sum.total ?? 0),
+      posRevenue: posRevenueRows.reduce(
+        (sum, sale) => sum + Number(sale.total) - sale.returns.reduce((returnSum, entry) => returnSum + Number(entry.amount), 0),
+        0,
+      ),
       posSales,
       pendingCommission: Number(pendingCommissionAggregate._sum.amount ?? 0),
       employees,

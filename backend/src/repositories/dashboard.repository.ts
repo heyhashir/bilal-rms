@@ -27,6 +27,7 @@ export const dashboardRepository = {
         variants: {
           select: {
             stock: true,
+            isActive: true,
           },
         },
       },
@@ -39,23 +40,26 @@ export const dashboardRepository = {
     return prisma.employee.count();
   },
   countPosSales() {
-    return prisma.posSale.count();
+    return prisma.posSale.count({
+      where: { status: { in: ['FINALIZED', 'REFUNDED'] } },
+    });
   },
   getPosRevenueAggregate() {
-    return prisma.posSale.aggregate({
+    return prisma.posSale.findMany({
       where: {
-        status: {
-          not: 'DRAFT',
-        },
+        status: { in: ['FINALIZED', 'REFUNDED'] },
       },
-      _sum: {
+      select: {
         total: true,
+        returns: {
+          select: { amount: true },
+        },
       },
     });
   },
   getPendingCommissionAggregate() {
     return prisma.commissionEntry.aggregate({
-      where: { status: 'EARNED' },
+      where: { status: { in: ['EARNED', 'REVERSED'] } },
       _sum: {
         amount: true,
       },
@@ -77,9 +81,7 @@ export const dashboardRepository = {
   listRecentPosSales() {
     return prisma.posSale.findMany({
       where: {
-        status: {
-          not: 'DRAFT',
-        },
+        status: { in: ['FINALIZED', 'REFUNDED'] },
       },
       orderBy: { createdAt: 'desc' },
       take: 8,
@@ -101,7 +103,7 @@ export const dashboardRepository = {
         name: true,
         commissionRate: true,
         commissionEntries: {
-          where: { status: 'EARNED' },
+          where: { status: { in: ['EARNED', 'REVERSED'] } },
           select: {
             amount: true,
           },

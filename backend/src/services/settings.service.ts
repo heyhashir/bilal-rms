@@ -20,11 +20,19 @@ export const settingsService = {
     email: string;
     phone: string;
     address: string;
+    taxNumber?: string;
+    receiptLogoPath?: string;
     currencySymbol: string;
     invoicePrefix: string;
     receiptPrefix: string;
     thermalHeader?: string;
     thermalFooter?: string;
+    receiptThankYou?: string;
+    guaranteePolicy?: string;
+    exchangePolicy?: string;
+    returnPolicy?: string;
+    saleItemPolicy?: string;
+    receiptNotes?: string;
     barcodePrefix: string;
     qrPrefix: string;
     instagram?: string;
@@ -45,11 +53,19 @@ export const settingsService = {
         email: input.email,
         phone: input.phone,
         address: input.address,
+        taxNumber: input.taxNumber || null,
+        receiptLogoPath: input.receiptLogoPath || null,
         currencySymbol: input.currencySymbol,
         invoicePrefix: input.invoicePrefix,
         receiptPrefix: input.receiptPrefix,
         thermalHeader: input.thermalHeader || '',
         thermalFooter: input.thermalFooter || '',
+        receiptThankYou: input.receiptThankYou ?? existing.receiptThankYou,
+        guaranteePolicy: input.guaranteePolicy ?? existing.guaranteePolicy,
+        exchangePolicy: input.exchangePolicy ?? existing.exchangePolicy,
+        returnPolicy: input.returnPolicy ?? existing.returnPolicy,
+        saleItemPolicy: input.saleItemPolicy ?? existing.saleItemPolicy,
+        receiptNotes: input.receiptNotes ?? existing.receiptNotes,
         barcodePrefix: input.barcodePrefix,
         qrPrefix: input.qrPrefix,
         instagram: input.instagram || null,

@@ -65,6 +65,8 @@ export const syncApi = {
         windows: {
           installerUrl: string;
           manifestUrl: string;
+          sha256: string | null;
+          size: number | null;
         } | null;
       };
     }>(`/sync/updates/${encodeURIComponent(deviceKey)}${currentVersion ? `?currentVersion=${encodeURIComponent(currentVersion)}` : ""}`),

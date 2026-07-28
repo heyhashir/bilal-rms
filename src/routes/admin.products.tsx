@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Pencil, Plus, Printer, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import { getErrorMessage } from "@/lib/api";
@@ -10,6 +10,7 @@ import { queryKeys } from "@/lib/query-keys";
 import type { Brand, Category, Product } from "@/lib/catalog-types";
 import { ActionButton, Field, Modal, PageHeader, SelectField } from "@/components/admin/primitives";
 import { formatPrice } from "@/lib/format";
+import { BarcodeStickerModal } from "@/components/admin/BarcodeStickerModal";
 
 export const Route = createFileRoute("/admin/products")({
   component: AdminProducts,
@@ -40,7 +41,20 @@ type Draft = {
   barcode: string;
   qrCode: string;
   supplierBarcode: string;
-  variantsJson: string;
+  variants: Array<{
+    id?: string;
+    sku: string;
+    size: string;
+    colorName: string;
+    colorHex: string;
+    stock: number;
+    priceOverride?: number | null;
+    costPrice?: number | null;
+    isActive: boolean;
+    barcode?: string;
+    qrCode?: string;
+    supplierBarcode?: string;
+  }>;
 };
 
 const makeDraft = (product?: Product): Draft => ({
@@ -68,7 +82,7 @@ const makeDraft = (product?: Product): Draft => ({
   barcode: product?.barcode ?? "",
   qrCode: product?.qrCode ?? "",
   supplierBarcode: product?.supplierBarcode ?? "",
-  variantsJson: product ? JSON.stringify(product.variants, null, 2) : "[]",
+  variants: product?.variants.map((variant) => ({ ...variant })) ?? [],
 });
 
 const invalidateCatalogAfterMutation = async () => {
@@ -82,6 +96,7 @@ const invalidateCatalogAfterMutation = async () => {
 
 function AdminProducts() {
   const [editing, setEditing] = useState<Draft | null>(null);
+  const [printing, setPrinting] = useState<Product | null>(null);
   const { data: products = [] } = useQuery({
     queryKey: queryKeys.admin.products,
     queryFn: async () => (await adminCatalogApi.products()).products,
@@ -165,6 +180,13 @@ function AdminProducts() {
                 <td className="p-3 uppercase">{product.stockMode ?? "simple"}</td>
                 <td className="p-3">
                   <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => setPrinting(product)}
+                      title="Print barcode stickers"
+                      className="p-2 hover:bg-secondary"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                    </button>
                     <button onClick={() => setEditing(makeDraft(product))} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
                     {product.isActive !== false ? (
                       <button
@@ -207,9 +229,13 @@ function AdminProducts() {
           categories={categoryOptions}
           brands={brands}
           onClose={() => setEditing(null)}
-          onSave={() => setEditing(null)}
+          onSave={(product) => {
+            setEditing(null);
+            setPrinting(product);
+          }}
         />
       )}
+      {printing && <BarcodeStickerModal product={printing} onClose={() => setPrinting(null)} />}
     </div>
   );
 }
@@ -225,7 +251,7 @@ function ProductModal({
   categories: Category[];
   brands: Brand[];
   onClose: () => void;
-  onSave: () => void;
+  onSave: (product: Product) => void;
 }) {
   const [form, setForm] = useState(draft);
   // Keep generated slugs in sync with a new product name until an operator edits it.
@@ -235,6 +261,52 @@ function ProductModal({
   const [colorName, setColorName] = useState("");
   const [colorHex, setColorHex] = useState("#111111");
   const isAccessory = form.sizeChart === "none" || inferSizeChart(form.categorySlug) === "none";
+  const matrixSizes = sizeText.split(",").map((value) => value.trim()).filter(Boolean);
+
+  const generateVariantMatrix = () => {
+    const sizes = isAccessory ? ["Standard"] : matrixSizes;
+    if (sizes.length === 0 || form.colors.length === 0) {
+      toast.error("Add at least one size and one color before generating the matrix");
+      return;
+    }
+
+    const existingByKey = new Map(
+      form.variants.map((variant) => [`${variant.size.trim().toLowerCase()}::${variant.colorName.trim().toLowerCase()}`, variant]),
+    );
+    const variants = sizes.flatMap((size) =>
+      form.colors.map((color) => {
+        const existing = existingByKey.get(`${size.toLowerCase()}::${color.name.trim().toLowerCase()}`);
+        if (existing) {
+          return { ...existing, size, colorName: color.name, colorHex: color.hex, isActive: true };
+        }
+
+        const sku = makeVariantSku(form.slug || form.name, color.name, size);
+        return {
+          sku,
+          size,
+          colorName: color.name,
+          colorHex: color.hex,
+          stock: 0,
+          priceOverride: null,
+          costPrice: null,
+          isActive: true,
+          barcode: sku,
+          qrCode: `QR-${sku}`,
+          supplierBarcode: "",
+        };
+      }),
+    );
+    setForm((current) => ({ ...current, variants }));
+  };
+
+  const updateVariantStock = (size: string, color: string, stock: number) => {
+    setForm((current) => ({
+      ...current,
+      variants: current.variants.map((variant) =>
+        variant.size === size && variant.colorName === color ? { ...variant, stock: Math.max(0, stock) } : variant,
+      ),
+    }));
+  };
 
   const uploadFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -254,7 +326,7 @@ function ProductModal({
 
   const submit = async () => {
     try {
-      await adminCatalogApi.saveProduct({
+      const result = await adminCatalogApi.saveProduct({
         slug: form.slug,
         name: form.name,
         description: form.description,
@@ -278,11 +350,11 @@ function ProductModal({
         supplierBarcode: form.supplierBarcode,
         video: form.video,
         images: form.images,
-        variants: JSON.parse(form.variantsJson || "[]"),
+        variants: form.stockMode === "variant" ? form.variants : [],
       }, form.id);
       toast.success(form.id ? "Product updated" : "Product created");
       await invalidateCatalogAfterMutation();
-      onSave();
+      onSave(result.product);
     } catch (error) {
       toast.error(getErrorMessage(error, "Unable to save product"));
     }
@@ -356,8 +428,20 @@ function ProductModal({
           </ActionButton>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
-          <SelectField label="Stock mode" value={form.stockMode} onChange={(v) => setForm({ ...form, stockMode: v as Draft["stockMode"] })} options={[{ value: "simple", label: "Simple" }, { value: "variant", label: "Variant" }]} />
-          <Field label="Stock" type="number" value={String(form.stock)} onChange={(v) => setForm({ ...form, stock: Number(v) })} />
+          <SelectField
+            label="Stock mode"
+            value={form.stockMode}
+            onChange={(v) => setForm({ ...form, stockMode: v as Draft["stockMode"] })}
+            options={[{ value: "simple", label: "Simple" }, { value: "variant", label: "Variant" }]}
+          />
+          {form.stockMode === "simple" ? (
+            <Field label="Stock" type="number" value={String(form.stock)} onChange={(v) => setForm({ ...form, stock: Number(v) })} />
+          ) : (
+            <div className="border border-border bg-secondary px-3 py-2 text-sm">
+              <div className="text-xs uppercase tracking-widest text-muted-foreground">Variant stock</div>
+              <div className="mt-1 font-semibold">{form.variants.reduce((sum, variant) => sum + variant.stock, 0)} units</div>
+            </div>
+          )}
           <SelectField
             label="Size chart"
             value={form.sizeChart}
@@ -371,6 +455,53 @@ function ProductModal({
             ]}
           />
         </div>
+        {form.stockMode === "variant" && (
+          <section className="space-y-4 border border-border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Variant configuration</div>
+                <div className="mt-1 text-sm text-muted-foreground">Sizes are rows, colors are columns, and each cell is independent stock.</div>
+              </div>
+              <ActionButton variant="ghost" onClick={generateVariantMatrix}>Generate matrix</ActionButton>
+            </div>
+            {form.variants.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="min-w-[560px] w-full text-sm">
+                  <thead className="bg-secondary text-xs uppercase tracking-widest">
+                    <tr>
+                      <th className="p-3 text-left">Size</th>
+                      {form.colors.map((color) => <th key={color.name} className="p-3 text-left">{color.name}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(isAccessory ? ["Standard"] : matrixSizes).map((size) => (
+                      <tr key={size} className="border-t border-border">
+                        <th className="p-3 text-left font-medium">{size}</th>
+                        {form.colors.map((color) => {
+                          const variant = form.variants.find((entry) => entry.size === size && entry.colorName === color.name);
+                          return (
+                            <td key={`${size}-${color.name}`} className="p-2">
+                              <input
+                                type="number"
+                                min={0}
+                                value={variant?.stock ?? 0}
+                                disabled={!variant}
+                                onChange={(event) => updateVariantStock(size, color.name, Number(event.target.value) || 0)}
+                                className="w-24 border border-border bg-background px-3 py-2"
+                                aria-label={`${size} ${color.name} stock`}
+                              />
+                              {variant && <div className="mt-1 max-w-24 truncate font-mono text-[9px] text-muted-foreground">{variant.sku}</div>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
         {!isAccessory && <Field label="Sizes (comma separated)" value={sizeText} onChange={setSizeText} />}
         <Field label="Tags (comma separated)" value={tagText} onChange={setTagText} />
         <div>
@@ -431,13 +562,19 @@ function ProductModal({
         <label className="flex items-center gap-2 text-xs uppercase tracking-widest">
           <input type="checkbox" checked={form.trending} onChange={(e) => setForm({ ...form, trending: e.target.checked })} /> Trending
         </label>
-        <Field label="Variants JSON" value={form.variantsJson} onChange={(v) => setForm({ ...form, variantsJson: v })} textarea />
       </div>
     </Modal>
   );
 }
 
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+const makeVariantSku = (productValue: string, color: string, size: string) => {
+  const base = slugify(productValue).replaceAll("-", "").toUpperCase().slice(0, 10) || "PRODUCT";
+  const colorCode = color.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 3) || "CLR";
+  const sizeCode = size.replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 5) || "STD";
+  return `${base}-${colorCode}-${sizeCode}`;
+};
 
 const inferSizeChart = (categorySlug: string): "apparel" | "bottoms" | "kids" | "none" => {
   const slug = categorySlug.toLowerCase();

@@ -6,6 +6,7 @@ export const colorSchema = z.object({
 });
 
 export const variantSchema = z.object({
+  id: z.string().optional().or(z.literal('')),
   sku: z.string().min(1),
   size: z.string().min(1),
   colorName: z.string().min(1),

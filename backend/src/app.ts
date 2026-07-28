@@ -130,6 +130,14 @@ export const createApp = (): Application => {
       message: 'Too many uploads, please try again later.',
     }),
   );
+  app.use(
+    `${API_PREFIX}/admin/desktop-releases`,
+    createLimiter({
+      windowMs: 15 * 60 * 1000,
+      limit: 120,
+      message: 'Too many desktop release uploads, please try again later.',
+    }),
+  );
   app.use(`${API_PREFIX}/admin`, adminRoutes);
   app.use(
     `${API_PREFIX}/sync`,

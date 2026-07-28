@@ -71,6 +71,7 @@ enum InventoryReason {
   MANUAL
   POS_SALE
   POS_REFUND
+  POS_VOID
 }
 
 enum SaleSource {
@@ -151,6 +152,7 @@ model AdminAccount {
   lastLoginAt  DateTime?
   sessions     AdminSession[]
   ledgerEntries LedgerEntry[]
+  voidedPosSales PosSale[]       @relation("PosSaleVoidedBy")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -505,8 +507,11 @@ model PosSale {
   customerPhone String?
   customerEmail String?
   subtotal      Decimal           @db.Decimal(10, 2)
+  retailSubtotal Decimal          @default(0) @db.Decimal(10, 2)
+  discountTotal Decimal           @default(0) @db.Decimal(10, 2)
   total         Decimal           @db.Decimal(10, 2)
   paidAmount    Decimal           @db.Decimal(10, 2)
+  changeAmount  Decimal           @default(0) @db.Decimal(10, 2)
   paymentMethod PosPaymentMethod?
   notes         String?           @db.Text
   syncedStatus  SyncStatus        @default(PENDING)
@@ -514,6 +519,9 @@ model PosSale {
   finalizedAt   DateTime?
   deviceId      String?
   deviceName    String?
+  voidReason    String?           @db.Text
+  voidedAt      DateTime?
+  voidedById    String?
   items         PosSaleItem[]
   payments      PosPayment[]
   returns       PosReturn[]
@@ -522,10 +530,12 @@ model PosSale {
   inventory     InventoryMovement[]
   ledgerEntries LedgerEntry[]
   device        RegisterDevice?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  voidedBy      AdminAccount?     @relation("PosSaleVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
   @@index([deviceId])
+  @@index([voidedById])
   @@map("pos_sales")
 }
 
@@ -544,6 +554,7 @@ model PosSaleItem {
   size             String?
   colorName        String?
   unitPrice        Decimal         @db.Decimal(10, 2)
+  retailPrice      Decimal         @default(0) @db.Decimal(10, 2)
   unitCost         Decimal?        @db.Decimal(10, 2)
   qty              Int
   refundedQty      Int             @default(0)
@@ -627,6 +638,8 @@ model Receipt {
   saleId         String    @unique
   receiptNumber  String    @unique
   invoiceNumber  String    @unique
+  invoiceSequence Int?     @unique
+  documentSnapshot Json?
   reprintCount   Int       @default(0)
   lastPrintedAt  DateTime?
   sale           PosSale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
@@ -688,12 +701,20 @@ model StoreSetting {
   email           String
   phone           String
   address         String
+  taxNumber       String?
+  receiptLogoPath String?
   currencyCode    String   @default("PKR")
   currencySymbol  String   @default("Rs.")
   invoicePrefix   String   @default("BG")
   receiptPrefix   String   @default("REC")
   thermalHeader   String   @default("")
   thermalFooter   String   @default("")
+  receiptThankYou String   @default("Thank you for shopping with us!")
+  guaranteePolicy String   @default("Due items will be replaced within 2 days.") @db.Text
+  exchangePolicy  String   @default("") @db.Text
+  returnPolicy    String   @default("") @db.Text
+  saleItemPolicy  String   @default("No Return - No Exchange on Sale Items") @db.Text
+  receiptNotes    String   @default("Please keep this receipt for exchange or warranty.") @db.Text
   barcodePrefix   String   @default("BG")
   qrPrefix        String   @default("BGQR")
   metaTitle       String
@@ -705,6 +726,14 @@ model StoreSetting {
   updatedAt       DateTime @updatedAt
 
   @@map("store_settings")
+}
+
+model DocumentSequence {
+  id        String   @id
+  nextValue Int      @default(1)
+  updatedAt DateTime @updatedAt
+
+  @@map("document_sequences")
 }
 
 model Vendor {

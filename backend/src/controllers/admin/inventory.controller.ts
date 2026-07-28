@@ -17,7 +17,7 @@ export const getInventorySnapshot = async (_req: Request, res: Response) => {
         categoryName: product.category.name,
         stockMode: product.stockMode.toLowerCase(),
         stock: product.stockMode === 'VARIANT'
-          ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+          ? product.variants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
           : product.stock,
         variants: product.variants.map((variant) => ({
           id: variant.id,
@@ -28,7 +28,7 @@ export const getInventorySnapshot = async (_req: Request, res: Response) => {
           isActive: variant.isActive,
         })),
         lowStock: (product.stockMode === 'VARIANT'
-          ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+          ? product.variants.filter((variant) => variant.isActive).reduce((sum, variant) => sum + variant.stock, 0)
           : product.stock) <= 5,
       })),
     }),

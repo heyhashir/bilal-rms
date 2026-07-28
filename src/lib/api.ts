@@ -36,24 +36,23 @@ const normalizeFieldErrors = (errors: unknown): RequestFieldError[] => {
     return [];
   }
 
-  return errors
-    .map((entry) => {
+  return errors.reduce<RequestFieldError[]>((normalized, entry) => {
       if (!entry || typeof entry !== "object") {
-        return null;
+        return normalized;
       }
 
       const record = entry as Record<string, unknown>;
       const message = typeof record.message === "string" ? record.message : null;
       if (!message) {
-        return null;
+        return normalized;
       }
 
-      return {
+      normalized.push({
         field: typeof record.field === "string" ? record.field : undefined,
         message,
-      };
-    })
-    .filter((entry): entry is RequestFieldError => entry !== null);
+      });
+      return normalized;
+    }, []);
 };
 
 export const getErrorMessage = (error: unknown, fallback = "Request failed") => {

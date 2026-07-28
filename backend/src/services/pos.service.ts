@@ -1,8 +1,10 @@
+import type { Prisma } from '@prisma/client';
 import prisma from '../config/prisma';
 import { catalogRepository } from '../repositories/catalog.repository';
 import { posRepository, posSaleInclude } from '../repositories/pos.repository';
 import { ApiError } from '../types/ApiError';
 import { inventoryService } from './inventory.service';
+import { receiptService } from './receipt.service';
 
 const toNullable = (value?: string | null): string | null => {
   if (!value) {
@@ -12,14 +14,17 @@ const toNullable = (value?: string | null): string | null => {
   return value.trim().length > 0 ? value.trim() : null;
 };
 
-const createDocumentNumbers = async () => {
-  const settings = await prisma.storeSetting.findFirstOrThrow();
-  const suffix = `${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-
-  return {
-    receiptNumber: `${settings.receiptPrefix}-${suffix}`,
-    invoiceNumber: `${settings.invoicePrefix}-${suffix}`,
-  };
+const lockSaleForCorrection = async (tx: Prisma.TransactionClient, saleNumber: string) => {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM pos_sales
+    WHERE saleNumber = ${saleNumber}
+    FOR UPDATE
+  `;
+  if (!rows[0]) {
+    throw new ApiError(404, 'POS sale not found');
+  }
+  return rows[0].id;
 };
 
 export const posService = {
@@ -32,6 +37,19 @@ export const posService = {
   }) => posRepository.listSales(params),
   listSalesForExport: (query?: string) => posRepository.listSalesForExport(query),
   getSale: (saleNumber: string) => posRepository.findSaleByNumber(saleNumber),
+  async findSale(identifier: string) {
+    const normalized = identifier.trim();
+    if (!normalized) {
+      throw new ApiError(400, 'Invoice number, receipt ID, or sale number is required');
+    }
+
+    const sale = await posRepository.findSaleByIdentifier(normalized);
+    if (!sale) {
+      throw new ApiError(404, 'Invoice not found');
+    }
+
+    return sale;
+  },
   async recordReceiptReprint(saleNumber: string) {
     const sale = await posRepository.findSaleByNumber(saleNumber);
     if (!sale.receipt) {
@@ -96,15 +114,24 @@ export const posService = {
       const unitPrice = line.unitPrice ?? Number(variant?.priceOverride ?? product.salePrice ?? product.price);
       return sum + unitPrice * line.qty;
     }, 0);
+    const retailSubtotal = input.lines.reduce((sum, line) => {
+      const product = productMap.get(line.productId)!;
+      const variant = line.variantId ? product.variants.find((entry) => entry.id === line.variantId) : null;
+      const retailPrice = Number(variant?.priceOverride ?? product.price);
+      return sum + retailPrice * line.qty;
+    }, 0);
+    const discountTotal = Math.max(0, retailSubtotal - subtotal);
 
     const paidAmount = input.paidAmount ?? subtotal;
     const device =
       input.deviceKey && input.deviceName
         ? await posRepository.upsertRegisterDevice(input.deviceKey, input.deviceName)
         : null;
-    const docs = input.status === 'finalized' ? await createDocumentNumbers() : null;
+    const changeAmount = input.paymentMethod === 'cash' ? Math.max(0, paidAmount - subtotal) : 0;
 
     return prisma.$transaction(async (tx) => {
+      const settings = input.status === 'finalized' ? await tx.storeSetting.findFirstOrThrow() : null;
+      const docs = settings ? await receiptService.allocateDocumentNumbers(tx, settings) : null;
       const sale = await tx.posSale.create({
         data: {
           saleNumber,
@@ -114,8 +141,11 @@ export const posService = {
           customerPhone: toNullable(input.customerPhone),
           customerEmail: toNullable(input.customerEmail),
           subtotal,
+          retailSubtotal,
+          discountTotal,
           total: subtotal,
           paidAmount,
+          changeAmount,
           paymentMethod: input.paymentMethod.toUpperCase() as never,
           notes: toNullable(input.notes),
           syncedStatus: device ? 'SYNCED' : 'PENDING',
@@ -130,6 +160,7 @@ export const posService = {
         const product = productMap.get(line.productId)!;
         const variant = line.variantId ? product.variants.find((entry) => entry.id === line.variantId) : null;
         const unitPrice = line.unitPrice ?? Number(variant?.priceOverride ?? product.salePrice ?? product.price);
+        const retailPrice = Number(variant?.priceOverride ?? product.price);
         const unitCost = Number(variant?.costPrice ?? product.costPrice ?? 0);
         const employeeId = toNullable(line.employeeId);
         const employee = employeeId ? employeeMap.get(employeeId) : null;
@@ -151,6 +182,7 @@ export const posService = {
             size: variant?.size ?? '',
             colorName: variant?.colorName ?? '',
             unitPrice,
+            retailPrice,
             unitCost,
             qty: line.qty,
             lineTotal: unitPrice * line.qty,
@@ -199,7 +231,20 @@ export const posService = {
             saleId: sale.id,
             receiptNumber: docs!.receiptNumber,
             invoiceNumber: docs!.invoiceNumber,
+            invoiceSequence: docs!.invoiceSequence,
+            documentSnapshot: docs!.documentSnapshot,
             lastPrintedAt: new Date(),
+          },
+        });
+
+        await tx.ledgerEntry.create({
+          data: {
+            type: 'SALE',
+            direction: 'CREDIT',
+            amount: subtotal,
+            reference: sale.saleNumber,
+            note: `POS sale ${sale.saleNumber}`,
+            posSaleId: sale.id,
           },
         });
       }
@@ -216,17 +261,26 @@ export const posService = {
     note?: string;
     items: Array<{ saleItemId: string; qty: number }>;
   }) {
-    const sale = await prisma.posSale.findUniqueOrThrow({
-      where: { saleNumber: input.saleNumber },
-      include: {
-        items: true,
-      },
-    });
-
-    const saleItems = new Map(sale.items.map((item) => [item.id, item]));
-
     return prisma.$transaction(async (tx) => {
-      for (const entry of input.items) {
+      const saleId = await lockSaleForCorrection(tx, input.saleNumber);
+      const sale = await tx.posSale.findUniqueOrThrow({
+        where: { id: saleId },
+        include: { items: true },
+      });
+      if (sale.status !== 'FINALIZED') {
+        throw new ApiError(409, 'Only finalized invoices can be refunded');
+      }
+
+      const saleItems = new Map(sale.items.map((item) => [item.id, item]));
+      const requestedItems = Array.from(
+        input.items.reduce((items, entry) => {
+          items.set(entry.saleItemId, (items.get(entry.saleItemId) ?? 0) + entry.qty);
+          return items;
+        }, new Map<string, number>()),
+        ([saleItemId, qty]) => ({ saleItemId, qty }),
+      );
+
+      for (const entry of requestedItems) {
         const item = saleItems.get(entry.saleItemId);
         if (!item) {
           throw new ApiError(404, 'Sale item not found');
@@ -237,10 +291,16 @@ export const posService = {
           throw new ApiError(400, `Refund quantity exceeds available quantity for ${item.name}`);
         }
 
-        await tx.posSaleItem.update({
-          where: { id: item.id },
+        const updatedItem = await tx.posSaleItem.updateMany({
+          where: {
+            id: item.id,
+            refundedQty: { lte: item.qty - entry.qty },
+          },
           data: { refundedQty: { increment: entry.qty } },
         });
+        if (updatedItem.count !== 1) {
+          throw new ApiError(409, `Refund quantity changed for ${item.name}; refresh and try again`);
+        }
 
         const amount = Number(item.unitPrice) * entry.qty;
         const createdReturn = await tx.posReturn.create({
@@ -293,6 +353,92 @@ export const posService = {
           data: { status: 'REFUNDED' },
         });
       }
+
+      return tx.posSale.findUniqueOrThrow({
+        where: { id: sale.id },
+        include: posSaleInclude,
+      });
+    });
+  },
+  async voidSale(input: {
+    saleNumber: string;
+    reason: string;
+    adminAccountId: string;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      const saleId = await lockSaleForCorrection(tx, input.saleNumber);
+      const sale = await tx.posSale.findUniqueOrThrow({
+        where: { id: saleId },
+        include: {
+          items: true,
+          returns: true,
+          commissions: true,
+          ledgerEntries: true,
+        },
+      });
+      if (sale.status === 'VOID') {
+        throw new ApiError(409, 'This invoice has already been voided');
+      }
+      if (sale.status !== 'FINALIZED') {
+        throw new ApiError(409, 'Only finalized invoices can be voided');
+      }
+      if (sale.returns.length > 0 || sale.items.some((item) => item.refundedQty > 0)) {
+        throw new ApiError(409, 'Invoices with returns or refunds cannot be voided');
+      }
+
+      for (const item of sale.items) {
+        await inventoryService.recordPosVoid(tx, {
+          productId: item.productId,
+          variantId: item.variantId,
+          qty: item.qty,
+          posSaleId: sale.id,
+          reference: sale.saleNumber,
+          note: input.reason,
+        });
+      }
+
+      for (const commission of sale.commissions.filter((entry) => Number(entry.amount) > 0)) {
+        await tx.commissionEntry.create({
+          data: {
+            employeeId: commission.employeeId,
+            saleId: commission.saleId,
+            saleItemId: commission.saleItemId,
+            productId: commission.productId,
+            variantId: commission.variantId,
+            rate: commission.rate,
+            amount: -Number(commission.amount),
+            status: 'REVERSED',
+            note: `Invoice void: ${input.reason}`,
+          },
+        });
+      }
+
+      const saleCredit = sale.ledgerEntries.find(
+        (entry) => entry.type === 'SALE' && entry.direction === 'CREDIT' && Number(entry.amount) > 0,
+      );
+      if (saleCredit) {
+        await tx.ledgerEntry.create({
+          data: {
+            type: 'ADJUSTMENT',
+            direction: 'DEBIT',
+            amount: sale.total,
+            reference: sale.saleNumber,
+            note: `Invoice void: ${input.reason}`,
+            posSaleId: sale.id,
+            adminAccountId: input.adminAccountId,
+          },
+        });
+      }
+
+      await tx.posSale.update({
+        where: { id: sale.id },
+        data: {
+          status: 'VOID',
+          voidReason: input.reason,
+          voidedAt: new Date(),
+          voidedById: input.adminAccountId,
+        },
+      });
 
       return tx.posSale.findUniqueOrThrow({
         where: { id: sale.id },

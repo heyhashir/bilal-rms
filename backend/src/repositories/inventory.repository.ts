@@ -44,13 +44,19 @@ const inventoryLedgerOrderBy = (
 
 export const inventoryRepository = {
   adjustProductStock: (db: DbClient, productId: string, delta: number) =>
-    db.product.update({
-      where: { id: productId },
+    db.product.updateMany({
+      where: {
+        id: productId,
+        ...(delta < 0 ? { stock: { gte: Math.abs(delta) } } : {}),
+      },
       data: { stock: { increment: delta } },
     }),
   adjustVariantStock: (db: DbClient, variantId: string, delta: number) =>
-    db.productVariant.update({
-      where: { id: variantId },
+    db.productVariant.updateMany({
+      where: {
+        id: variantId,
+        ...(delta < 0 ? { isActive: true, stock: { gte: Math.abs(delta) } } : {}),
+      },
       data: { stock: { increment: delta } },
     }),
   createMovement: (db: DbClient, data: {

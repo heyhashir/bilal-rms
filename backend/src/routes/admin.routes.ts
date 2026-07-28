@@ -3,6 +3,7 @@ import { requireAdminPanelAuth, requireAdminRoles } from '../middleware/auth';
 import catalogAdminRoutes from './admin/catalog-admin.routes';
 import commissionsAdminRoutes from './admin/commissions-admin.routes';
 import coreAdminRoutes from './admin/core-admin.routes';
+import desktopReleaseAdminRoutes from './admin/desktop-release-admin.routes';
 import inventoryAdminRoutes from './admin/inventory-admin.routes';
 import ordersAdminRoutes from './admin/orders-admin.routes';
 import peopleAdminRoutes from './admin/people-admin.routes';
@@ -42,5 +43,6 @@ mountProtected(commissionsAdminRoutes, ['ADMIN'], ['/commissions']);
 mountProtected(reportsAdminRoutes, ['ADMIN'], ['/reports', '/vendors', '/vendor-purchases', '/ledger']);
 mountProtected(settingsAdminRoutes, ['ADMIN'], ['/settings', '/shipping-zones']);
 mountProtected(syncAdminRoutes, ['ADMIN'], ['/sync-diagnostics']);
+mountProtected(desktopReleaseAdminRoutes, ['ADMIN'], ['/desktop-releases']);
 
 export default router;

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Printer, RotateCcw } from "lucide-react";
+import { Ban, Download, Printer, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/api";
 import { adminPosApi } from "@/lib/admin-pos-api";
@@ -10,6 +10,8 @@ import { syncApi } from "@/lib/sync-api";
 import { formatPrice } from "@/lib/format";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
+import { adminSettingsApi } from "@/lib/admin-settings-api";
+import { PosReceipt } from "@/components/pos/PosReceipt";
 import {
   ActionButton,
   EmptyState,
@@ -33,6 +35,8 @@ function AdminPosSales() {
   const [refundReason, setRefundReason] = useState("");
   const [refundNote, setRefundNote] = useState("");
   const [refundItems, setRefundItems] = useState<Record<string, number>>({});
+  const [voidReason, setVoidReason] = useState("");
+  const [lookup, setLookup] = useState("");
 
   const { data: salesResponse, isLoading: loading } = useQuery({
     queryKey: queryKeys.admin.posSalesList({ page, query }),
@@ -46,6 +50,10 @@ function AdminPosSales() {
     queryKey: queryKeys.admin.syncDiagnostics,
     queryFn: syncApi.syncDiagnostics,
     refetchOnWindowFocus: true,
+  });
+  const { data: settingsPayload } = useQuery({
+    queryKey: queryKeys.admin.settings,
+    queryFn: adminSettingsApi.settings,
   });
 
   const refundSale = useMutation({
@@ -69,6 +77,24 @@ function AdminPosSales() {
     onError: (error) => {
       toast.error(getErrorMessage(error, "Unable to process refund"));
     },
+  });
+  const voidSale = useMutation({
+    mutationFn: (payload: { saleNumber: string; reason: string }) =>
+      adminPosApi.voidPosSale(payload.saleNumber, payload.reason),
+    onSuccess: async ({ sale }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.dashboard }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
+      ]);
+      setView(sale);
+      setVoidReason("");
+      toast.success("Invoice voided and financial effects reversed");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to void invoice")),
   });
 
   const failedJobs = syncDiagnostics?.jobs.filter((job) => job.status === "failed").slice(0, 5) ?? [];
@@ -136,6 +162,35 @@ function AdminPosSales() {
           setPage(1);
         }}
       />
+      <div className="mb-4 flex gap-2">
+        <input
+          value={lookup}
+          onChange={(event) => setLookup(event.target.value)}
+          onKeyDown={async (event) => {
+            if (event.key !== "Enter" || !lookup.trim()) return;
+            try {
+              setView((await adminPosApi.findPosSale(lookup.trim())).sale);
+            } catch (error) {
+              toast.error(getErrorMessage(error, "Invoice not found"));
+            }
+          }}
+          placeholder="Exact invoice number, receipt ID, or scanner input"
+          className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-sm"
+        />
+        <ActionButton
+          variant="ghost"
+          onClick={async () => {
+            if (!lookup.trim()) return;
+            try {
+              setView((await adminPosApi.findPosSale(lookup.trim())).sale);
+            } catch (error) {
+              toast.error(getErrorMessage(error, "Invoice not found"));
+            }
+          }}
+        >
+          <Search className="h-3.5 w-3.5" /> Find invoice
+        </ActionButton>
+      </div>
       {loading ? (
         <EmptyState title="Loading POS sales" hint="Fetching live billing history from the server." />
       ) : sales.length === 0 ? (
@@ -165,7 +220,10 @@ function AdminPosSales() {
                     {sale.customerName || "Walk-in"}
                     <div className="text-xs text-muted-foreground">{sale.customerPhone || "-"}</div>
                   </td>
-                  <td className="p-3">{sale.receipt?.receiptNumber ?? "Draft"}</td>
+                  <td className="p-3">
+                    <div>{sale.receipt?.invoiceNumber ?? "Draft"}</div>
+                    <div className="text-xs text-muted-foreground">{sale.receipt?.receiptNumber ?? ""}</div>
+                  </td>
                   <td className="p-3 uppercase">{sale.paymentMethod}</td>
                   <td className="p-3 font-semibold">{formatPrice(sale.total)}</td>
                   <td className="p-3"><StatusPill status={sale.syncedStatus} /></td>
@@ -248,6 +306,7 @@ function AdminPosSales() {
             setRefundReason("");
             setRefundNote("");
             setRefundItems({});
+            setVoidReason("");
           }}
           wide
           footer={
@@ -264,6 +323,20 @@ function AdminPosSales() {
                 <Printer className="h-3.5 w-3.5" /> Print
               </ActionButton>
               <ActionButton
+                variant="ghost"
+                onClick={() => {
+                  const anchor = document.createElement("a");
+                  anchor.href = adminPosApi.receiptPdfUrl(view.saleNumber);
+                  anchor.download = "";
+                  document.body.appendChild(anchor);
+                  anchor.click();
+                  anchor.remove();
+                }}
+              >
+                <Download className="h-3.5 w-3.5" /> Download PDF
+              </ActionButton>
+              {view.status === "finalized" && (
+                <ActionButton
                 onClick={() => {
                   const items = Object.entries(refundItems)
                     .filter(([, qty]) => qty > 0)
@@ -283,11 +356,32 @@ function AdminPosSales() {
                 }}
               >
                 <RotateCcw className="h-3.5 w-3.5" /> Refund selected
-              </ActionButton>
+                </ActionButton>
+              )}
+              {view.status === "finalized" && (
+                <ActionButton
+                  variant="danger"
+                  onClick={() => {
+                    if (voidReason.trim().length < 3) {
+                      toast.error("Enter a cancellation reason");
+                      return;
+                    }
+                    if (!confirm(`Void ${view.receipt?.invoiceNumber ?? view.saleNumber}? This reverses stock, revenue, ledger entries, and commissions.`)) {
+                      return;
+                    }
+                    voidSale.mutate({ saleNumber: view.saleNumber, reason: voidReason.trim() });
+                  }}
+                >
+                  <Ban className="h-3.5 w-3.5" /> Void invoice
+                </ActionButton>
+              )}
             </>
           }
         >
           <div className="space-y-5">
+            <div className="border border-border bg-white p-3">
+              <PosReceipt sale={view} settings={settingsPayload?.settings ?? null} />
+            </div>
             <div className="grid gap-3 text-sm md:grid-cols-3">
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Receipt</div>
@@ -341,10 +435,25 @@ function AdminPosSales() {
               })}
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Refund reason" value={refundReason} onChange={setRefundReason} />
-              <Field label="Refund note" value={refundNote} onChange={setRefundNote} />
-            </div>
+            {view.status === "finalized" && (
+              <>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="Refund reason" value={refundReason} onChange={setRefundReason} />
+                  <Field label="Refund note" value={refundNote} onChange={setRefundNote} />
+                </div>
+                <Field
+                  label="Administrator cancellation reason"
+                  value={voidReason}
+                  onChange={setVoidReason}
+                  placeholder="Required only when voiding the complete invoice"
+                />
+              </>
+            )}
+            {view.status === "void" && (
+              <div className="border border-sale bg-sale/10 p-3 text-sm">
+                Voided by {view.voidedByName || "Administrator"}: {view.voidReason}
+              </div>
+            )}
 
             <div className="border-t border-border pt-3 text-right font-semibold">Sale total: {formatPrice(view.total)}</div>
           </div>

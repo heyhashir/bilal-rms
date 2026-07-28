@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { adminBackofficeApi } from "@/lib/admin-backoffice-api";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import { getErrorMessage } from "@/lib/api";
-import type { Product, Vendor } from "@/lib/admin-types";
+import type { Vendor } from "@/lib/admin-types";
+import type { Product } from "@/lib/catalog-types";
 import { queryClient } from "@/lib/query-client";
 import { ActionButton, Field, Modal, PageHeader, SelectField, StatusPill, Tabs } from "@/components/admin/primitives";
 

@@ -22,6 +22,7 @@ const cleanup = async () => {
   await prisma.ledgerEntry.deleteMany({
     where: {
       OR: [
+        { reference: { startsWith: `POS-${prefix}` } },
         { vendorPurchase: { vendor: { name: { startsWith: prefix } } } },
         { adminAccount: { email: { startsWith: prefix } } },
       ],
@@ -1065,6 +1066,56 @@ const run = async () => {
     assert.equal(staffProducts.status, 200, 'staff should access catalog operations');
     const staffReports = await staffRequest<unknown>('/admin/reports/summary');
     assert.equal(staffReports.status, 403, 'staff should be blocked from financial reports');
+    const unauthenticatedDesktopRelease = await request<unknown>('/admin/desktop-releases');
+    assert.equal(unauthenticatedDesktopRelease.status, 401, 'desktop release status should require authentication');
+    const staffDesktopRelease = await staffRequest<unknown>('/admin/desktop-releases');
+    assert.equal(staffDesktopRelease.status, 403, 'staff should not access desktop release publishing');
+    const adminDesktopRelease = await adminRequest<{ release: { version: string; published: boolean } }>(
+      '/admin/desktop-releases',
+    );
+    assert.equal(adminDesktopRelease.status, 200, 'admin should access desktop release publishing');
+    assert.equal(
+      adminDesktopRelease.payload?.data.release.version,
+      env.DESKTOP_BUNDLED_VERSION,
+      'desktop release status should use the bundled desktop version',
+    );
+
+    const voidSaleNumber = `POS-${prefix}-void`;
+    const voidCandidate = await adminRequest<{ sale: { saleNumber: string } }>('/admin/pos-sales', {
+      method: 'POST',
+      body: JSON.stringify({
+        saleNumber: voidSaleNumber,
+        paymentMethod: 'cash',
+        paidAmount: 1999,
+        status: 'finalized',
+        lines: [{ productId: adminProductId, employeeId, qty: 1 }],
+      }),
+    });
+    assert.equal(voidCandidate.status, 201, 'admin should create the cancellation test sale');
+
+    const anonymousRequest = createJsonRequest(baseUrl, new CookieJar());
+    const anonymousVoid = await anonymousRequest<unknown>(`/admin/pos-sales/${voidSaleNumber}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Unauthorized correction' }),
+    });
+    assert.equal(anonymousVoid.status, 401, 'unauthenticated invoice cancellation should be rejected');
+
+    const staffVoid = await staffRequest<unknown>(`/admin/pos-sales/${voidSaleNumber}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'Staff correction' }),
+    });
+    assert.equal(staffVoid.status, 403, 'staff invoice cancellation should be rejected');
+
+    const adminVoid = await adminRequest<{ sale: { status: string; voidReason: string } }>(
+      `/admin/pos-sales/${voidSaleNumber}/void`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Admin integration correction' }),
+      },
+    );
+    assert.equal(adminVoid.status, 200, 'administrator invoice cancellation should succeed');
+    assert.equal(adminVoid.payload?.data.sale.status, 'void');
+    assert.equal(adminVoid.payload?.data.sale.voidReason, 'Admin integration correction');
 
     const adminOrders = await adminRequest<{ orders: Array<{ id: string; status: string }> }>('/admin/orders');
     assert.equal(adminOrders.status, 200, 'admin orders should load');

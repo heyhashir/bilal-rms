@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import {
   createPosSale as createPosSaleController,
+  downloadPosSalePdf as downloadPosSalePdfController,
   exportPosSales as exportPosSalesController,
   getPosSale as getPosSaleController,
+  findPosSale as findPosSaleController,
   listPosSales as listPosSalesController,
   markPosSaleReprint as markPosSaleReprintController,
   refundPosSale as refundPosSaleController,
+  voidPosSale as voidPosSaleController,
 } from '../../controllers/admin/pos.controller';
+import { requireAdmin } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { z } from 'zod';
 
@@ -48,8 +52,14 @@ const posRefundSchema = z.object({
     .min(1),
 });
 
+const posVoidSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
 router.get('/pos-sales', asyncHandler(listPosSalesController));
 router.get('/pos-sales/export', asyncHandler(exportPosSalesController));
+router.get('/pos-sales-find', asyncHandler(findPosSaleController));
+router.get('/pos-sales/:saleNumber/pdf', asyncHandler(downloadPosSalePdfController));
 router.get('/pos-sales/:saleNumber', asyncHandler(getPosSaleController));
 
 router.post(
@@ -69,5 +79,14 @@ router.post(
 );
 
 router.post('/pos-sales/:saleNumber/reprint', asyncHandler(markPosSaleReprintController));
+
+router.post(
+  '/pos-sales/:saleNumber/void',
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    req.body = posVoidSchema.parse(req.body);
+    await voidPosSaleController(req, res);
+  }),
+);
 
 export default router;

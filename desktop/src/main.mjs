@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -265,6 +266,15 @@ const downloadUpdateInstaller = async (installerUrl) => {
   return destinationPath;
 };
 
+const hashFile = async (filePath) =>
+  new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+
 const registerIpc = () => {
   ipcMain.on("bilal-desktop:get-device-key", (event) => {
     event.returnValue = store.getDeviceKey();
@@ -392,6 +402,18 @@ const registerIpc = () => {
     }
 
     const installerPath = await downloadUpdateInstaller(installerUrl);
+    const installerStat = fs.statSync(installerPath);
+    if (payload?.expectedSize && installerStat.size !== payload.expectedSize) {
+      fs.rmSync(installerPath, { force: true });
+      throw new Error("Downloaded update size does not match the published release");
+    }
+    if (payload?.expectedSha256) {
+      const actualSha256 = await hashFile(installerPath);
+      if (actualSha256.toLowerCase() !== payload.expectedSha256.toLowerCase()) {
+        fs.rmSync(installerPath, { force: true });
+        throw new Error("Downloaded update checksum does not match the published release");
+      }
+    }
     const openResult = await shell.openPath(installerPath);
     if (openResult) {
       throw new Error(openResult);

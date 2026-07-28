@@ -250,3 +250,31 @@
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .pos-receipt,
+  .pos-receipt * {
+    visibility: visible !important;
+  }
+
+  .pos-receipt {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    min-height: 0;
+    margin: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
