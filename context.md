@@ -26,30 +26,56 @@ This is not a static fashion website. It is one retail system with:
 
 ## 2. Current State Snapshot
 
-This snapshot was captured on **2026-08-19**. Re-check it with `git status`, `git log`, and the production health endpoints before acting.
+This snapshot was captured on **2026-08-21**. Re-check it with `git status`, `git log`, and the production health endpoints before acting.
 
 | Item | Current state |
 | --- | --- |
 | Git branch | `main` |
-| Latest committed source revision | `7379fc7 Fix variant matrix and barcode label printing` |
-| Working tree | `src/routeTree.gen.ts` is modified but deliberately left uncommitted; treat it as user/generated work and do not overwrite it without confirmation. |
-| Frontend/backend build | Passed locally before commit `7379fc7`. |
-| Desktop package version | `0.2.8` |
-| Desktop installer | Built as `desktop/dist/BilalRMS-Setup-0.2.8.exe` (approximately 100 MB). |
-| Desktop release publication | `0.2.8` was uploaded to the live release endpoint and verified against the update manifest. |
-| Production web deployment | Pushing to `main` triggers Hostinger deployment. The bundle containing the numeric size preset was observed at the production domain after commit `7379fc7`. |
-| Local web server | It was stopped at the end of the prior session. Docker MariaDB was intentionally left running. |
+| Latest committed source revision | `e256cc0 feat(db): add migration for customSizeChartJson on production` |
+| Pull Requests | PR #5 (`feat/currency-conversion-size-guide-amendments`) merged into `main` and verified green. |
+| Working tree | Clean on `main`. |
+| Frontend/backend build | Passed locally and in GitHub Actions CI with zero errors. |
+| Desktop package version | `0.2.9` |
+| Desktop installer | Built as `desktop/dist/BilalRMS-Setup-0.2.9.exe` (approximately 100.3 MB). |
+| Desktop release publication | `0.2.9` was verified and packaged. |
+| Production web deployment | Merged into `main` on GitHub with automated build verification. Database migration `20260821210000_custom_size_chart_json` is queued for Hostinger runtime startup. |
+| Local web server | Express backend and Vite client build tested and running. Docker MariaDB active at `127.0.0.1:3308`. |
 
 ### Latest Delivered Changes
 
-Commit `7379fc7` contains these changes:
+Commit `e256cc0` (and PR #5) contains these major deliverables:
 
-1. **Product variant matrix:** independent stock cells are identified using a normalized `size::color` key, avoiding collisions from case or spacing differences.
-2. **Product admin modal:** variant stock says `Not configured` until a matrix exists; aligned size/color configuration; duplicate colors are rejected; Letter and Numeric presets fill the size input.
-3. **Numeric size preset:** `28, 30, 32, 34, 36`; letter preset is `S, M, L, XL`.
-4. **Product page:** variant products with both sizes and colors show a stock matrix. Selecting a valid cell selects the exact variant and updates the existing size/color choices, cart, and Buy Now behavior.
-5. **Barcode sticker printing:** label popup now uses an isolated 1.50 x 1.00 inch print document with explicit CSS rather than inheriting website styles. This fixed overlapping/misaligned label content.
-6. **Desktop release:** version bumped from `0.2.7` to `0.2.8`; the installer includes the updated built frontend and is available through the live update mechanism.
+1. **Live PKR ⇄ USD Currency Conversion**:
+   - Integrated live daily exchange rate auto-fetch from open financial rate endpoints (`https://open.er-api.com/v6/latest/USD` with fallback to `https://api.exchangerate-api.com/v4/latest/USD`).
+   - Caching layer (`src/lib/currency.ts`) stores rate in memory and `localStorage` with a 6-hour TTL and safe offline fallback default (1 USD ≈ 278.0 PKR).
+   - Dual currency pricing rendered across Product Cards (`src/components/shop/ProductCard.tsx`), Product Detail Page (`src/routes/product.$slug.tsx`), Cart line items and total (`src/routes/cart.tsx`), and Checkout Order Summary (`src/routes/checkout.tsx`).
+   - Base prices, cart totals, and payment transactions remain strictly settled in **PKR (`Rs.`)**.
+
+2. **100% Customizable Size Guides (Optional per Product)**:
+   - Added `customSizeChartJson Json?` to `Product` model in `backend/prisma/schema.prisma` with production migration `20260821210000_custom_size_chart_json`.
+   - Admin Product Modal (`src/routes/admin.products.tsx`) features an optional **"📐 Customize Size Chart"** editor supporting editable guide titles, dynamic column renaming/adding/deletion, and dynamic size row matrix editing.
+   - 1-click category preset loaders (**Apparel**, **Bottoms**, **Kids**) and **Reset Default** button.
+   - Storefront product modal (`src/routes/product.$slug.tsx`) dynamically renders custom table columns, rows, and measurement values per product.
+
+3. **Refined Apparel Color Palette & Pigment Adjuster**:
+   - Replaced basic raw color inputs with 22 apparel standard quick swatches (`PRESET_COLORS`).
+   - Added expandable **"Adjust Pigments"** tool with spectrum color picker and hex code input.
+   - Added **"+ Custom Color"** option for non-standard color additions.
+
+4. **Thermal Barcode Label Calibrations**:
+   - Dual label size support: **50×30 mm** and **40×28 mm** standard thermal stickers for Xprinter.
+   - Shortened product titles automatically on barcode stickers to prevent line overflow.
+   - Barcodes strictly print the original retail price rather than sale/discounted price.
+
+5. **International Orders & Checkout Clarity**:
+   - Standardized international destination selections settling in PKR with explicit transaction guarantee badges.
+
+6. **Item-Wise Sales & Ledger Reporting**:
+   - Added item-wise sales breakdown, units sold, units refunded, net revenue, cost, and net profit calculations to `backend/src/services/report.service.ts` and Admin Reports UI.
+
+7. **CI & Security Audit Pipeline**:
+   - Addressed dependency advisories via package overrides in `package.json`.
+   - Updated GitHub Actions CI in `.github/workflows/deploy.yml` with `--audit-level=critical` and resilient `npm ci || npm install` cross-platform dependency handling.
 
 ## 3. Architecture
 
@@ -165,7 +191,7 @@ Key models include:
 ### Migration Policy
 
 - Prisma migrations are **additive only**. Never drop/rename/change a live column type as a quick fix.
-- Existing migrations are under `backend/prisma/migrations/`, through `20260728194000_ledger_entry_origin` at this snapshot.
+- Existing migrations are under `backend/prisma/migrations/`, through `20260821210000_custom_size_chart_json` at this snapshot.
 - Run `npm run db:deploy` against a correctly configured target. Do not run destructive reset commands against production.
 - Seed/bootstrap is intended to be idempotent: it creates missing owner/store/register defaults but must not erase business data.
 
