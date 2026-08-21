@@ -88,7 +88,7 @@ function AdminReports() {
       <PageHeader
         eyebrow="Reports"
         title="Range reporting."
-        description="Cloud-authoritative revenue, profit, ledger, refunds, and commission summaries for the selected date range."
+        description="Cloud-authoritative revenue, profit, ledger, refunds, wholesale, and commission summaries for the selected date range."
         action={
           <div className="flex flex-wrap gap-2">
             <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="border border-border bg-background px-3 py-2 text-sm" />
@@ -101,14 +101,20 @@ function AdminReports() {
         <EmptyState title="Loading reports" hint="Calculating date-range totals from live cloud data." />
       ) : (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
             <StatCard label="Online revenue" value={formatPrice(summary.overview.onlineRevenue)} />
             <StatCard label="POS revenue" value={formatPrice(summary.overview.posRevenue)} />
             <StatCard label="POS refunds" value={formatPrice(summary.overview.posRefundAmount)} />
+            <StatCard label="Wholesale purchases" value={formatPrice(summary.wholesale?.totalSpend ?? 0)} />
+            <StatCard label="Gross profit" value={formatPrice(summary.profit.total)} />
+          </div>
+
+          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
             <StatCard label="Online orders" value={summary.overview.onlineOrders} />
             <StatCard label="POS sales" value={summary.overview.posSales} />
-            <StatCard label="Gross profit" value={formatPrice(summary.profit.total)} />
+            <StatCard label="Wholesale units" value={summary.wholesale?.totalUnits ?? 0} />
             <StatCard label="Ledger credit" value={formatPrice(summary.ledger.credit)} />
+            <StatCard label="Ledger debit" value={formatPrice(summary.ledger.debit)} />
             <StatCard label="Ledger net" value={formatPrice(summary.ledger.net)} />
           </div>
 
@@ -118,6 +124,46 @@ function AdminReports() {
             <StatCard label="Commission paid" value={formatPrice(summary.commissions.paid)} />
             <StatCard label="Commission payable" value={formatPrice(summary.commissions.payable)} />
           </div>
+
+          {summary.itemWiseSales && summary.itemWiseSales.length > 0 && (
+            <section className="mb-8 border border-border">
+              <div className="border-b border-border p-4">
+                <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Item-Wise Sales & Margin Report</div>
+                <div className="mt-1 text-sm text-muted-foreground">Comprehensive itemized product volume, sales revenue, product costs, and realized profits.</div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[840px] text-sm">
+                  <thead className="bg-secondary text-xs uppercase tracking-widest">
+                    <tr>
+                      <th className="p-3 text-left">Product</th>
+                      <th className="p-3 text-left">Category</th>
+                      <th className="p-3 text-left">Units Sold</th>
+                      <th className="p-3 text-left">Refunds</th>
+                      <th className="p-3 text-left">Net Revenue</th>
+                      <th className="p-3 text-left">Total Cost</th>
+                      <th className="p-3 text-left">Net Profit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.itemWiseSales.map((item) => (
+                      <tr key={item.productId} className="border-t border-border">
+                        <td className="p-3">
+                          <div className="font-medium">{item.productName}</div>
+                          {item.barcode && <div className="text-xs font-mono text-muted-foreground">{item.barcode}</div>}
+                        </td>
+                        <td className="p-3 text-muted-foreground">{item.categoryName}</td>
+                        <td className="p-3 font-semibold">{item.unitsSold}</td>
+                        <td className="p-3 text-sale">{item.unitsRefunded > 0 ? `-${item.unitsRefunded}` : "0"}</td>
+                        <td className="p-3 font-semibold">{formatPrice(item.netRevenue)}</td>
+                        <td className="p-3 text-muted-foreground">{formatPrice(item.totalCost)}</td>
+                        <td className="p-3 font-semibold text-emerald-700 dark:text-emerald-400">{formatPrice(item.netProfit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <section className="border border-border">

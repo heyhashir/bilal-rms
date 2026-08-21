@@ -3,6 +3,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/store/cart";
 import { formatPrice } from "@/lib/format";
 import { site } from "@/config/site";
+import { useExchangeRate } from "@/lib/currency";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({ meta: [{ title: "Cart — Bilal Garments" }] }),
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/cart")({
 
 function CartPage() {
   const { lines, setQty, remove, subtotal } = useCart();
+  const { formatUsdShort } = useExchangeRate();
   const sub = subtotal();
   const ship = lines.length === 0 ? 0 : sub >= site.shipping.freeAbove ? 0 : site.shipping.flatRate;
   const total = sub + ship;
@@ -53,23 +55,32 @@ function CartPage() {
                     <span className="w-8 text-center text-sm">{l.qty}</span>
                     <button onClick={() => setQty(l.id, l.qty + 1)} className="px-2 py-1.5"><Plus className="h-3.5 w-3.5" /></button>
                   </div>
-                  <div className="font-semibold">{formatPrice(l.unitPrice * l.qty)}</div>
+                  <div className="text-right">
+                    <div className="font-semibold">{formatPrice(l.unitPrice * l.qty)}</div>
+                    <div className="text-[11px] text-muted-foreground">≈ {formatUsdShort(l.unitPrice * l.qty)} USD</div>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        <aside className="bg-secondary p-6 h-fit space-y-4 text-sm">
+        <aside className="bg-secondary p-6 h-fit space-y-4 text-sm rounded-lg border border-border">
           <h2 className="display text-xl mb-2">Order summary</h2>
           <Row label="Subtotal" value={formatPrice(sub)} />
           <Row label="Shipping" value={ship === 0 ? "Free" : formatPrice(ship)} />
-          <div className="border-t border-border pt-3 flex justify-between font-semibold text-base">
-            <span>Total</span><span>{formatPrice(total)}</span>
+          <div className="border-t border-border pt-3 space-y-1">
+            <div className="flex justify-between font-bold text-base">
+              <span>Total</span>
+              <span>{formatPrice(total)}</span>
+            </div>
+            <div className="text-right text-xs text-muted-foreground">
+              Approx. <strong className="text-foreground">{formatUsdShort(total)} USD</strong>
+            </div>
           </div>
           <Link
             to="/checkout"
-            className="block text-center bg-primary text-primary-foreground py-4 text-xs uppercase tracking-[0.2em] mt-2"
+            className="block text-center bg-primary text-primary-foreground py-4 text-xs uppercase tracking-[0.2em] mt-2 font-semibold"
           >
             Checkout
           </Link>

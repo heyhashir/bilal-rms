@@ -40,7 +40,60 @@ function ProductPage() {
   const [qty, setQty] = useState(1);
   const [showChart, setShowChart] = useState(false);
 
-  const gallery = useMemo(() => (product ? [...product.images.map((src) => ({ type: "image" as const, src })), ...(product.video ? [{ type: "video" as const, src: product.video }] : [])] : []), [product]);
+  const allImages = useMemo(() => {
+    if (!product) return [];
+    const imagesList: string[] = [...product.images];
+    product.colors.forEach((c) => {
+      if (c.image && !imagesList.includes(c.image)) {
+        imagesList.push(c.image);
+      }
+    });
+    product.variants.forEach((v) => {
+      if (v.image && !imagesList.includes(v.image)) {
+        imagesList.push(v.image);
+      }
+    });
+    return imagesList;
+  }, [product]);
+
+  const gallery = useMemo(
+    () =>
+      product
+        ? [
+            ...allImages.map((src) => ({ type: "image" as const, src })),
+            ...(product.video ? [{ type: "video" as const, src: product.video }] : []),
+          ]
+        : [],
+    [product, allImages],
+  );
+
+  const hasSizes = Boolean(product && product.sizes.length > 0);
+  const hasColors = Boolean(product && product.colors.length > 0);
+
+  const effectiveSizeChart = useMemo(() => {
+    if (!product || product.sizeChart === "none") return null;
+    if (
+      product.customSizeChart &&
+      product.customSizeChart.columns &&
+      product.customSizeChart.columns.length > 0 &&
+      product.customSizeChart.rows &&
+      product.customSizeChart.rows.length > 0
+    ) {
+      return product.customSizeChart;
+    }
+    return sizeCharts[product.sizeChart] ?? null;
+  }, [product]);
+
+  const activeVariant = useMemo(() => {
+    if (!product || product.stockMode !== "variant") return null;
+    return (
+      product.variants.find((variant) => {
+        const sizeMatch = !hasSizes || variant.size === size;
+        const colorMatch = !hasColors || variant.colorName === color;
+        return sizeMatch && colorMatch;
+      }) ?? null
+    );
+  }, [product, hasSizes, hasColors, size, color]);
 
   useEffect(() => {
     if (!product) {
@@ -52,6 +105,22 @@ function ProductPage() {
     setSize((current) => (current && product.sizes.includes(current) ? current : (product.sizes[0] ?? "")));
     setColor((current) => (current && product.colors.some((entry) => entry.name === current) ? current : (product.colors[0]?.name ?? "")));
   }, [product]);
+
+  // When color or variant changes, immediately switch the product photo accordingly!
+  useEffect(() => {
+    if (!product) return;
+    const targetImage =
+      activeVariant?.image ||
+      product.variants.find((v) => v.colorName === color && v.image)?.image ||
+      product.colors.find((c) => c.name === color)?.image;
+
+    if (targetImage) {
+      const idx = gallery.findIndex((item) => item.type === "image" && item.src === targetImage);
+      if (idx >= 0) {
+        setImg(idx);
+      }
+    }
+  }, [color, size, activeVariant, product, gallery]);
 
   useEffect(() => {
     if (!showChart) {
@@ -71,18 +140,13 @@ function ProductPage() {
   if (!product && loaded) throw notFound();
   if (!product) return null;
   const fav = wish.has(product.id);
-  const hasSizes = product.sizes.length > 0;
-  const hasColors = product.colors.length > 0;
-  const activeVariant =
-    product.stockMode === "variant"
-      ? product.variants.find((variant) => {
-          const sizeMatch = !hasSizes || variant.size === size;
-          const colorMatch = !hasColors || variant.colorName === color;
-          return sizeMatch && colorMatch;
-        })
-      : null;
   const inStock = activeVariant ? activeVariant.stock > 0 : product.stock > 0;
   const unitPrice = activeVariant?.priceOverride ?? getEffectiveAmount(product.price, product.salePrice);
+  const currentPhoto =
+    activeVariant?.image ||
+    product.colors.find((c) => c.name === color)?.image ||
+    gallery[img]?.src ||
+    product.images[0];
 
   const related = products.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
 
@@ -95,7 +159,7 @@ function ProductPage() {
       productId: product.id,
       variantId: activeVariant?.id ?? null,
       name: product.name,
-      image: product.images[0],
+      image: currentPhoto,
       size: hasSizes ? size : "",
       color: hasColors ? color : "",
       qty,
@@ -113,7 +177,7 @@ function ProductPage() {
       productId: product.id,
       variantId: activeVariant?.id ?? null,
       name: product.name,
-      image: product.images[0],
+      image: currentPhoto,
       size: hasSizes ? size : "",
       color: hasColors ? color : "",
       qty,
@@ -133,7 +197,7 @@ function ProductPage() {
               </button>
             ))}
           </div>
-          <div className="aspect-[4/5] overflow-hidden bg-secondary">{gallery[img]?.type === "video" ? <video src={gallery[img].src} controls className="h-full w-full object-contain" /> : <img src={gallery[img]?.src ?? product.images[0]} alt={product.name} className="h-full w-full object-cover" />}</div>
+          <div className="aspect-[4/5] overflow-hidden bg-secondary">{gallery[img]?.type === "video" ? <video src={gallery[img].src} controls className="h-full w-full object-contain" /> : <img src={gallery[img]?.src ?? currentPhoto} alt={product.name} className="h-full w-full object-cover transition-all duration-300" />}</div>
         </div>
 
         <div>
@@ -160,7 +224,7 @@ function ProductPage() {
             <div className="mt-8">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-widest">Size</span>
-                {product.sizeChart !== "none" && sizeCharts[product.sizeChart] && (
+                {effectiveSizeChart && (
                   <button onClick={() => setShowChart(true)} className="inline-flex items-center gap-1 text-xs uppercase tracking-widest underline underline-offset-4">
                     <Ruler className="h-3.5 w-3.5" /> Size guide
                   </button>
@@ -256,34 +320,34 @@ function ProductPage() {
         </section>
       )}
 
-      {showChart && product.sizeChart !== "none" && sizeCharts[product.sizeChart] && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setShowChart(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-background p-8">
+      {showChart && effectiveSizeChart && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowChart(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-lg border border-border bg-background p-6 md:p-8 shadow-2xl">
             <div className="mb-6 flex items-start justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest text-muted-foreground">Size guide</div>
-                <h3 className="display mt-1 text-2xl">{sizeCharts[product.sizeChart].label}</h3>
+                <h3 className="display mt-1 text-2xl font-bold">{effectiveSizeChart.label}</h3>
               </div>
-              <button onClick={() => setShowChart(false)}>
+              <button onClick={() => setShowChart(false)} className="rounded-full p-1 text-muted-foreground hover:text-foreground">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[420px] text-sm">
                 <thead className="text-xs uppercase tracking-widest text-muted-foreground">
-                  <tr>
-                    {sizeCharts[product.sizeChart].columns.map((column) => (
-                      <th key={column.key} className="py-2 text-left">
+                  <tr className="border-b border-border">
+                    {effectiveSizeChart.columns.map((column) => (
+                      <th key={column.key} className="py-2.5 px-3 text-left font-semibold">
                         {column.label}
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {sizeCharts[product.sizeChart].rows.map((row) => (
-                    <tr key={row.size} className="border-t border-border">
-                      {sizeCharts[product.sizeChart].columns.map((column) => (
-                        <td key={column.key} className={`py-2 ${column.key === "size" ? "font-medium" : ""}`}>
+                <tbody className="divide-y divide-border">
+                  {effectiveSizeChart.rows.map((row, idx) => (
+                    <tr key={row.size || idx} className="hover:bg-secondary/30 transition-colors">
+                      {effectiveSizeChart.columns.map((column) => (
+                        <td key={column.key} className={`py-2.5 px-3 ${column.key === "size" ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
                           {row[column.key] ?? "-"}
                         </td>
                       ))}

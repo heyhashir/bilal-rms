@@ -77,4 +77,17 @@ export const reportRepository = {
       orderBy: { createdAt: 'desc' },
     });
   },
+  listVendorPurchases(range: DateRange) {
+    return prisma.vendorPurchase.findMany({
+      where: {
+        purchasedAt: toCreatedAtRange(range),
+        reversedAt: null,
+      },
+      include: {
+        vendor: true,
+        product: true,
+      },
+      orderBy: { purchasedAt: 'desc' },
+    });
+  },
 };

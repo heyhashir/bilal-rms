@@ -1,19 +1,39 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ShoppingBag, Heart, User, Menu, Search, X } from "lucide-react";
+import {
+  ShoppingBag,
+  Heart,
+  User,
+  Menu,
+  Search,
+  X,
+  ChevronRight,
+  MapPin,
+  Package,
+  Phone,
+  MessageCircle,
+  Instagram,
+  Shirt,
+  Sparkles,
+  Tag,
+  Glasses,
+  Footprints,
+  Layers,
+  Flame,
+} from "lucide-react";
 import { useState } from "react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { catalogApi } from "@/lib/catalog-api";
-import type { Category, StorefrontSettings } from "@/lib/catalog-types";
+import type { StorefrontSettings } from "@/lib/catalog-types";
 import { queryKeys } from "@/lib/query-keys";
 import { useCart, useWishlist } from "@/store/cart";
 import { site } from "@/config/site";
-
-const navTail = [
-  { to: "/sale", label: "Sale" },
-  { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
-] as const;
+import catMen from "@/assets/cat-men.jpg";
+import catWomen from "@/assets/cat-women.jpg";
+import catKids from "@/assets/cat-kids.jpg";
+import catAcc from "@/assets/cat-acc.jpg";
+import heroImg from "@/assets/hero.jpg";
+import pJacket from "@/assets/p-jacket.jpg";
 
 const fallbackSettings: StorefrontSettings = {
   id: "fallback",
@@ -21,13 +41,12 @@ const fallbackSettings: StorefrontSettings = {
   logoPrimaryText: "BALY",
   logoSecondaryText: "By Bilal Garments",
   logoTertiaryText: "EST 2001",
-  promoRibbonText: `Free shipping over Rs. ${site.shipping.freeAbove.toLocaleString()}\nNew drop\nAW26 collection live now\nCOD available across Pakistan\nEasy 7-day returns`,
+  promoRibbonText: `Free shipping over Rs. ${site.shipping.freeAbove.toLocaleString()}\nNew drop\nSummer '26 collection live now\nCOD available across Pakistan\nEasy 7-day returns`,
   promoRibbonItems: [
     `Free shipping over Rs. ${site.shipping.freeAbove.toLocaleString()}`,
-    "New drop",
-    "AW26 collection live now",
-    "COD available across Pakistan",
-    "Easy 7-day returns",
+    "New Summer '26 Drop",
+    "Cash On Delivery Across Pakistan",
+    "Easy 7-Day Returns & Exchange",
   ],
   tagline: site.tagline,
   description: site.description,
@@ -58,180 +77,395 @@ const fallbackSettings: StorefrontSettings = {
   metaDescription: site.description,
 };
 
+type MenuCategoryItem = {
+  label: string;
+  to: string;
+  params?: Record<string, string>;
+  icon: React.ReactNode;
+  isSpecial?: boolean;
+};
+
+const menuCategoriesByGender: Record<"men" | "women" | "kids", MenuCategoryItem[]> = {
+  men: [
+    { label: "Eastern Wear (Kurta)", to: "/category/$slug", params: { slug: "men" }, icon: <Shirt className="h-4 w-4" /> },
+    { label: "T-Shirts & Polos", to: "/category/$slug", params: { slug: "men" }, icon: <Flame className="h-4 w-4" /> },
+    { label: "Casual & Formal Shirts", to: "/category/$slug", params: { slug: "men" }, icon: <Shirt className="h-4 w-4" /> },
+    { label: "Trousers & Chinos", to: "/category/$slug", params: { slug: "men" }, icon: <Layers className="h-4 w-4" /> },
+    { label: "Unstitched Fabric", to: "/category/$slug", params: { slug: "men" }, icon: <Sparkles className="h-4 w-4" /> },
+    { label: "Outerwear & Jackets", to: "/category/$slug", params: { slug: "men" }, icon: <Shirt className="h-4 w-4" /> },
+    { label: "Footwear", to: "/shop", icon: <Footprints className="h-4 w-4" /> },
+    { label: "Fragrance & Accessories", to: "/category/$slug", params: { slug: "accessories" }, icon: <Glasses className="h-4 w-4" /> },
+    { label: "Special Sale Drop", to: "/sale", icon: <Tag className="h-4 w-4 text-sale" />, isSpecial: true },
+  ],
+  women: [
+    { label: "Unstitched Summer Lawn", to: "/category/$slug", params: { slug: "women" }, icon: <Sparkles className="h-4 w-4" /> },
+    { label: "Ready to Wear (Pret)", to: "/category/$slug", params: { slug: "women" }, icon: <Shirt className="h-4 w-4" /> },
+    { label: "Printed & Solid Co-Ords", to: "/category/$slug", params: { slug: "women" }, icon: <Flame className="h-4 w-4" /> },
+    { label: "Bottoms & Tights", to: "/category/$slug", params: { slug: "women" }, icon: <Layers className="h-4 w-4" /> },
+    { label: "Dupattas & Shawls", to: "/category/$slug", params: { slug: "women" }, icon: <Sparkles className="h-4 w-4" /> },
+    { label: "Footwear", to: "/shop", icon: <Footprints className="h-4 w-4" /> },
+    { label: "Accessories & Bags", to: "/category/$slug", params: { slug: "accessories" }, icon: <Glasses className="h-4 w-4" /> },
+    { label: "Special Sale Drop", to: "/sale", icon: <Tag className="h-4 w-4 text-sale" />, isSpecial: true },
+  ],
+  kids: [
+    { label: "Boys Eastern Wear", to: "/category/$slug", params: { slug: "kids" }, icon: <Shirt className="h-4 w-4" /> },
+    { label: "Boys Western & Tees", to: "/category/$slug", params: { slug: "kids" }, icon: <Flame className="h-4 w-4" /> },
+    { label: "Girls Eastern & Frocks", to: "/category/$slug", params: { slug: "kids" }, icon: <Sparkles className="h-4 w-4" /> },
+    { label: "Girls Western Wear", to: "/category/$slug", params: { slug: "kids" }, icon: <Shirt className="h-4 w-4" /> },
+    { label: "Kids Accessories", to: "/category/$slug", params: { slug: "kids" }, icon: <Glasses className="h-4 w-4" /> },
+    { label: "Special Sale Drop", to: "/sale", icon: <Tag className="h-4 w-4 text-sale" />, isSpecial: true },
+  ],
+};
+
 export function Header() {
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [activeGender, setActiveGender] = useState<"men" | "women" | "kids">("men");
+
   const cartCount = useCart((s) => s.lines.reduce((a, l) => a + l.qty, 0));
   const wishCount = useWishlist((s) => s.ids.length);
   const { data: user } = useCurrentUser();
-  const path = useRouterState({ select: (r) => r.location.pathname });
   const settingsQuery = useQuery({
     queryKey: queryKeys.catalog.settings,
     queryFn: catalogApi.settings,
   });
-  const categoriesQuery = useQuery({
-    queryKey: queryKeys.catalog.categories,
-    queryFn: catalogApi.categories,
-  });
   const settings = settingsQuery.data?.settings ?? fallbackSettings;
   const promoItems = settings.promoRibbonItems.length > 0 ? settings.promoRibbonItems : fallbackSettings.promoRibbonItems;
-  const categories = categoriesQuery.data?.categories ?? [];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/70 bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 transition-colors">
-      <div className="bg-primary text-[11px] uppercase tracking-[0.2em] text-primary-foreground">
-        <div className="container-bg overflow-hidden py-2">
-          <div className="marquee">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div
-                key={i}
-                className={`marquee-copy ${i === 1 ? "marquee-copy--duplicate" : ""}`}
-                aria-hidden={i === 1}
-              >
-                {promoItems.map((item, index) => (
-                  <span key={`${i}-${index}-${item}`}>
-                    {index > 0 ? "· " : ""}
-                    {item}
-                    {index < promoItems.length - 1 ? " ·" : ""}
-                  </span>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="container-bg flex min-h-[84px] items-center justify-between gap-4 py-3">
-        <button
-          className="-ml-2 p-2 xl:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Open menu"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-
-        <Link to="/" className="shrink-0 text-foreground">
-          <BrandMark settings={settings} variant="header" />
-        </Link>
-
-        <nav className="hidden items-center gap-7 text-sm xl:flex">
-          <Link
-            to="/shop"
-            className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
-              path.startsWith("/shop")
-                ? "text-foreground after:scale-x-100"
-                : "text-muted-foreground hover:text-foreground after:scale-x-0 hover:after:scale-x-100"
-            }`}
-          >
-            Shop
-          </Link>
-          {categories.map((category) => (
-            <CategoryNavItem key={category.id} category={category} path={path} />
-          ))}
-          {navTail.map((n) => {
-            const active = path.startsWith(n.to);
-            return (
-              <Link
-                key={n.to}
-                to={n.to}
-                className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                  active
-                    ? "text-foreground after:scale-x-100"
-                    : "text-muted-foreground hover:text-foreground after:scale-x-0 hover:after:scale-x-100"
-                }`}
-              >
-                {n.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="flex items-center gap-0.5">
-          <Link
-            to="/search"
-            className="p-2.5 transition-colors duration-300 hover:text-accent"
-            aria-label="Search"
-          >
-            <Search className="h-[17px] w-[17px]" />
-          </Link>
-          <Link
-            to={user ? "/account" : "/login"}
-            className="p-2.5 transition-colors duration-300 hover:text-accent"
-            aria-label="Account"
-          >
-            <User className="h-[17px] w-[17px]" />
-          </Link>
-          <Link
-            to="/wishlist"
-            className="relative p-2.5 transition-colors duration-300 hover:text-accent"
-            aria-label="Wishlist"
-          >
-            <Heart className="h-[17px] w-[17px]" />
-            {wishCount > 0 && <Badge n={wishCount} />}
-          </Link>
-          <Link
-            to="/cart"
-            className="relative p-2.5 transition-colors duration-300 hover:text-accent"
-            aria-label="Cart"
-          >
-            <ShoppingBag className="h-[17px] w-[17px]" />
-            {cartCount > 0 && <Badge n={cartCount} />}
-          </Link>
-        </div>
-      </div>
-
-      <div
-        className={`overflow-hidden border-t border-border transition-[max-height,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] xl:hidden ${
-          open ? "max-h-[420px] opacity-100" : "max-h-0 opacity-0"
-        }`}
-      >
-        <nav className="container-bg flex flex-col py-2">
-          <Link
-            to="/shop"
-            onClick={() => setOpen(false)}
-            className="border-b border-border/50 py-3 text-sm uppercase tracking-[0.16em] transition-colors last:border-0 hover:text-accent"
-          >
-            Shop
-          </Link>
-          {categories.map((category) => (
-            <div key={category.id} className="border-b border-border/50 py-3 last:border-0">
-              <Link
-                to="/category/$slug"
-                params={{ slug: category.slug }}
-                onClick={() => setOpen(false)}
-                className="block text-sm uppercase tracking-[0.16em] transition-colors hover:text-accent"
-              >
-                {category.name}
-              </Link>
-              {category.children.length > 0 && (
-                <div className="mt-2 flex flex-col gap-2 pl-4">
-                  {category.children.map((child) => (
-                    <Link
-                      key={child.id}
-                      to="/category/$slug"
-                      params={{ slug: child.slug }}
-                      onClick={() => setOpen(false)}
-                      className="text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-accent"
-                    >
-                      {child.name}
-                    </Link>
+    <>
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70 transition-colors">
+        {/* Top Marquee Announcement Bar */}
+        <div className="bg-primary text-[11px] uppercase tracking-[0.2em] text-primary-foreground">
+          <div className="container-bg overflow-hidden py-1.5">
+            <div className="marquee">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`marquee-copy ${i === 1 ? "marquee-copy--duplicate" : ""}`}
+                  aria-hidden={i === 1}
+                >
+                  {promoItems.map((item, index) => (
+                    <span key={`${i}-${index}-${item}`}>
+                      {index > 0 ? "· " : ""}
+                      {item}
+                      {index < promoItems.length - 1 ? " ·" : ""}
+                    </span>
                   ))}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
-          {navTail.map((n) => (
-            <Link
-              key={n.to}
-              to={n.to}
-              onClick={() => setOpen(false)}
-              className="border-b border-border/50 py-3 text-sm uppercase tracking-[0.16em] transition-colors last:border-0 hover:text-accent"
-            >
-              {n.label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-    </header>
+          </div>
+        </div>
+
+        {/* Main Navigation Bar - Full Width Edge-to-Edge Floating Capsule */}
+        <div className="w-full px-2 sm:px-4 md:px-6 py-2 sm:py-2.5">
+          <div className="flex min-h-[60px] sm:min-h-[68px] w-full items-center justify-between gap-3 sm:gap-4 rounded-full border border-border/85 bg-background/90 px-4 sm:px-8 shadow-sm backdrop-blur-md">
+            {/* Left Menu Toggle */}
+            <div className="flex items-center">
+              <button
+                onClick={() => setMenuOpen(true)}
+                className="flex items-center gap-2 rounded-full p-2 text-foreground hover:text-accent transition-colors focus:outline-none"
+                aria-label="Open Navigation Menu"
+              >
+                <Menu className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden sm:inline text-xs font-bold uppercase tracking-wider">Menu</span>
+              </button>
+            </div>
+
+            {/* Centered Brand Logo */}
+            <div className="flex justify-center text-center">
+              <Link to="/" className="inline-block text-foreground transition-transform hover:scale-[1.02]">
+                <BrandMark settings={settings} variant="header" />
+              </Link>
+            </div>
+
+            {/* Right Options (Search, Account, Wishlist, Bag with Icons & Text) */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* 1. Search */}
+              <Link
+                to="/search"
+                className="flex items-center gap-1.5 rounded-full px-2 sm:px-2.5 py-1.5 text-xs font-medium text-foreground hover:text-accent transition-colors"
+                aria-label="Search Catalog"
+              >
+                <Search className="h-4 w-4" />
+                <span className="hidden md:inline text-[11px] font-semibold uppercase tracking-wider">Search</span>
+              </Link>
+
+              {/* 2. Account */}
+              <Link
+                to={user ? "/account" : "/login"}
+                className="flex items-center gap-1.5 rounded-full px-2 sm:px-2.5 py-1.5 text-xs font-medium text-foreground hover:text-accent transition-colors"
+                aria-label="Account / Sign In"
+              >
+                <User className="h-4 w-4" />
+                <span className="hidden md:inline text-[11px] font-semibold uppercase tracking-wider">Account</span>
+              </Link>
+
+              {/* 3. Wishlist */}
+              <Link
+                to="/wishlist"
+                className="relative flex items-center gap-1.5 rounded-full px-2 sm:px-2.5 py-1.5 text-xs font-medium text-foreground hover:text-accent transition-colors"
+                aria-label="Wishlist"
+              >
+                <Heart className="h-4 w-4" />
+                <span className="hidden md:inline text-[11px] font-semibold uppercase tracking-wider">Wishlist</span>
+                {wishCount > 0 && <Badge n={wishCount} />}
+              </Link>
+
+              {/* 4. Bag / Cart */}
+              <Link
+                to="/cart"
+                className="relative flex items-center gap-1.5 rounded-full px-2 sm:px-2.5 py-1.5 text-xs font-medium text-foreground hover:text-accent transition-colors"
+                aria-label="Shopping Bag"
+              >
+                <ShoppingBag className="h-4 w-4" />
+                <span className="hidden md:inline text-[11px] font-semibold uppercase tracking-wider">Bag</span>
+                {cartCount > 0 && <Badge n={cartCount} />}
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ========================================================================= */}
+      {/* Zellbury-Style Left Side Menu Drawer                                      */}
+      {/* ========================================================================= */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setMenuOpen(false)}
+          />
+
+          {/* Drawer Panel */}
+          <div className="relative z-10 flex h-full w-full max-w-[380px] sm:max-w-[420px] flex-col bg-background text-foreground shadow-2xl animate-in slide-in-from-left duration-300">
+            {/* Top Promo Banner Cards (Horizontally Scrollable) inside Drawer */}
+            <div className="relative bg-secondary/80 p-4 border-b border-border/80">
+              {/* Close Button */}
+              <button
+                onClick={() => setMenuOpen(false)}
+                className="absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-full bg-black/70 text-white transition hover:bg-black"
+                aria-label="Close menu"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="pt-6">
+                <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none snap-x">
+                  <Link
+                    to="/category/$slug"
+                    params={{ slug: "men" }}
+                    onClick={() => setMenuOpen(false)}
+                    className="group relative w-32 sm:w-36 shrink-0 aspect-[16/10] overflow-hidden rounded-sm bg-black snap-start"
+                  >
+                    <img
+                      src={catMen}
+                      alt="Eastern Wear"
+                      className="h-full w-full object-cover opacity-85 transition group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Eastern Wear</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/shop"
+                    onClick={() => setMenuOpen(false)}
+                    className="group relative w-32 sm:w-36 shrink-0 aspect-[16/10] overflow-hidden rounded-sm bg-black snap-start"
+                  >
+                    <img
+                      src={pJacket}
+                      alt="Graphic Tees & Drops"
+                      className="h-full w-full object-cover opacity-85 transition group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">T-Shirts & Drop</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/category/$slug"
+                    params={{ slug: "women" }}
+                    onClick={() => setMenuOpen(false)}
+                    className="group relative w-32 sm:w-36 shrink-0 aspect-[16/10] overflow-hidden rounded-sm bg-black snap-start"
+                  >
+                    <img
+                      src={catWomen}
+                      alt="Summer Lawn '26"
+                      className="h-full w-full object-cover opacity-85 transition group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Summer Lawn</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/category/$slug"
+                    params={{ slug: "women" }}
+                    onClick={() => setMenuOpen(false)}
+                    className="group relative w-32 sm:w-36 shrink-0 aspect-[16/10] overflow-hidden rounded-sm bg-black snap-start"
+                  >
+                    <img
+                      src={heroImg}
+                      alt="Pret Co-Ords"
+                      className="h-full w-full object-cover opacity-85 transition group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Pret Co-Ords</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/category/$slug"
+                    params={{ slug: "kids" }}
+                    onClick={() => setMenuOpen(false)}
+                    className="group relative w-32 sm:w-36 shrink-0 aspect-[16/10] overflow-hidden rounded-sm bg-black snap-start"
+                  >
+                    <img
+                      src={catKids}
+                      alt="Kids Drop"
+                      className="h-full w-full object-cover opacity-85 transition group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Kids Drop</span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/sale"
+                    onClick={() => setMenuOpen(false)}
+                    className="group relative w-32 sm:w-36 shrink-0 aspect-[16/10] overflow-hidden rounded-sm bg-black snap-start"
+                  >
+                    <img
+                      src={catAcc}
+                      alt="Special Sale"
+                      className="h-full w-full object-cover opacity-85 transition group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-sale/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-2 text-white">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-sale">Special Sale</span>
+                    </div>
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Demographic Tabs: Men | Women | Kids */}
+            <div className="grid grid-cols-3 border-b border-border text-center">
+              {(["men", "women", "kids"] as const).map((gender) => {
+                const isActive = activeGender === gender;
+                return (
+                  <button
+                    key={gender}
+                    onClick={() => setActiveGender(gender)}
+                    className={`py-3.5 text-xs font-bold uppercase tracking-[0.2em] transition-all relative ${
+                      isActive
+                        ? "text-foreground font-black after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent"
+                        : "text-muted-foreground hover:text-foreground bg-secondary/30"
+                    }`}
+                  >
+                    {gender}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Category List */}
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 scrollbar-thin">
+              {menuCategoriesByGender[activeGender].map((item, index) => (
+                <Link
+                  key={`${item.label}-${index}`}
+                  to={item.to}
+                  params={item.params}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center justify-between px-3 py-3 rounded-none text-xs font-semibold uppercase tracking-[0.14em] transition-colors ${
+                    item.isSpecial
+                      ? "bg-sale/10 text-sale font-bold hover:bg-sale/20"
+                      : "text-foreground/90 hover:bg-secondary hover:text-accent"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/70" />
+                </Link>
+              ))}
+            </div>
+
+            {/* Customer Care Section */}
+            <div className="border-t border-border/80 bg-secondary/30 px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Customer Care
+                </span>
+                <div className="flex items-center gap-3">
+                  <a
+                    href="https://wa.me/923000000000"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                    aria-label="WhatsApp Support"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href="tel:080000000"
+                    className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                    aria-label="Phone Support"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href="https://instagram.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                    aria-label="Instagram"
+                  >
+                    <Instagram className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom 3-Button Utility Bar: Stores | Tracking | Contact */}
+            <div className="grid grid-cols-3 border-t border-border bg-secondary/80 text-center">
+              <Link
+                to="/about"
+                onClick={() => setMenuOpen(false)}
+                className="flex flex-col items-center gap-1 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors border-r border-border/60"
+              >
+                <MapPin className="h-4 w-4" />
+                <span>Stores</span>
+              </Link>
+              <Link
+                to="/track-order"
+                onClick={() => setMenuOpen(false)}
+                className="flex flex-col items-center gap-1 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors border-r border-border/60"
+              >
+                <Package className="h-4 w-4" />
+                <span>Tracking</span>
+              </Link>
+              <Link
+                to="/contact"
+                onClick={() => setMenuOpen(false)}
+                className="flex flex-col items-center gap-1 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <Phone className="h-4 w-4" />
+                <span>Contact</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -358,44 +592,6 @@ export function Footer() {
         </div>
       </div>
     </footer>
-  );
-}
-
-function CategoryNavItem({ category, path }: { category: Category; path: string }) {
-  const active =
-    path === `/category/${category.slug}` ||
-    category.children.some((child) => path === `/category/${child.slug}`);
-
-  return (
-    <div className="group relative">
-      <Link
-        to="/category/$slug"
-        params={{ slug: category.slug }}
-        className={`relative text-[11.5px] font-medium uppercase tracking-[0.14em] transition-colors duration-300 after:pointer-events-none after:absolute after:left-0 after:right-0 after:-bottom-1 after:h-px after:origin-left after:bg-current after:transition-transform after:duration-500 after:ease-[cubic-bezier(0.22,1,0.36,1)] ${
-          active
-            ? "text-foreground after:scale-x-100"
-            : "text-muted-foreground hover:text-foreground after:scale-x-0 hover:after:scale-x-100"
-        }`}
-      >
-        {category.name}
-      </Link>
-      {category.children.length > 0 && (
-        <div className="invisible absolute left-0 top-full z-30 min-w-[220px] translate-y-3 border border-border bg-background/95 p-3 opacity-0 shadow-2xl backdrop-blur transition duration-200 group-hover:visible group-hover:translate-y-1 group-hover:opacity-100">
-          <div className="grid gap-2">
-            {category.children.map((child) => (
-              <Link
-                key={child.id}
-                to="/category/$slug"
-                params={{ slug: child.slug }}
-                className="text-xs uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {child.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
   );
 }
 

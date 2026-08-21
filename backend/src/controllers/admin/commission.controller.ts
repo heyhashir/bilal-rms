@@ -23,19 +23,25 @@ export const exportCommissions = async (req: Request, res: Response) => {
   );
 
   const csv = toCsv(
-    ['employee', 'saleNumber', 'product', 'qty', 'refundedQty', 'rate', 'amount', 'status', 'note', 'createdAt'],
-    commissions.map((entry) => ({
-      employee: entry.employee.name,
-      saleNumber: entry.sale.saleNumber,
-      product: entry.saleItem.name,
-      qty: entry.saleItem.qty,
-      refundedQty: entry.saleItem.refundedQty,
-      rate: Number(entry.rate),
-      amount: Number(entry.amount),
-      status: entry.status,
-      note: entry.note,
-      createdAt: entry.createdAt.toISOString(),
-    })),
+    ['date', 'employee', 'saleNumber', 'product', 'qty', 'refundedQty', 'unitCost', 'totalCost', 'rate', 'commissionAmount', 'status', 'note'],
+    commissions.map((entry) => {
+      const unitCost = Number(entry.saleItem.unitCost ?? 0);
+      const effectiveQty = Math.max(0, entry.saleItem.qty - entry.saleItem.refundedQty);
+      return {
+        date: entry.createdAt.toISOString(),
+        employee: entry.employee.name,
+        saleNumber: entry.sale.saleNumber,
+        product: entry.saleItem.name,
+        qty: entry.saleItem.qty,
+        refundedQty: entry.saleItem.refundedQty,
+        unitCost,
+        totalCost: unitCost * (effectiveQty > 0 ? effectiveQty : entry.saleItem.qty),
+        rate: Number(entry.rate),
+        commissionAmount: Number(entry.amount),
+        status: entry.status,
+        note: entry.note,
+      };
+    }),
   );
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');

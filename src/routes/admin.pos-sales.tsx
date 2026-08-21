@@ -5,7 +5,9 @@ import { Ban, Download, Printer, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/api";
 import { adminPosApi } from "@/lib/admin-pos-api";
+import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import type { PosSale } from "@/lib/admin-types";
+import type { Product } from "@/lib/catalog-types";
 import { syncApi } from "@/lib/sync-api";
 import { formatPrice } from "@/lib/format";
 import { queryClient } from "@/lib/query-client";
@@ -35,6 +37,7 @@ function AdminPosSales() {
   const [refundReason, setRefundReason] = useState("");
   const [refundNote, setRefundNote] = useState("");
   const [refundItems, setRefundItems] = useState<Record<string, number>>({});
+  const [refundVariants, setRefundVariants] = useState<Record<string, string>>({});
   const [voidReason, setVoidReason] = useState("");
   const [lookup, setLookup] = useState("");
 
@@ -45,6 +48,12 @@ function AdminPosSales() {
   });
   const sales = salesResponse?.sales ?? [];
   const meta = salesResponse?.meta;
+
+  const { data: catalogData } = useQuery({
+    queryKey: ["admin", "products"],
+    queryFn: async () => (await adminCatalogApi.products()).products as Product[],
+  });
+  const products = catalogData ?? [];
 
   const { data: syncDiagnostics } = useQuery({
     queryKey: queryKeys.admin.syncDiagnostics,
@@ -57,7 +66,12 @@ function AdminPosSales() {
   });
 
   const refundSale = useMutation({
-    mutationFn: (payload: { saleNumber: string; reason: string; note?: string; items: Array<{ saleItemId: string; qty: number }> }) =>
+    mutationFn: (payload: {
+      saleNumber: string;
+      reason: string;
+      note?: string;
+      items: Array<{ saleItemId: string; qty: number; returnVariantId?: string | null; returnVariantLabel?: string | null }>;
+    }) =>
       adminPosApi.refundPosSale(payload.saleNumber, {
         reason: payload.reason,
         note: payload.note,
@@ -340,7 +354,22 @@ function AdminPosSales() {
                 onClick={() => {
                   const items = Object.entries(refundItems)
                     .filter(([, qty]) => qty > 0)
-                    .map(([saleItemId, qty]) => ({ saleItemId, qty }));
+                    .map(([saleItemId, qty]) => {
+                      const selectedVariantId = refundVariants[saleItemId];
+                      const line = view.items.find((i) => i.id === saleItemId);
+                      const prod = line ? products.find((p) => p.id === line.productId) : null;
+                      const customVariant = prod?.variants.find((v) => v.id === selectedVariantId);
+                      const returnVariantLabel = customVariant
+                        ? [customVariant.sku, customVariant.size, customVariant.colorName].filter(Boolean).join(" / ")
+                        : undefined;
+
+                      return {
+                        saleItemId,
+                        qty,
+                        returnVariantId: selectedVariantId || undefined,
+                        returnVariantLabel,
+                      };
+                    });
 
                   if (items.length === 0) {
                     toast.error("Select at least one refund item quantity");
@@ -400,8 +429,11 @@ function AdminPosSales() {
             <div className="border border-border">
               {view.items.map((line) => {
                 const remaining = line.qty - line.refundedQty;
+                const product = products.find((p) => p.id === line.productId);
+                const hasVariants = Boolean(product?.variants && product.variants.length > 0);
+
                 return (
-                  <div key={line.id} className="grid gap-3 border-b border-border p-3 last:border-0 md:grid-cols-[1.4fr_0.6fr_0.6fr_0.8fr]">
+                  <div key={line.id} className="grid gap-3 border-b border-border p-3 last:border-0 md:grid-cols-[1.2fr_0.6fr_0.6fr_1fr_0.6fr]">
                     <div>
                       <div className="font-medium">{line.name}</div>
                       <div className="text-xs text-muted-foreground">{[line.size, line.color, line.employeeName].filter(Boolean).join(" | ")}</div>
@@ -414,7 +446,24 @@ function AdminPosSales() {
                       <div className="text-xs uppercase tracking-widest text-muted-foreground">Line total</div>
                       <div>{formatPrice(line.lineTotal)}</div>
                     </div>
-                    <div>
+                    {hasVariants && (
+                      <div>
+                        <label className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Restock Variant</label>
+                        <select
+                          value={refundVariants[line.id] ?? line.variantId ?? ""}
+                          onChange={(e) => setRefundVariants((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                          className="w-full border border-border bg-background px-2 py-1.5 text-xs"
+                        >
+                          <option value={line.variantId ?? ""}>Original variant ({[line.size, line.color].filter(Boolean).join(" / ") || "Base"})</option>
+                          {product?.variants.filter((v) => v.id !== line.variantId).map((v) => (
+                            <option key={v.id} value={v.id}>
+                              Different variant: {[v.sku, v.size, v.colorName].filter(Boolean).join(" / ")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className={!hasVariants ? "md:col-span-2" : ""}>
                       <label className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Refund qty</label>
                       <input
                         type="number"

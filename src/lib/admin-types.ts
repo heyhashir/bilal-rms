@@ -142,6 +142,10 @@ export type CommissionEntry = {
   productName: string;
   qty: number;
   refundedQty: number;
+  unitPrice?: number;
+  lineTotal?: number;
+  unitCost?: number;
+  cost?: number;
   rate: number;
   amount: number;
   status: string;
@@ -194,6 +198,23 @@ export type ReportSummary = {
     posRevenue: number;
     posRefundAmount: number;
   };
+  wholesale?: {
+    count: number;
+    totalSpend: number;
+    totalUnits: number;
+  };
+  itemWiseSales?: Array<{
+    productId: string;
+    productName: string;
+    categoryName: string;
+    barcode: string;
+    unitsSold: number;
+    unitsRefunded: number;
+    grossRevenue: number;
+    netRevenue: number;
+    totalCost: number;
+    netProfit: number;
+  }>;
   commissions: {
     earned: number;
     reversed: number;
