@@ -278,7 +278,7 @@ export const serializeProduct = (product: ProductWithRelations) => {
       : product.stock,
     stockMode: product.stockMode.toLowerCase(),
     sizeChart: product.sizeChart,
-    customSizeChart: (product.customSizeChartJson as any) ?? null,
+    customSizeChart: (product.customSizeChartJson as Record<string, unknown> | null) ?? null,
     tags,
     seoTitle: product.seoTitle ?? '',
     seoDescription: product.seoDescription ?? '',
