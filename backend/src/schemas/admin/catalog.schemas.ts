@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const colorSchema = z.object({
   name: z.string().min(1),
   hex: z.string().min(4),
+  image: z.string().optional().nullable().or(z.literal('')),
 });
 
 export const variantSchema = z.object({
@@ -11,6 +12,7 @@ export const variantSchema = z.object({
   size: z.string().min(1),
   colorName: z.string().min(1),
   colorHex: z.string().min(4),
+  image: z.string().optional().nullable().or(z.literal('')),
   stock: z.coerce.number().int().nonnegative(),
   priceOverride: z.coerce.number().nonnegative().optional().nullable(),
   isActive: z.boolean().default(true),
@@ -22,6 +24,20 @@ export const variantSchema = z.object({
 });
 
 const sizeChartSchema = z.enum(['auto', 'apparel', 'bottoms', 'kids', 'none']);
+
+const customSizeChartSchema = z
+  .object({
+    label: z.string(),
+    columns: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+      }),
+    ),
+    rows: z.array(z.record(z.string())),
+  })
+  .optional()
+  .nullable();
 
 export const productSchema = z.object({
   slug: z.string().min(1),
@@ -35,6 +51,7 @@ export const productSchema = z.object({
   costPrice: z.coerce.number().nonnegative().optional().nullable(),
   stock: z.coerce.number().int().nonnegative().default(0),
   sizeChart: sizeChartSchema.default('auto'),
+  customSizeChart: customSizeChartSchema,
   sizes: z.array(z.string()).default([]),
   colors: z.array(colorSchema).default([]),
   tags: z.array(z.string()).default([]),

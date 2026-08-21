@@ -47,6 +47,12 @@ export type DesktopBridge = {
   cacheCurrentUser: (user: User | null) => void;
   getCachedCurrentUser: () => User | null;
   printReceipt: (payload: { sale: PosSale; settings: StorefrontSettings | null }) => Promise<void>;
+  printStickers?: (payload: {
+    html: string;
+    widthMm?: number;
+    heightMm?: number;
+    landscape?: boolean;
+  }) => Promise<{ ok: true }>;
   checkForUpdates: (payload: { deviceKey: string; currentVersion?: string | null; baseUrl?: string | null }) => Promise<DesktopUpdateManifest>;
   installUpdate: (payload: {
     installerUrl: string;

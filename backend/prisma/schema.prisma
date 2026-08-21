@@ -33,6 +33,8 @@ enum PaymentMethod {
   COD
   JAZZCASH
   EASYPAISA
+  CARD
+  BANK_TRANSFER
 }
 
 enum OrderStatus {
@@ -250,8 +252,9 @@ model Product {
   salePrice       Decimal?            @db.Decimal(10, 2)
   costPrice       Decimal?            @db.Decimal(10, 2)
   stock           Int                 @default(0)
-  sizeChart       String              @default("apparel")
-  sizesJson       Json?
+  sizeChart           String              @default("apparel")
+  customSizeChartJson Json?
+  sizesJson           Json?
   colorsJson      Json?
   tagsJson        Json?
   seoTitle        String?
@@ -300,6 +303,7 @@ model ProductVariant {
   size            String
   colorName       String
   colorHex        String
+  image           String?
   stock           Int                 @default(0)
   priceOverride   Decimal?            @db.Decimal(10, 2)
   costPrice       Decimal?            @db.Decimal(10, 2)

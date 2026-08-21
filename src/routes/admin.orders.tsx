@@ -22,13 +22,23 @@ function AdminOrders() {
   const [view, setView] = useState<Order | null>(null);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.admin.ordersList({ page, query }),
     queryFn: async () => adminOrdersApi.orders({ page, pageSize: 20, query }),
   });
-  const orders = data?.orders ?? [];
+  const allOrders = data?.orders ?? [];
   const meta = data?.meta;
+
+  const orders = allOrders.filter((order) => {
+    if (!fromDate && !toDate) return true;
+    const orderDate = new Date(order.createdAt).toISOString().slice(0, 10);
+    if (fromDate && orderDate < fromDate) return false;
+    if (toDate && orderDate > toDate) return false;
+    return true;
+  });
 
   const updateStatus = useMutation({
     mutationFn: async (params: { orderNumber: string; status: string; paymentStatus?: string }) =>
@@ -64,13 +74,44 @@ function AdminOrders() {
         description="Cloud ecommerce orders, payment-proof review, and shipping lifecycle updates."
         action={<ActionButton variant="ghost" onClick={() => window.open(adminOrdersApi.exportUrl({ query }), "_blank")}>Export CSV</ActionButton>}
       />
-      <Toolbar
-        search={query}
-        onSearch={(value) => {
-          setQuery(value);
-          setPage(1);
-        }}
-      />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex-1 min-w-[280px]">
+          <Toolbar
+            search={query}
+            onSearch={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
+          />
+        </div>
+        <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+          <span>Date:</span>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="border border-border bg-background px-2 py-1.5 text-xs"
+          />
+          <span>to</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="border border-border bg-background px-2 py-1.5 text-xs"
+          />
+          {(fromDate || toDate) && (
+            <button
+              onClick={() => {
+                setFromDate("");
+                setToDate("");
+              }}
+              className="text-xs underline hover:text-foreground"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
       {isLoading ? (
         <EmptyState title="Loading orders" hint="Fetching the latest ecommerce orders." />
       ) : orders.length === 0 ? (
@@ -147,13 +188,31 @@ function AdminOrders() {
             <div>
               <div className="mb-2 text-xs uppercase tracking-widest text-muted-foreground">Items</div>
               {view.lines.map((line) => (
-                <div key={line.id} className="flex justify-between border-t border-border py-2">
-                  <span>{line.name} <span className="text-muted-foreground">· {line.color}/{line.size} ×{line.qty}</span></span>
-                  <span>{formatPrice(line.unitPrice * line.qty)}</span>
+                <div key={line.id} className="flex items-center justify-between gap-3 border-t border-border py-2">
+                  <div className="flex items-center gap-3">
+                    {line.image && (
+                      <img src={line.image} alt={line.name} className="h-10 w-10 border border-border object-cover" />
+                    )}
+                    <div>
+                      <div className="font-medium">{line.name}</div>
+                      <div className="text-xs text-muted-foreground">{line.color}/{line.size} × {line.qty}</div>
+                    </div>
+                  </div>
+                  <span className="font-medium">{formatPrice(line.unitPrice * line.qty)}</span>
                 </div>
               ))}
             </div>
-            <div className="flex justify-between border-t border-border pt-3 font-semibold">
+            <div className="border-t border-border pt-2 space-y-1 text-xs text-muted-foreground">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>{formatPrice(view.subtotal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Shipping fee</span>
+                <span>{view.shippingFee > 0 ? formatPrice(view.shippingFee) : "Free"}</span>
+              </div>
+            </div>
+            <div className="flex justify-between border-t border-border pt-3 font-semibold text-base">
               <span>Total</span><span>{formatPrice(view.total)}</span>
             </div>
             {view.status === "cancelled" ? (

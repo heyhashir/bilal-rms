@@ -15,7 +15,7 @@ type CheckoutInput = {
   postal: string;
   country: string;
   shippingZoneId: string;
-  payment: 'cod' | 'jazzcash' | 'easypaisa';
+  payment: 'cod' | 'jazzcash' | 'easypaisa' | 'card' | 'bank_transfer';
   walletReference?: string;
   notes?: string;
   checkoutKey?: string;
@@ -160,8 +160,15 @@ export const orderService = {
         city: input.city,
         postalCode: input.postal,
         country: input.country,
-        paymentMethod: input.payment.toUpperCase() as 'COD' | 'JAZZCASH' | 'EASYPAISA',
-        paymentStatus: input.payment === 'cod' ? 'COD_DUE' : paymentProof ? 'PROOF_UPLOADED' : 'PENDING',
+        paymentMethod: input.payment.toUpperCase() as 'COD' | 'JAZZCASH' | 'EASYPAISA' | 'CARD' | 'BANK_TRANSFER',
+        paymentStatus:
+          input.payment === 'cod'
+            ? 'COD_DUE'
+            : input.payment === 'card'
+              ? 'VERIFIED'
+              : paymentProof
+                ? 'PROOF_UPLOADED'
+                : 'PENDING',
         shippingZoneId: shippingZone.id,
         shippingZoneName: shippingZone.name,
         shippingFee,

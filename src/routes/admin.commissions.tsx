@@ -71,14 +71,16 @@ function AdminCommissions() {
         <EmptyState title="No commission entries yet" hint="POS sales with salesperson attribution create entries here." />
       ) : (
         <div className="overflow-x-auto border border-border">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full min-w-[1080px] text-sm">
             <thead className="bg-secondary text-xs uppercase tracking-widest">
               <tr>
+                <th className="p-3 text-left">Date</th>
                 <th className="p-3 text-left">Employee</th>
                 <th className="p-3 text-left">Sale</th>
                 <th className="p-3 text-left">Product</th>
+                <th className="p-3 text-left">Cost</th>
                 <th className="p-3 text-left">Rate</th>
-                <th className="p-3 text-left">Amount</th>
+                <th className="p-3 text-left">Commission</th>
                 <th className="p-3 text-left">Status</th>
                 <th className="p-3" />
               </tr>
@@ -86,12 +88,25 @@ function AdminCommissions() {
             <tbody>
               {entries.map((entry) => (
                 <tr key={entry.id} className="border-t border-border">
+                  <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">
+                    <div>{new Date(entry.createdAt).toLocaleDateString()}</div>
+                    <div className="text-[10px]">{new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                  </td>
                   <td className="p-3 font-medium">{entry.employeeName}</td>
                   <td className="p-3">
-                    {entry.saleNumber}
-                    <div className="text-xs text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</div>
+                    <span className="font-mono text-xs">{entry.saleNumber}</span>
                   </td>
-                  <td className="p-3">{entry.productName}</td>
+                  <td className="p-3">
+                    <div>{entry.productName}</div>
+                    <div className="text-xs text-muted-foreground">Qty: {entry.qty}{entry.refundedQty > 0 ? ` (${entry.refundedQty} refunded)` : ""}</div>
+                  </td>
+                  <td className="p-3 font-medium text-muted-foreground">
+                    {typeof entry.cost === "number" && entry.cost > 0
+                      ? formatPrice(entry.cost)
+                      : typeof entry.unitCost === "number" && entry.unitCost > 0
+                        ? formatPrice(entry.unitCost * Math.max(1, entry.qty - entry.refundedQty))
+                        : "—"}
+                  </td>
                   <td className="p-3">{entry.rate}%</td>
                   <td className="p-3 font-semibold">{formatPrice(entry.amount)}</td>
                   <td className="p-3">

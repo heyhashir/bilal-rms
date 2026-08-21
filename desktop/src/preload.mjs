@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("bilalDesktop", {
   cacheCurrentUser: (user) => ipcRenderer.send("bilal-desktop:cache-current-user", user),
   getCachedCurrentUser: () => ipcRenderer.sendSync("bilal-desktop:get-cached-current-user"),
   printReceipt: (payload) => ipcRenderer.invoke("bilal-desktop:print-receipt", payload),
+  printStickers: (payload) => ipcRenderer.invoke("bilal-desktop:print-stickers", payload),
   checkForUpdates: (payload) => ipcRenderer.invoke("bilal-desktop:check-for-updates", payload),
   installUpdate: (payload) => ipcRenderer.invoke("bilal-desktop:install-update", payload),
   openUrl: (url) => ipcRenderer.invoke("bilal-desktop:open-url", url),

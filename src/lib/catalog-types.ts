@@ -1,4 +1,4 @@
-export type ProductColor = { name: string; hex: string };
+export type ProductColor = { name: string; hex: string; image?: string | null };
 
 export type ProductVariant = {
   id: string;
@@ -6,6 +6,7 @@ export type ProductVariant = {
   size: string;
   colorName: string;
   colorHex: string;
+  image?: string | null;
   stock: number;
   priceOverride?: number;
   costPrice?: number | null;
@@ -14,6 +15,14 @@ export type ProductVariant = {
   qrCode?: string;
   supplierBarcode?: string;
   commissionRate?: number | null;
+};
+
+export type SizeChartColumn = { key: string; label: string };
+
+export type SizeChart = {
+  label: string;
+  columns: SizeChartColumn[];
+  rows: Record<string, string>[];
 };
 
 export type Product = {
@@ -37,6 +46,7 @@ export type Product = {
   stock: number;
   stockMode?: "simple" | "variant";
   sizeChart: string;
+  customSizeChart?: SizeChart | null;
   tags: string[];
   seoTitle?: string;
   seoDescription?: string;

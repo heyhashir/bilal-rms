@@ -50,7 +50,7 @@ export type Order = {
     country: string;
     zone: string;
   };
-  payment: "cod" | "jazzcash" | "easypaisa";
+  payment: "cod" | "jazzcash" | "easypaisa" | "card" | "bank_transfer";
   paymentStatus: string;
   subtotal: number;
   shippingFee: number;

@@ -21,11 +21,12 @@ const toRange = (from?: string, to?: string) => {
 export const reportService = {
   async getSummary(input: { from?: string; to?: string }) {
     const range = toRange(input.from, input.to);
-    const [orders, posSales, commissions, ledgerEntries] = await Promise.all([
+    const [orders, posSales, commissions, ledgerEntries, vendorPurchases] = await Promise.all([
       reportRepository.listOrders(range),
       reportRepository.listPosSales(range),
       reportRepository.listCommissionEntries(range),
       reportRepository.listLedgerEntries(range),
+      reportRepository.listVendorPurchases(range),
     ]);
 
     const employeeSummary = new Map<
@@ -91,6 +92,22 @@ export const reportService = {
 
     const profitByProduct = new Map<string, { productId: string; productName: string; categoryName: string; profit: number }>();
     const profitByCategory = new Map<string, { categorySlug: string; categoryName: string; profit: number }>();
+    const itemMap = new Map<
+      string,
+      {
+        productId: string;
+        productName: string;
+        categoryName: string;
+        barcode: string;
+        unitsSold: number;
+        unitsRefunded: number;
+        grossRevenue: number;
+        netRevenue: number;
+        totalCost: number;
+        netProfit: number;
+      }
+    >();
+
     let totalProfit = 0;
 
     for (const order of orders) {
@@ -116,6 +133,25 @@ export const reportService = {
         };
         categoryRow.profit += profit;
         profitByCategory.set(item.product.category.slug, categoryRow);
+
+        const itemRow = itemMap.get(item.productId) ?? {
+          productId: item.productId,
+          productName: item.name,
+          categoryName: item.product.category.name,
+          barcode: item.product.barcode || '',
+          unitsSold: 0,
+          unitsRefunded: 0,
+          grossRevenue: 0,
+          netRevenue: 0,
+          totalCost: 0,
+          netProfit: 0,
+        };
+        itemRow.unitsSold += item.qty;
+        itemRow.grossRevenue += unitPrice * item.qty;
+        itemRow.netRevenue += unitPrice * item.qty;
+        itemRow.totalCost += unitCost * item.qty;
+        itemRow.netProfit += profit;
+        itemMap.set(item.productId, itemRow);
       }
     }
 
@@ -144,6 +180,26 @@ export const reportService = {
         };
         categoryRow.profit += profit;
         profitByCategory.set(item.product.category.slug, categoryRow);
+
+        const itemRow = itemMap.get(item.productId) ?? {
+          productId: item.productId,
+          productName: item.name,
+          categoryName: item.product.category.name,
+          barcode: item.product.barcode || '',
+          unitsSold: 0,
+          unitsRefunded: 0,
+          grossRevenue: 0,
+          netRevenue: 0,
+          totalCost: 0,
+          netProfit: 0,
+        };
+        itemRow.unitsSold += item.qty;
+        itemRow.unitsRefunded += item.refundedQty;
+        itemRow.grossRevenue += unitPrice * item.qty;
+        itemRow.netRevenue += unitPrice * (item.qty - item.refundedQty);
+        itemRow.totalCost += unitCost * (item.qty - item.refundedQty);
+        itemRow.netProfit += profit;
+        itemMap.set(item.productId, itemRow);
       }
     }
 
@@ -160,6 +216,9 @@ export const reportService = {
       { credit: 0, debit: 0 },
     );
 
+    const wholesaleSpend = vendorPurchases.reduce((sum, p) => sum + p.quantity * Number(p.unitCost), 0);
+    const wholesaleUnits = vendorPurchases.reduce((sum, p) => sum + p.quantity, 0);
+
     return {
       range: {
         from: range.from?.toISOString() ?? null,
@@ -175,11 +234,17 @@ export const reportService = {
         ),
         posRefundAmount,
       },
+      wholesale: {
+        count: vendorPurchases.length,
+        totalSpend: wholesaleSpend,
+        totalUnits: wholesaleUnits,
+      },
       profit: {
         total: totalProfit,
         byCategory: Array.from(profitByCategory.values()).sort((left, right) => right.profit - left.profit),
         byProduct: Array.from(profitByProduct.values()).sort((left, right) => right.profit - left.profit),
       },
+      itemWiseSales: Array.from(itemMap.values()).sort((a, b) => b.netRevenue - a.netRevenue),
       ledger: {
         credit: ledgerTotals.credit,
         debit: ledgerTotals.debit,

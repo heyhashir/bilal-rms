@@ -22,7 +22,7 @@ const checkoutSchema = z.object({
   postal: z.string().min(2),
   country: z.string().default('Pakistan'),
   shippingZoneId: z.string().min(1),
-  payment: z.enum(['cod', 'jazzcash', 'easypaisa']),
+  payment: z.enum(['cod', 'jazzcash', 'easypaisa', 'card', 'bank_transfer']),
   walletReference: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   checkoutKey: z.string().min(16).max(128).optional().or(z.literal('')),

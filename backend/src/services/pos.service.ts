@@ -259,7 +259,7 @@ export const posService = {
     saleNumber: string;
     reason: string;
     note?: string;
-    items: Array<{ saleItemId: string; qty: number }>;
+    items: Array<{ saleItemId: string; qty: number; returnVariantId?: string | null; returnVariantLabel?: string | null }>;
   }) {
     return prisma.$transaction(async (tx) => {
       const saleId = await lockSaleForCorrection(tx, input.saleNumber);
@@ -272,15 +272,9 @@ export const posService = {
       }
 
       const saleItems = new Map(sale.items.map((item) => [item.id, item]));
-      const requestedItems = Array.from(
-        input.items.reduce((items, entry) => {
-          items.set(entry.saleItemId, (items.get(entry.saleItemId) ?? 0) + entry.qty);
-          return items;
-        }, new Map<string, number>()),
-        ([saleItemId, qty]) => ({ saleItemId, qty }),
-      );
 
-      for (const entry of requestedItems) {
+      for (const entry of input.items) {
+        if (!entry.qty || entry.qty <= 0) continue;
         const item = saleItems.get(entry.saleItemId);
         if (!item) {
           throw new ApiError(404, 'Sale item not found');
@@ -303,12 +297,18 @@ export const posService = {
         }
 
         const amount = Number(item.unitPrice) * entry.qty;
+        const effectiveVariantId = entry.returnVariantId !== undefined ? entry.returnVariantId : item.variantId;
+        const returnNote = [
+          input.note || '',
+          entry.returnVariantLabel ? `Returned variant: ${entry.returnVariantLabel}` : '',
+        ].filter(Boolean).join(' | ');
+
         const createdReturn = await tx.posReturn.create({
           data: {
             saleId: sale.id,
             saleItemId: item.id,
             reason: input.reason,
-            note: input.note || '',
+            note: returnNote,
             qty: entry.qty,
             amount,
           },
@@ -316,12 +316,12 @@ export const posService = {
 
         await inventoryService.recordPosRefund(tx, {
           productId: item.productId,
-          variantId: item.variantId,
+          variantId: effectiveVariantId,
           qty: entry.qty,
           posSaleId: sale.id,
           posReturnId: createdReturn.id,
           reference: sale.saleNumber,
-          note: input.reason,
+          note: returnNote || input.reason,
         });
 
         if (item.employeeId && item.commissionRate && item.commissionAmount) {
@@ -332,7 +332,7 @@ export const posService = {
               saleId: sale.id,
               saleItemId: item.id,
               productId: item.productId,
-              variantId: item.variantId,
+              variantId: effectiveVariantId,
               rate: item.commissionRate,
               amount: -reversalAmount,
               status: 'REVERSED',

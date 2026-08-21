@@ -247,6 +247,42 @@ const printReceipt = async ({ sale, settings }) => {
   });
 };
 
+const printBarcodeStickers = async ({ html, widthMm = 38, heightMm = 25, landscape = false }) => {
+  const printWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      sandbox: false,
+    },
+  });
+
+  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  await new Promise((resolve, reject) => {
+    printWindow.webContents.print(
+      {
+        silent: false,
+        printBackground: true,
+        landscape: Boolean(landscape),
+        margins: {
+          marginType: "none",
+        },
+        pageSize: {
+          width: Math.round(widthMm * 1000),
+          height: Math.round(heightMm * 1000),
+        },
+      },
+      (success, failureReason) => {
+        printWindow.close();
+        if (!success) {
+          reject(new Error(failureReason || "Sticker print failed"));
+          return;
+        }
+
+        resolve();
+      },
+    );
+  });
+};
+
 const downloadUpdateInstaller = async (installerUrl) => {
   const response = await fetch(installerUrl, {
     headers: {
@@ -358,6 +394,11 @@ const registerIpc = () => {
 
   ipcMain.handle("bilal-desktop:print-receipt", async (_event, payload) => {
     await printReceipt(payload);
+    return { ok: true };
+  });
+
+  ipcMain.handle("bilal-desktop:print-stickers", async (_event, payload) => {
+    await printBarcodeStickers(payload);
     return { ok: true };
   });
 

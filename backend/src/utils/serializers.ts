@@ -278,6 +278,7 @@ export const serializeProduct = (product: ProductWithRelations) => {
       : product.stock,
     stockMode: product.stockMode.toLowerCase(),
     sizeChart: product.sizeChart,
+    customSizeChart: (product.customSizeChartJson as any) ?? null,
     tags,
     seoTitle: product.seoTitle ?? '',
     seoDescription: product.seoDescription ?? '',
@@ -296,6 +297,7 @@ export const serializeProduct = (product: ProductWithRelations) => {
       size: variant.size,
       colorName: variant.colorName,
       colorHex: variant.colorHex,
+      image: variant.image ?? null,
       stock: variant.stock,
       priceOverride: decimalToNumber(variant.priceOverride),
       costPrice: decimalToNumber(variant.costPrice) ?? null,
@@ -449,25 +451,37 @@ export const serializePosSale = (sale: PosSaleWithRelations) => ({
   updatedAt: sale.updatedAt.getTime(),
 });
 
-export const serializeCommissionEntry = (entry: CommissionEntry & { employee: Employee; sale: PosSale; saleItem: PosSaleItem }) => ({
-  id: entry.id,
-  employeeId: entry.employeeId,
-  employeeName: entry.employee.name,
-  saleId: entry.saleId,
-  saleNumber: entry.sale.saleNumber,
-  saleItemId: entry.saleItemId,
-  productId: entry.productId,
-  variantId: entry.variantId,
-  productName: entry.saleItem.name,
-  qty: entry.saleItem.qty,
-  refundedQty: entry.saleItem.refundedQty,
-  rate: decimalToNumber(entry.rate) ?? 0,
-  amount: decimalToNumber(entry.amount) ?? 0,
-  status: entry.status.toLowerCase(),
-  note: entry.note,
-  createdAt: entry.createdAt.getTime(),
-  updatedAt: entry.updatedAt.getTime(),
-});
+export const serializeCommissionEntry = (entry: CommissionEntry & { employee: Employee; sale: PosSale; saleItem: PosSaleItem }) => {
+  const unitCost = decimalToNumber(entry.saleItem.unitCost) ?? 0;
+  const unitPrice = decimalToNumber(entry.saleItem.unitPrice) ?? 0;
+  const lineTotal = decimalToNumber(entry.saleItem.lineTotal) ?? 0;
+  const effectiveQty = Math.max(0, entry.saleItem.qty - entry.saleItem.refundedQty);
+  const cost = unitCost * (effectiveQty > 0 ? effectiveQty : entry.saleItem.qty);
+
+  return {
+    id: entry.id,
+    employeeId: entry.employeeId,
+    employeeName: entry.employee.name,
+    saleId: entry.saleId,
+    saleNumber: entry.sale.saleNumber,
+    saleItemId: entry.saleItemId,
+    productId: entry.productId,
+    variantId: entry.variantId,
+    productName: entry.saleItem.name,
+    qty: entry.saleItem.qty,
+    refundedQty: entry.saleItem.refundedQty,
+    unitPrice,
+    lineTotal,
+    unitCost,
+    cost,
+    rate: decimalToNumber(entry.rate) ?? 0,
+    amount: decimalToNumber(entry.amount) ?? 0,
+    status: entry.status.toLowerCase(),
+    note: entry.note,
+    createdAt: entry.createdAt.getTime(),
+    updatedAt: entry.updatedAt.getTime(),
+  };
+};
 
 export const serializeSyncJob = (job: SyncJob) => ({
   id: job.id,
