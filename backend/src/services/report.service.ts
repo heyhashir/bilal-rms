@@ -1,15 +1,21 @@
 import { reportRepository } from '../repositories/report.repository';
 
 const toRange = (from?: string, to?: string) => {
-  const parsedFrom = from ? new Date(from) : undefined;
-  const parsedTo = to ? new Date(to) : undefined;
+  let parsedFrom: Date | undefined;
+  let parsedTo: Date | undefined;
 
-  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from) && parsedFrom && !Number.isNaN(parsedFrom.getTime())) {
-    parsedFrom.setHours(0, 0, 0, 0);
+  if (from && /^\d{4}-\d{2}-\d{2}$/.test(from)) {
+    const [y, m, d] = from.split('-').map(Number);
+    parsedFrom = new Date(y, m - 1, d, 0, 0, 0, 0);
+  } else if (from) {
+    parsedFrom = new Date(from);
   }
 
-  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to) && parsedTo && !Number.isNaN(parsedTo.getTime())) {
-    parsedTo.setHours(23, 59, 59, 999);
+  if (to && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+    const [y, m, d] = to.split('-').map(Number);
+    parsedTo = new Date(y, m - 1, d, 23, 59, 59, 999);
+  } else if (to) {
+    parsedTo = new Date(to);
   }
 
   return {
@@ -262,5 +268,231 @@ export const reportService = {
         .map(([productId, row]) => ({ productId, ...row }))
         .sort((left, right) => right.payable - left.payable),
     };
+  },
+
+  async getBillWiseReport(input: {
+    from?: string;
+    to?: string;
+    cashier?: string;
+    paymentMethod?: string;
+    type?: string;
+    query?: string;
+  }) {
+    const range = toRange(input.from, input.to);
+    const posSales = await reportRepository.listPosSalesForBillWise(range);
+
+    type BillRow = {
+      id: string;
+      saleId: string;
+      date: string;
+      time: string;
+      timestamp: number;
+      receiptNumber: string;
+      receiptType: 'Sales' | 'Refund';
+      cashier: string;
+      paymentMethod: string;
+      qtySold: number;
+      total: number;
+      customerName: string;
+      customerPhone: string;
+      items: Array<{
+        name: string;
+        sku: string;
+        size: string;
+        colorName: string;
+        qty: number;
+        unitPrice: number;
+        lineTotal: number;
+        refundedQty: number;
+      }>;
+    };
+
+    const rows: BillRow[] = [];
+
+    for (const sale of posSales) {
+      const cashierName =
+        sale.items.find((i) => i.employee?.name)?.employee?.name ||
+        sale.deviceName ||
+        'Admin';
+
+      const paymentMethod = (sale.paymentMethod || sale.payments[0]?.method || 'CASH').toUpperCase();
+      const saleDate = sale.createdAt.toISOString().slice(0, 10);
+      const saleTime = sale.createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const qtySold = sale.items.reduce((s, i) => s + i.qty, 0);
+      const total = Number(sale.total);
+
+      rows.push({
+        id: `sale_${sale.id}`,
+        saleId: sale.id,
+        date: saleDate,
+        time: saleTime,
+        timestamp: sale.createdAt.getTime(),
+        receiptNumber: sale.saleNumber,
+        receiptType: 'Sales',
+        cashier: cashierName,
+        paymentMethod,
+        qtySold,
+        total,
+        customerName: sale.customerName || '',
+        customerPhone: sale.customerPhone || '',
+        items: sale.items.map((i) => ({
+          name: i.name,
+          sku: i.sku || '',
+          size: i.size || '',
+          colorName: i.colorName || '',
+          qty: i.qty,
+          unitPrice: Number(i.unitPrice),
+          lineTotal: Number(i.lineTotal),
+          refundedQty: i.refundedQty,
+        })),
+      });
+
+      if (sale.returns && sale.returns.length > 0) {
+        for (const ret of sale.returns) {
+          const retDate = ret.createdAt.toISOString().slice(0, 10);
+          const retTime = ret.createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const retQty = ret.qty || 1;
+          const retAmount = Number(ret.amount);
+
+          rows.push({
+            id: `ret_${ret.id}`,
+            saleId: sale.id,
+            date: retDate,
+            time: retTime,
+            timestamp: ret.createdAt.getTime(),
+            receiptNumber: `${sale.saleNumber}-RET`,
+            receiptType: 'Refund',
+            cashier: cashierName,
+            paymentMethod,
+            qtySold: -retQty,
+            total: -retAmount,
+            customerName: sale.customerName || '',
+            customerPhone: sale.customerPhone || '',
+            items: ret.saleItem
+              ? [
+                  {
+                    name: ret.saleItem.name,
+                    sku: ret.saleItem.sku || '',
+                    size: ret.saleItem.size || '',
+                    colorName: ret.saleItem.colorName || '',
+                    qty: ret.qty,
+                    unitPrice: Number(ret.saleItem.unitPrice),
+                    lineTotal: -retAmount,
+                    refundedQty: ret.qty,
+                  },
+                ]
+              : [
+                  {
+                    name: `Refund: ${ret.reason || 'Returned item'}`,
+                    sku: '',
+                    size: '',
+                    colorName: '',
+                    qty: ret.qty,
+                    unitPrice: 0,
+                    lineTotal: -retAmount,
+                    refundedQty: ret.qty,
+                  },
+                ],
+          });
+        }
+      }
+    }
+
+    rows.sort((a, b) => b.timestamp - a.timestamp);
+
+    const filtered = rows.filter((r) => {
+      if (input.cashier && input.cashier !== 'ALL') {
+        if (input.cashier.toLowerCase() === 'admin' && r.cashier.toLowerCase() !== 'admin') return false;
+        if (input.cashier.toLowerCase() !== 'admin' && !r.cashier.toLowerCase().includes(input.cashier.toLowerCase())) return false;
+      }
+      if (input.paymentMethod && input.paymentMethod !== 'ALL') {
+        if (r.paymentMethod.toUpperCase() !== input.paymentMethod.toUpperCase()) return false;
+      }
+      if (input.type && input.type !== 'ALL') {
+        if (input.type.toLowerCase() === 'sale' && r.receiptType !== 'Sales') return false;
+        if (input.type.toLowerCase() === 'refund' && r.receiptType !== 'Refund') return false;
+      }
+      if (input.query) {
+        const q = input.query.toLowerCase();
+        const matches =
+          r.receiptNumber.toLowerCase().includes(q) ||
+          r.cashier.toLowerCase().includes(q) ||
+          r.customerName.toLowerCase().includes(q) ||
+          r.customerPhone.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    });
+
+    let totalSalesCount = 0;
+    let totalRefundsCount = 0;
+    let totalQtySold = 0;
+    let totalCash = 0;
+    let totalCard = 0;
+    let totalDigital = 0;
+    let totalRefundAmount = 0;
+    let totalSalesAmount = 0;
+
+    for (const r of filtered) {
+      totalQtySold += r.qtySold;
+      if (r.receiptType === 'Sales') {
+        totalSalesCount += 1;
+        totalSalesAmount += r.total;
+        if (r.paymentMethod === 'CASH') totalCash += r.total;
+        else if (r.paymentMethod === 'CARD') totalCard += r.total;
+        else totalDigital += r.total;
+      } else {
+        totalRefundsCount += 1;
+        totalRefundAmount += Math.abs(r.total);
+        if (r.paymentMethod === 'CASH') totalCash -= Math.abs(r.total);
+        else if (r.paymentMethod === 'CARD') totalCard -= Math.abs(r.total);
+        else totalDigital -= Math.abs(r.total);
+      }
+    }
+
+    const grandNetTotal = Math.round((totalSalesAmount - totalRefundAmount) * 100) / 100;
+
+    return {
+      range: {
+        from: range.from?.toISOString() ?? null,
+        to: range.to?.toISOString() ?? null,
+      },
+      summary: {
+        totalBills: filtered.length,
+        totalSalesCount,
+        totalRefundsCount,
+        totalQtySold,
+        totalSalesAmount: Math.round(totalSalesAmount * 100) / 100,
+        totalRefundAmount: Math.round(totalRefundAmount * 100) / 100,
+        netCash: Math.round(totalCash * 100) / 100,
+        netCard: Math.round(totalCard * 100) / 100,
+        netDigital: Math.round(totalDigital * 100) / 100,
+        grandNetTotal,
+      },
+      bills: filtered,
+    };
+  },
+
+  async getBillWiseReportForExport(input: {
+    from?: string;
+    to?: string;
+    cashier?: string;
+    paymentMethod?: string;
+    type?: string;
+    query?: string;
+  }) {
+    const report = await this.getBillWiseReport(input);
+    return report.bills.map((b) => ({
+      Date: b.date,
+      Time: b.time,
+      'Receipt #': b.receiptNumber,
+      'Receipt Type': b.receiptType,
+      Cashier: b.cashier,
+      'Payment Method': b.paymentMethod,
+      'Qty Sold': b.qtySold,
+      'Total (PKR)': b.total,
+      'Customer Name': b.customerName || 'Walk-in',
+      'Customer Phone': b.customerPhone || 'N/A',
+    }));
   },
 };

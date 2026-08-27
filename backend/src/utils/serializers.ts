@@ -53,7 +53,7 @@ type PosSaleWithRelations = PosSale & {
   voidedBy: AdminAccount | null;
 };
 
-const decimalToNumber = (value: Prisma.Decimal | null | undefined): number | undefined => {
+export const decimalToNumber = (value: Prisma.Decimal | null | undefined): number | undefined => {
   if (value === null || value === undefined) {
     return undefined;
   }

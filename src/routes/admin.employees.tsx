@@ -18,6 +18,8 @@ const emptyEmployee = (): Employee => ({
   id: "",
   name: "",
   phone: "",
+  email: "",
+  password: "",
   commissionRate: 0,
   status: "active",
   notes: "",
@@ -57,7 +59,7 @@ function AdminEmployees() {
   const filtered = useMemo(
     () =>
       employees.filter((employee) =>
-        `${employee.name} ${employee.phone} ${employee.status} ${employee.notes}`.toLowerCase().includes(query.toLowerCase()),
+        `${employee.name} ${employee.phone} ${employee.email ?? ""} ${employee.status} ${employee.notes}`.toLowerCase().includes(query.toLowerCase()),
       ),
     [employees, query],
   );
@@ -67,22 +69,23 @@ function AdminEmployees() {
       <PageHeader
         eyebrow="People"
         title={`Employees (${employees.length})`}
-        description="Staff master records used for POS attribution and commission tracking."
+        description="Staff master records and POS login accounts used for inventory handling, billing, and commission tracking."
         action={
           <ActionButton onClick={() => setEditing(emptyEmployee())}>
-            <Plus className="h-3.5 w-3.5" /> New employee
+            <Plus className="h-3.5 w-3.5 mr-1" /> New employee
           </ActionButton>
         }
       />
       <Toolbar search={query} onSearch={setQuery} />
       {filtered.length === 0 ? (
-        <EmptyState title="No employees yet" hint="Add shop staff so POS lines can be attributed for commission." />
+        <EmptyState title="No employees yet" hint="Add shop staff and assign login credentials so they can manage inventory and ring up bills." />
       ) : (
         <div className="overflow-x-auto border border-border">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-secondary text-xs uppercase tracking-widest">
               <tr>
                 <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Login Email</th>
                 <th className="p-3 text-left">Phone</th>
                 <th className="p-3 text-left">Commission</th>
                 <th className="p-3 text-left">Notes</th>
@@ -95,6 +98,7 @@ function AdminEmployees() {
               {filtered.map((employee) => (
                 <tr key={employee.id} className="border-t border-border">
                   <td className="p-3 font-medium">{employee.name}</td>
+                  <td className="p-3 font-mono text-xs text-muted-foreground">{employee.email || "-"}</td>
                   <td className="p-3">{employee.phone || "-"}</td>
                   <td className="p-3">{employee.commissionRate}%</td>
                   <td className="p-3 text-muted-foreground">{employee.notes || "-"}</td>
@@ -104,7 +108,7 @@ function AdminEmployees() {
                   <td className="p-3 text-xs text-muted-foreground">{new Date(employee.updatedAt).toLocaleString()}</td>
                   <td className="p-3">
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => setEditing(employee)} className="p-2 hover:bg-secondary">
+                      <button onClick={() => setEditing(employee)} className="p-2 hover:bg-secondary" title="Edit employee">
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
@@ -113,6 +117,7 @@ function AdminEmployees() {
                           archiveEmployee.mutate(employee.id);
                         }}
                         className="p-2 hover:bg-sale hover:text-primary-foreground"
+                        title="Archive employee"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -136,10 +141,13 @@ function AdminEmployees() {
               </ActionButton>
               <ActionButton
                 onClick={async () => {
+                  if (!editing.name.trim()) return toast.error("Enter employee name");
                   saveEmployee.mutate({
                     id: editing.id || undefined,
                     name: editing.name,
                     phone: editing.phone,
+                    email: editing.email || undefined,
+                    password: editing.password || undefined,
                     commissionRate: editing.commissionRate,
                     status: editing.status,
                     notes: editing.notes,
@@ -155,6 +163,20 @@ function AdminEmployees() {
             <Field label="Full name" value={editing.name} autoFocus onChange={(value) => setEditing({ ...editing, name: value })} />
             <Field label="Phone" value={editing.phone} onChange={(value) => setEditing({ ...editing, phone: value })} />
             <Field
+              label="Login Email (Optional)"
+              type="email"
+              placeholder="staff@baly.local"
+              value={editing.email ?? ""}
+              onChange={(value) => setEditing({ ...editing, email: value })}
+            />
+            <Field
+              label={editing.id ? "Reset Password (Min 6 chars)" : "Login Password (Min 6 chars)"}
+              type="password"
+              placeholder={editing.id ? "Leave blank to keep unchanged" : "••••••••"}
+              value={editing.password ?? ""}
+              onChange={(value) => setEditing({ ...editing, password: value })}
+            />
+            <Field
               label="Commission %"
               type="number"
               value={String(editing.commissionRate)}
@@ -169,7 +191,9 @@ function AdminEmployees() {
                 { value: "inactive", label: "Inactive" },
               ]}
             />
-            <Field label="Notes" value={editing.notes} onChange={(value) => setEditing({ ...editing, notes: value })} textarea />
+            <div className="md:col-span-2">
+              <Field label="Notes" value={editing.notes} onChange={(value) => setEditing({ ...editing, notes: value })} textarea />
+            </div>
           </div>
         </Modal>
       )}

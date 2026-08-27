@@ -43,9 +43,51 @@ This snapshot was captured on **2026-08-21**. Re-check it with `git status`, `gi
 
 ### Latest Delivered Changes
 
-Commit `e256cc0` (and PR #5) contains these major deliverables:
+1. **Employee Role Isolation & Direct Login Provisioning (Email + Password)**:
+   - When creating or editing employees in `/admin/employees`, admins can assign an optional **Login Email** and **Password** (min 6 characters).
+   - Backend automatically provisions/synchronizes a corresponding `AdminAccount` record with `STAFF` role and hashed credentials.
+   - Access control rules configured so that `STAFF` users are strictly restricted to POS billing (`/pos`), inventory lookup/adjustment (`/admin/inventory`), product catalog (`/admin/products`, `/admin/categories`, `/admin/brands`), and label sticker printing.
+   - Owner-only sections (P&L/revenue reports, store settings, commission master adjustments, staff access management) are strictly hidden and blocked for `STAFF`.
 
-1. **Live PKR ⇄ USD Currency Conversion**:
+2. **Bill-Wise Sales & Collections Audit Report (Cash and Credit Details)**:
+   - Modeled after the QuickBooks POS `Cash and Credit Details` reference standard.
+   - Endpoint `/api/v1/admin/reports/bill-wise` and CSV export `/api/v1/admin/reports/bill-wise/export` in `backend/src/services/report.service.ts`.
+   - Displays all bills/receipts with columns: Expand `[+]`, `Date`, `Time`, `Receipt #`, `Receipt Type` (`Sales` vs `Refund`), `Qty Sold`, `Total`, `Payment Method`, and `Cashier` (Admin or employee name).
+   - Expandable rows allow drilldown into line items, sizes, colors, and line totals for each bill.
+   - 4-way filter toolbar: Date range presets (`Today`, `Yesterday`, `This Week`, `This Month`, `All Time`), Cashier selector (All Cashiers, Admin, specific employee), Payment method (Cash, Card, JazzCash, Easypaisa, Bank Transfer), Receipt type (Sales vs Refunds), and search.
+   - Bottom auto-summation bar (`Grand Total`) dynamically totals up all bills, net pieces sold, cash collected, card/digital collected, and grand net collections.
+   - Includes CSV export and printable A4 daily audit sheet.
+   - Strict zero-emoji compliance across code, comments, and UI.
+
+3. **Uncongested Dedicated Standalone Admin Menus**:
+   - Restructured admin navigation and separated composite pages into dedicated standalone routes:
+     - **Overview**: Dashboard (`/admin`), P&L Reports (`/admin/reports`), Bill-Wise Sales (`/admin/bill-wise`).
+     - **Catalog**: Products (`/admin/products`), Categories (`/admin/categories`), Brands (`/admin/brands`), Size Guides (`/admin/size-charts`).
+     - **Inventory & Purchasing**: Stock Manager (`/admin/inventory`), Inventory Valuation (`/admin/inventory-valuation`), Vendors (`/admin/suppliers`), Vendor Purchases (`/admin/vendor-purchases`).
+     - **Sales & Billing**: POS Terminal (`/pos`), POS Invoices (`/admin/pos-sales`), Online Orders (`/admin/orders`), Returns Log (`/admin/returns`), Refunds Log (`/admin/refunds`).
+     - **Finance**: Expense Ledger (`/admin/ledger`), Staff Commissions (`/admin/commissions`).
+     - **People & Store**: Employees (`/admin/employees`), Customers (`/admin/customers`), Staff Access (`/admin/roles`), Settings (`/admin/settings`), CSV Imports (`/admin/imports`).
+   - Eliminated tab clutter across inventory and reports so accountants, owners, and cashiers have direct 1-click tools.
+   - Maintained strict role-based access control and zero-emoji compliance across the entire codebase.
+
+4. **Honeywell Orbit MS7120 Hardware Scanner Integration**:
+   - Full hardware compatibility verification with the **Honeywell Orbit MS7120 (N) 38-3 LS USB** omnidirectional desktop laser presentation scanner.
+   - Global keystroke buffer listener detects high-speed laser scan bursts (<60ms inter-key delays) even when the input box is not clicked, enabling hands-free presentation counter scanning.
+   - Exact Match Priority engine matches scanned 1D Code 128 / Code 39 tags against barcode, SKU, QR code, and `#` tag prefixes (e.g. `# 57678`, `50330`, `45881`).
+   - Integrated cash register audio feedback using Web Audio API (1400Hz positive scan chime, 300Hz error tone).
+   - Multi-scan quantity auto-incrementation (repeated scan of same barcode increments cart line quantity).
+   - Automatic input clearing and refocus for high-throughput retail checkout.
+
+5. **Department-Wise Inventory Valuation & Stock Evaluation Report**:
+   - Modeled directly after the QuickBooks POS / Enterprise RMS Inventory Valuation standard.
+   - Comprehensive backend valuation engine in `backend/src/services/inventory.service.ts` and endpoints `/admin/inventory/valuation` and `/admin/inventory/valuation/export`.
+   - Aggregates simple products and variant matrix entries grouped by department/category with weighted average unit cost, total department units, and extended cost totals.
+   - Grand Total summary bar calculates store-wide total cost valuation, total retail potential, on-hand pieces, and gross profit margin.
+   - UI features multi-level filtering by Department/Category, Brand, In-Stock Only vs All Catalog, and real-time search.
+   - Row-level quick actions for Barcode Label sticker printing and immediate stock adjustment.
+   - Direct CSV export and A4 printable physical audit sheet with dedicated `@media print` clean document styling.
+
+4. **Live PKR ⇄ USD Currency Conversion**:
    - Integrated live daily exchange rate auto-fetch from open financial rate endpoints (`https://open.er-api.com/v6/latest/USD` with fallback to `https://api.exchangerate-api.com/v4/latest/USD`).
    - Caching layer (`src/lib/currency.ts`) stores rate in memory and `localStorage` with a 6-hour TTL and safe offline fallback default (1 USD ≈ 278.0 PKR).
    - Dual currency pricing rendered across Product Cards (`src/components/shop/ProductCard.tsx`), Product Detail Page (`src/routes/product.$slug.tsx`), Cart line items and total (`src/routes/cart.tsx`), and Checkout Order Summary (`src/routes/checkout.tsx`).

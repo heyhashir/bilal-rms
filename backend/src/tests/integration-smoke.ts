@@ -989,7 +989,8 @@ const run = async () => {
     const postPurchaseLedger = await adminRequest<{ movements: Array<{ productId: string; reason: string }> }>('/admin/inventory/ledger?limit=50');
     assert.ok(postPurchaseLedger.payload?.data.movements.some((entry) => entry.productId === product.id && entry.reason === 'restock'), 'vendor purchase should create a restock movement');
 
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const reportSummary = await adminRequest<{
       summary: { overview: { onlineOrders: number; posSales: number; onlineRevenue: number; posRevenue: number }; profit: { total: number } };
     }>(`/admin/reports/summary?from=${today}&to=${today}`);

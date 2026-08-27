@@ -11,12 +11,11 @@ import {
   updateLedgerEntry as updateLedgerEntryController,
   deleteLedgerEntry as deleteLedgerEntryController,
 } from '../../controllers/admin/backoffice.controller';
-import { getReportSummary } from '../../controllers/admin/report.controller';
+import { exportBillWiseReport, getBillWiseReport, getReportSummary } from '../../controllers/admin/report.controller';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { z } from 'zod';
 
 const router = Router();
-
 
 const vendorSchema = z.object({
   id: z.string().optional(),
@@ -47,6 +46,8 @@ const ledgerEntrySchema = z.object({
 });
 
 router.get('/reports/summary', asyncHandler(getReportSummary));
+router.get('/reports/bill-wise', asyncHandler(getBillWiseReport));
+router.get('/reports/bill-wise/export', asyncHandler(exportBillWiseReport));
 router.get('/vendors', asyncHandler(listVendorsController));
 router.get('/vendor-purchases', asyncHandler(listVendorPurchasesController));
 router.get('/ledger', asyncHandler(listLedgerEntriesController));
@@ -85,7 +86,7 @@ router.post(
   }),
 );
 
-router.patch(
+router.put(
   '/ledger/:id',
   asyncHandler(async (req, res) => {
     req.body = ledgerEntrySchema.parse(req.body);

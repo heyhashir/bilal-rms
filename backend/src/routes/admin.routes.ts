@@ -37,7 +37,7 @@ mountProtected(coreAdminRoutes, ['ADMIN', 'MANAGER'], ['/bootstrap', '/dashboard
 mountProtected(catalogAdminRoutes, ['ADMIN', 'MANAGER', 'STAFF'], ['/products', '/categories', '/brands', '/barcodes', '/uploads']);
 mountProtected(peopleAdminRoutes, ['ADMIN', 'MANAGER'], ['/customers', '/employees', '/staff-accounts']);
 mountProtected(ordersAdminRoutes, ['ADMIN', 'MANAGER'], ['/orders', '/returns']);
-mountProtected(inventoryAdminRoutes, ['ADMIN', 'MANAGER'], ['/inventory']);
+mountProtected(inventoryAdminRoutes, ['ADMIN', 'MANAGER', 'STAFF'], ['/inventory']);
 mountProtected(posAdminRoutes, ['ADMIN', 'MANAGER', 'STAFF'], ['/pos-sales']);
 mountProtected(commissionsAdminRoutes, ['ADMIN'], ['/commissions']);
 mountProtected(reportsAdminRoutes, ['ADMIN'], ['/reports', '/vendors', '/vendor-purchases', '/ledger']);

@@ -31,6 +31,7 @@ import { Route as TrackOrderRouteImport } from './routes/track-order'
 import { Route as WishlistRouteImport } from './routes/wishlist'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminActivityRouteImport } from './routes/admin.activity'
+import { Route as AdminBillWiseRouteImport } from './routes/admin.bill-wise'
 import { Route as AdminBrandsRouteImport } from './routes/admin.brands'
 import { Route as AdminCategoriesRouteImport } from './routes/admin.categories'
 import { Route as AdminCmsRouteImport } from './routes/admin.cms'
@@ -41,6 +42,8 @@ import { Route as AdminDiscountsRouteImport } from './routes/admin.discounts'
 import { Route as AdminEmployeesRouteImport } from './routes/admin.employees'
 import { Route as AdminImportsRouteImport } from './routes/admin.imports'
 import { Route as AdminInventoryRouteImport } from './routes/admin.inventory'
+import { Route as AdminInventoryValuationRouteImport } from './routes/admin.inventory-valuation'
+import { Route as AdminLedgerRouteImport } from './routes/admin.ledger'
 import { Route as AdminNotificationsRouteImport } from './routes/admin.notifications'
 import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as AdminPosSalesRouteImport } from './routes/admin.pos-sales'
@@ -54,6 +57,7 @@ import { Route as AdminSeoRouteImport } from './routes/admin.seo'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminSizeChartsRouteImport } from './routes/admin.size-charts'
 import { Route as AdminSuppliersRouteImport } from './routes/admin.suppliers'
+import { Route as AdminVendorPurchasesRouteImport } from './routes/admin.vendor-purchases'
 import { Route as CategorySlugRouteImport } from './routes/category.$slug'
 import { Route as InvoiceOrderNumberRouteImport } from './routes/invoice.$orderNumber'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
@@ -168,6 +172,11 @@ const AdminActivityRoute = AdminActivityRouteImport.update({
   path: '/activity',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminBillWiseRoute = AdminBillWiseRouteImport.update({
+  id: '/bill-wise',
+  path: '/bill-wise',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminBrandsRoute = AdminBrandsRouteImport.update({
   id: '/brands',
   path: '/brands',
@@ -216,6 +225,16 @@ const AdminImportsRoute = AdminImportsRouteImport.update({
 const AdminInventoryRoute = AdminInventoryRouteImport.update({
   id: '/inventory',
   path: '/inventory',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminInventoryValuationRoute = AdminInventoryValuationRouteImport.update({
+  id: '/inventory-valuation',
+  path: '/inventory-valuation',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminLedgerRoute = AdminLedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
@@ -283,6 +302,11 @@ const AdminSuppliersRoute = AdminSuppliersRouteImport.update({
   path: '/suppliers',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminVendorPurchasesRoute = AdminVendorPurchasesRouteImport.update({
+  id: '/vendor-purchases',
+  path: '/vendor-purchases',
+  getParentRoute: () => AdminRoute,
+} as any)
 const CategorySlugRoute = CategorySlugRouteImport.update({
   id: '/category/$slug',
   path: '/category/$slug',
@@ -321,6 +345,7 @@ export interface FileRoutesByFullPath {
   '/track-order': typeof TrackOrderRoute
   '/wishlist': typeof WishlistRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/bill-wise': typeof AdminBillWiseRoute
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/cms': typeof AdminCmsRoute
@@ -331,6 +356,8 @@ export interface FileRoutesByFullPath {
   '/admin/employees': typeof AdminEmployeesRoute
   '/admin/imports': typeof AdminImportsRoute
   '/admin/inventory': typeof AdminInventoryRoute
+  '/admin/inventory-valuation': typeof AdminInventoryValuationRoute
+  '/admin/ledger': typeof AdminLedgerRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pos-sales': typeof AdminPosSalesRoute
@@ -344,6 +371,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/size-charts': typeof AdminSizeChartsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
+  '/admin/vendor-purchases': typeof AdminVendorPurchasesRoute
   '/category/$slug': typeof CategorySlugRoute
   '/invoice/$orderNumber': typeof InvoiceOrderNumberRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -370,6 +398,7 @@ export interface FileRoutesByTo {
   '/track-order': typeof TrackOrderRoute
   '/wishlist': typeof WishlistRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/bill-wise': typeof AdminBillWiseRoute
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/cms': typeof AdminCmsRoute
@@ -380,6 +409,8 @@ export interface FileRoutesByTo {
   '/admin/employees': typeof AdminEmployeesRoute
   '/admin/imports': typeof AdminImportsRoute
   '/admin/inventory': typeof AdminInventoryRoute
+  '/admin/inventory-valuation': typeof AdminInventoryValuationRoute
+  '/admin/ledger': typeof AdminLedgerRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pos-sales': typeof AdminPosSalesRoute
@@ -393,6 +424,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/size-charts': typeof AdminSizeChartsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
+  '/admin/vendor-purchases': typeof AdminVendorPurchasesRoute
   '/category/$slug': typeof CategorySlugRoute
   '/invoice/$orderNumber': typeof InvoiceOrderNumberRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -421,6 +453,7 @@ export interface FileRoutesById {
   '/track-order': typeof TrackOrderRoute
   '/wishlist': typeof WishlistRoute
   '/admin/activity': typeof AdminActivityRoute
+  '/admin/bill-wise': typeof AdminBillWiseRoute
   '/admin/brands': typeof AdminBrandsRoute
   '/admin/categories': typeof AdminCategoriesRoute
   '/admin/cms': typeof AdminCmsRoute
@@ -431,6 +464,8 @@ export interface FileRoutesById {
   '/admin/employees': typeof AdminEmployeesRoute
   '/admin/imports': typeof AdminImportsRoute
   '/admin/inventory': typeof AdminInventoryRoute
+  '/admin/inventory-valuation': typeof AdminInventoryValuationRoute
+  '/admin/ledger': typeof AdminLedgerRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/orders': typeof AdminOrdersRoute
   '/admin/pos-sales': typeof AdminPosSalesRoute
@@ -444,6 +479,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/size-charts': typeof AdminSizeChartsRoute
   '/admin/suppliers': typeof AdminSuppliersRoute
+  '/admin/vendor-purchases': typeof AdminVendorPurchasesRoute
   '/category/$slug': typeof CategorySlugRoute
   '/invoice/$orderNumber': typeof InvoiceOrderNumberRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -473,6 +509,7 @@ export interface FileRouteTypes {
     | '/track-order'
     | '/wishlist'
     | '/admin/activity'
+    | '/admin/bill-wise'
     | '/admin/brands'
     | '/admin/categories'
     | '/admin/cms'
@@ -483,6 +520,8 @@ export interface FileRouteTypes {
     | '/admin/employees'
     | '/admin/imports'
     | '/admin/inventory'
+    | '/admin/inventory-valuation'
+    | '/admin/ledger'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pos-sales'
@@ -496,6 +535,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/size-charts'
     | '/admin/suppliers'
+    | '/admin/vendor-purchases'
     | '/category/$slug'
     | '/invoice/$orderNumber'
     | '/product/$slug'
@@ -522,6 +562,7 @@ export interface FileRouteTypes {
     | '/track-order'
     | '/wishlist'
     | '/admin/activity'
+    | '/admin/bill-wise'
     | '/admin/brands'
     | '/admin/categories'
     | '/admin/cms'
@@ -532,6 +573,8 @@ export interface FileRouteTypes {
     | '/admin/employees'
     | '/admin/imports'
     | '/admin/inventory'
+    | '/admin/inventory-valuation'
+    | '/admin/ledger'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pos-sales'
@@ -545,6 +588,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/size-charts'
     | '/admin/suppliers'
+    | '/admin/vendor-purchases'
     | '/category/$slug'
     | '/invoice/$orderNumber'
     | '/product/$slug'
@@ -572,6 +616,7 @@ export interface FileRouteTypes {
     | '/track-order'
     | '/wishlist'
     | '/admin/activity'
+    | '/admin/bill-wise'
     | '/admin/brands'
     | '/admin/categories'
     | '/admin/cms'
@@ -582,6 +627,8 @@ export interface FileRouteTypes {
     | '/admin/employees'
     | '/admin/imports'
     | '/admin/inventory'
+    | '/admin/inventory-valuation'
+    | '/admin/ledger'
     | '/admin/notifications'
     | '/admin/orders'
     | '/admin/pos-sales'
@@ -595,6 +642,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/size-charts'
     | '/admin/suppliers'
+    | '/admin/vendor-purchases'
     | '/category/$slug'
     | '/invoice/$orderNumber'
     | '/product/$slug'
@@ -783,6 +831,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminActivityRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/bill-wise': {
+      id: '/admin/bill-wise'
+      path: '/bill-wise'
+      fullPath: '/admin/bill-wise'
+      preLoaderRoute: typeof AdminBillWiseRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/brands': {
       id: '/admin/brands'
       path: '/brands'
@@ -851,6 +906,20 @@ declare module '@tanstack/react-router' {
       path: '/inventory'
       fullPath: '/admin/inventory'
       preLoaderRoute: typeof AdminInventoryRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/inventory-valuation': {
+      id: '/admin/inventory-valuation'
+      path: '/inventory-valuation'
+      fullPath: '/admin/inventory-valuation'
+      preLoaderRoute: typeof AdminInventoryValuationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/ledger': {
+      id: '/admin/ledger'
+      path: '/ledger'
+      fullPath: '/admin/ledger'
+      preLoaderRoute: typeof AdminLedgerRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/notifications': {
@@ -944,6 +1013,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSuppliersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/vendor-purchases': {
+      id: '/admin/vendor-purchases'
+      path: '/vendor-purchases'
+      fullPath: '/admin/vendor-purchases'
+      preLoaderRoute: typeof AdminVendorPurchasesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/category/$slug': {
       id: '/category/$slug'
       path: '/category/$slug'
@@ -970,6 +1046,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminActivityRoute: typeof AdminActivityRoute
+  AdminBillWiseRoute: typeof AdminBillWiseRoute
   AdminBrandsRoute: typeof AdminBrandsRoute
   AdminCategoriesRoute: typeof AdminCategoriesRoute
   AdminCmsRoute: typeof AdminCmsRoute
@@ -980,6 +1057,8 @@ interface AdminRouteChildren {
   AdminEmployeesRoute: typeof AdminEmployeesRoute
   AdminImportsRoute: typeof AdminImportsRoute
   AdminInventoryRoute: typeof AdminInventoryRoute
+  AdminInventoryValuationRoute: typeof AdminInventoryValuationRoute
+  AdminLedgerRoute: typeof AdminLedgerRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPosSalesRoute: typeof AdminPosSalesRoute
@@ -993,11 +1072,13 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSizeChartsRoute: typeof AdminSizeChartsRoute
   AdminSuppliersRoute: typeof AdminSuppliersRoute
+  AdminVendorPurchasesRoute: typeof AdminVendorPurchasesRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminActivityRoute: AdminActivityRoute,
+  AdminBillWiseRoute: AdminBillWiseRoute,
   AdminBrandsRoute: AdminBrandsRoute,
   AdminCategoriesRoute: AdminCategoriesRoute,
   AdminCmsRoute: AdminCmsRoute,
@@ -1008,6 +1089,8 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminEmployeesRoute: AdminEmployeesRoute,
   AdminImportsRoute: AdminImportsRoute,
   AdminInventoryRoute: AdminInventoryRoute,
+  AdminInventoryValuationRoute: AdminInventoryValuationRoute,
+  AdminLedgerRoute: AdminLedgerRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminPosSalesRoute: AdminPosSalesRoute,
@@ -1021,6 +1104,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSizeChartsRoute: AdminSizeChartsRoute,
   AdminSuppliersRoute: AdminSuppliersRoute,
+  AdminVendorPurchasesRoute: AdminVendorPurchasesRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

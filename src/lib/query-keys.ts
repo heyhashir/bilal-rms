@@ -19,6 +19,7 @@ export const queryKeys = {
     inventorySnapshot: ["admin", "inventory", "snapshot"] as const,
     inventoryLedger: ["admin", "inventory", "ledger"] as const,
     inventoryLedgerList: (params: Record<string, unknown>) => ["admin", "inventory", "ledger", params] as const,
+    inventoryValuation: (params: Record<string, unknown>) => ["admin", "inventory", "valuation", params] as const,
     categories: ["admin", "categories"] as const,
     brands: ["admin", "brands"] as const,
     orders: ["admin", "orders"] as const,

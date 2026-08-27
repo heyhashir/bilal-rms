@@ -19,6 +19,8 @@ export type Employee = {
   id: string;
   name: string;
   phone: string;
+  email?: string;
+  password?: string;
   commissionRate: number;
   status: "active" | "inactive";
   notes: string;
@@ -340,6 +342,102 @@ export type InventorySnapshotItem = {
     stock: number;
     isActive: boolean;
   }>;
+};
+
+export type InventoryValuationItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  productSlug: string;
+  variantId: string | null;
+  barcode: string;
+  deptName: string;
+  categorySlug: string;
+  brandName: string;
+  colorName: string;
+  colorHex: string;
+  size: string;
+  costPrice: number;
+  retailPrice: number;
+  stock: number;
+  extCost: number;
+  extRetail: number;
+};
+
+export type InventoryValuationGroup = {
+  deptName: string;
+  categorySlug: string;
+  items: InventoryValuationItem[];
+  totalUnits: number;
+  totalCost: number;
+  totalRetail: number;
+  averageCost: number;
+};
+
+export type InventoryValuationSummary = {
+  totalItems: number;
+  totalUnits: number;
+  totalCost: number;
+  totalRetail: number;
+  averageUnitCost: number;
+  projectedProfit: number;
+  projectedMarginPercent: number;
+};
+
+export type InventoryValuationReport = {
+  asOfDate: string;
+  groups: InventoryValuationGroup[];
+  summary: InventoryValuationSummary;
+};
+
+export type BillWiseItem = {
+  name: string;
+  sku: string;
+  size: string;
+  colorName: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+  refundedQty: number;
+};
+
+export type BillWiseRow = {
+  id: string;
+  saleId: string;
+  date: string;
+  time: string;
+  timestamp: number;
+  receiptNumber: string;
+  receiptType: "Sales" | "Refund";
+  cashier: string;
+  paymentMethod: string;
+  qtySold: number;
+  total: number;
+  customerName: string;
+  customerPhone: string;
+  items: BillWiseItem[];
+};
+
+export type BillWiseSummary = {
+  totalBills: number;
+  totalSalesCount: number;
+  totalRefundsCount: number;
+  totalQtySold: number;
+  totalSalesAmount: number;
+  totalRefundAmount: number;
+  netCash: number;
+  netCard: number;
+  netDigital: number;
+  grandNetTotal: number;
+};
+
+export type BillWiseReport = {
+  range: {
+    from: string | null;
+    to: string | null;
+  };
+  summary: BillWiseSummary;
+  bills: BillWiseRow[];
 };
 
 export type InventoryMovementEntry = {

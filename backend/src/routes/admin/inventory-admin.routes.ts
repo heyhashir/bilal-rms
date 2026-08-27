@@ -2,14 +2,15 @@ import { Router } from 'express';
 import {
   adjustInventory as adjustInventoryController,
   exportInventoryLedger as exportInventoryLedgerController,
+  exportInventoryValuation as exportInventoryValuationController,
   getInventoryLedger as getInventoryLedgerController,
   getInventorySnapshot as getInventorySnapshotController,
+  getInventoryValuation as getInventoryValuationController,
 } from '../../controllers/admin/inventory.controller';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { z } from 'zod';
 
 const router = Router();
-
 
 const inventorySchema = z.object({
   productId: z.string().min(1),
@@ -21,6 +22,8 @@ const inventorySchema = z.object({
 router.get('/inventory/snapshot', asyncHandler(getInventorySnapshotController));
 router.get('/inventory/ledger', asyncHandler(getInventoryLedgerController));
 router.get('/inventory/ledger/export', asyncHandler(exportInventoryLedgerController));
+router.get('/inventory/valuation', asyncHandler(getInventoryValuationController));
+router.get('/inventory/valuation/export', asyncHandler(exportInventoryValuationController));
 
 router.post(
   '/inventory/adjust',

@@ -112,3 +112,41 @@ export const adjustInventory = async (req: Request, res: Response) => {
 
   res.status(200).json(ApiResponse.success('Inventory updated', { ok: true }));
 };
+
+export const getInventoryValuation = async (req: Request, res: Response) => {
+  const categoryId = typeof req.query.categoryId === 'string' && req.query.categoryId ? req.query.categoryId : undefined;
+  const brandId = typeof req.query.brandId === 'string' && req.query.brandId ? req.query.brandId : undefined;
+  const inStockOnly = req.query.inStockOnly === 'true' || req.query.inStockOnly === '1';
+  const query = typeof req.query.query === 'string' && req.query.query ? req.query.query.trim() : undefined;
+
+  const data = await inventoryService.getInventoryValuation({
+    categoryId,
+    brandId,
+    inStockOnly,
+    query,
+  });
+
+  res.status(200).json(ApiResponse.success('Inventory valuation loaded', data));
+};
+
+export const exportInventoryValuation = async (req: Request, res: Response) => {
+  const categoryId = typeof req.query.categoryId === 'string' && req.query.categoryId ? req.query.categoryId : undefined;
+  const brandId = typeof req.query.brandId === 'string' && req.query.brandId ? req.query.brandId : undefined;
+  const inStockOnly = req.query.inStockOnly === 'true' || req.query.inStockOnly === '1';
+  const query = typeof req.query.query === 'string' && req.query.query ? req.query.query.trim() : undefined;
+
+  const rows = await inventoryService.getInventoryValuationForExport({
+    categoryId,
+    brandId,
+    inStockOnly,
+    query,
+  });
+
+  const headers = ['Item #', 'Dept Name', 'Colour', 'Item Name', 'Size', 'Unit Cost', 'Unit Retail', 'Cmp Qty', 'Ext Cost', 'Ext Retail', 'Brand'];
+  const csv = toCsv(headers, rows);
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="inventory-valuation-${dateStr}.csv"`);
+  res.status(200).send(csv);
+};

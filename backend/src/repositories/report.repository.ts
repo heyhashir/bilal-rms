@@ -61,6 +61,29 @@ export const reportRepository = {
       orderBy: { createdAt: 'desc' },
     });
   },
+  listPosSalesForBillWise(range: DateRange) {
+    return prisma.posSale.findMany({
+      where: {
+        createdAt: toCreatedAtRange(range),
+        status: { in: ['FINALIZED', 'REFUNDED'] },
+      },
+      include: {
+        items: {
+          include: {
+            employee: true,
+          },
+        },
+        payments: true,
+        returns: {
+          include: {
+            saleItem: true,
+          },
+        },
+        voidedBy: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
   listCommissionEntries(range: DateRange) {
     return prisma.commissionEntry.findMany({
       where: { createdAt: toCreatedAtRange(range) },

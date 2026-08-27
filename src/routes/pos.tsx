@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Printer, RefreshCcw, ScanLine, Trash2, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ type SaleChoice = {
   stock: number;
   image: string;
   barcode: string;
+  sku: string;
   qrCode: string;
   size: string;
   color: string;
@@ -47,6 +48,80 @@ type CartLine = SaleChoice & {
   qty: number;
   employeeId: string;
 };
+
+// Cash register scanner audio feedback using Web Audio API
+const playScanBeep = (type: "success" | "error" = "success") => {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === "success") {
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1400, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.07);
+    } else {
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(300, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    }
+  } catch {
+    // Ignore audio context autoplay restrictions
+  }
+};
+
+function findBestScanMatch(query: string, choices: SaleChoice[]): SaleChoice | null {
+  const raw = query.trim();
+  if (!raw) return null;
+  const clean = raw.replace(/^#\s*/, "").toLowerCase();
+  const rawLower = raw.toLowerCase();
+
+  // Priority 1: Exact match on barcode (raw or stripped #)
+  const exactBarcode = choices.find((c) => {
+    const b = c.barcode.trim().toLowerCase();
+    return b && (b === rawLower || b === clean || b.replace(/^#\s*/, "") === clean);
+  });
+  if (exactBarcode) return exactBarcode;
+
+  // Priority 2: Exact match on SKU
+  const exactSku = choices.find((c) => {
+    const s = (c.sku || "").trim().toLowerCase();
+    return s && (s === rawLower || s === clean || s.replace(/^#\s*/, "") === clean);
+  });
+  if (exactSku) return exactSku;
+
+  // Priority 3: Exact match on QR code
+  const exactQr = choices.find((c) => {
+    const q = (c.qrCode || "").trim().toLowerCase();
+    return q && (q === rawLower || q === clean);
+  });
+  if (exactQr) return exactQr;
+
+  // Priority 4: Exact match on subtitle or product slug
+  const exactSub = choices.find((c) => {
+    const sub = (c.subtitle || "").trim().toLowerCase();
+    return sub && (sub === rawLower || sub === clean);
+  });
+  if (exactSub) return exactSub;
+
+  // Priority 5: Fallback to first filtered choice
+  const filtered = choices.filter((c) =>
+    `${c.label} ${c.subtitle} ${c.sku} ${c.barcode} ${c.qrCode} ${c.brand} ${c.category} ${c.size} ${c.color}`
+      .toLowerCase()
+      .includes(clean),
+  );
+  return filtered[0] || null;
+}
 
 type PosQuerySource = "live" | "cache";
 
@@ -412,6 +487,13 @@ function PosTerminal() {
     setRefundNote("");
   }, [receipt?.saleNumber]);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus scan input on load
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, [settingsQuery.data]);
+
   const choices = useMemo<SaleChoice[]>(() => {
     const rows: SaleChoice[] = [];
     for (const product of products) {
@@ -427,6 +509,7 @@ function PosTerminal() {
             stock: variant.stock,
             image: product.images[0] ?? "",
             barcode: variant.barcode ?? product.barcode ?? "",
+            sku: variant.sku ?? product.sku ?? "",
             qrCode: variant.qrCode ?? product.qrCode ?? "",
             size: variant.size,
             color: variant.colorName,
@@ -444,6 +527,7 @@ function PosTerminal() {
           stock: product.stock,
           image: product.images[0] ?? "",
           barcode: product.barcode ?? "",
+          sku: product.sku ?? product.slug ?? "",
           qrCode: product.qrCode ?? "",
           size: "",
           color: "",
@@ -475,7 +559,7 @@ function PosTerminal() {
           return true;
         }
 
-        return `${choice.label} ${choice.subtitle} ${choice.barcode} ${choice.qrCode} ${choice.brand} ${choice.category} ${choice.size} ${choice.color}`.toLowerCase().includes(term);
+        return `${choice.label} ${choice.subtitle} ${choice.sku} ${choice.barcode} ${choice.qrCode} ${choice.brand} ${choice.category} ${choice.size} ${choice.color}`.toLowerCase().includes(term);
       })
       .slice(0, 8);
   }, [brandFilter, categoryFilter, choices, search]);
@@ -484,20 +568,95 @@ function PosTerminal() {
 
   const addChoice = (choice: SaleChoice) => {
     if (choice.stock <= 0) {
-      toast.error("This item is out of stock");
+      playScanBeep("error");
+      toast.error(`Out of stock: ${choice.label} (${choice.subtitle || "Standard"})`);
       return;
     }
 
     setCart((current) => {
       const existing = current.find((entry) => entry.productId === choice.productId && entry.variantId === choice.variantId);
       if (existing) {
-        return current.map((entry) => (entry.productId === choice.productId && entry.variantId === choice.variantId ? { ...entry, qty: Math.min(entry.qty + 1, choice.stock) } : entry));
+        if (existing.qty >= choice.stock) {
+          playScanBeep("error");
+          toast.warning(`Maximum available stock reached (${choice.stock} pcs on hand)`);
+          return current;
+        }
+        playScanBeep("success");
+        toast.success(`Incremented: ${choice.label} (Qty: ${existing.qty + 1})`);
+        return current.map((entry) => (entry.productId === choice.productId && entry.variantId === choice.variantId ? { ...entry, qty: entry.qty + 1 } : entry));
       }
 
+      playScanBeep("success");
+      toast.success(`Added: ${choice.label} ${choice.size ? `· Size ${choice.size}` : ""}`);
       return [...current, { ...choice, qty: 1, employeeId: "" }];
     });
     setSearch("");
+    searchInputRef.current?.focus();
   };
+
+  const handleScanOrSubmit = (codeToSearch: string) => {
+    const target = codeToSearch.trim();
+    if (!target) return;
+    const match = findBestScanMatch(target, choices);
+    if (match) {
+      addChoice(match);
+    } else {
+      playScanBeep("error");
+      toast.error(`No product found for barcode / SKU "${target}"`);
+    }
+    setSearch("");
+    searchInputRef.current?.focus();
+  };
+
+  // Global hardware presentation scanner listener (Honeywell Orbit MS7120)
+  useEffect(() => {
+    let buffer = "";
+    let lastKeyTime = 0;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isOtherInput =
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") &&
+        target !== searchInputRef.current;
+
+      // Do not intercept human typing if user is actively filling customer forms or select dropdowns
+      if (isOtherInput) {
+        return;
+      }
+
+      const currentTime = Date.now();
+      const isHardwareSpeed = currentTime - lastKeyTime < 60; // Hardware laser scanner burst
+      lastKeyTime = currentTime;
+
+      if (e.key === "Enter") {
+        if (buffer.length >= 2) {
+          e.preventDefault();
+          handleScanOrSubmit(buffer);
+          buffer = "";
+        } else if (target === searchInputRef.current && search.trim()) {
+          e.preventDefault();
+          handleScanOrSubmit(search);
+        }
+        return;
+      }
+
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (target === searchInputRef.current) {
+          buffer = "";
+        } else {
+          if (isHardwareSpeed || buffer.length === 0) {
+            buffer += e.key;
+          } else {
+            buffer = e.key;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [choices, search]);
 
   const queueCurrentSale = () => {
     const saleNumber = `OFF-${Date.now().toString(36).toUpperCase()}`;
@@ -709,15 +868,16 @@ function PosTerminal() {
               <div className="relative">
                 <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
+                  ref={searchInputRef}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && filteredChoices[0]) {
+                    if (event.key === "Enter") {
                       event.preventDefault();
-                      addChoice(filteredChoices[0]);
+                      handleScanOrSubmit(search);
                     }
                   }}
-                  placeholder="Barcode, QR code, SKU, or product name"
+                  placeholder="Scan barcode with Honeywell Orbit or search by name / SKU..."
                   className="w-full border border-border bg-background py-3 pl-10 pr-3 text-sm outline-none focus:border-foreground"
                 />
               </div>

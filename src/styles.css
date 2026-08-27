@@ -252,11 +252,6 @@
 }
 
 @media print {
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
-
   body * {
     visibility: hidden !important;
   }
@@ -273,6 +268,29 @@
     max-width: 80mm !important;
     min-height: 0;
     margin: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-valuation-sheet,
+  .print-valuation-sheet *,
+  .print-billwise-sheet,
+  .print-billwise-sheet * {
+    visibility: visible !important;
+  }
+
+  .print-valuation-sheet,
+  .print-billwise-sheet {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0;
+    margin: 0 !important;
+    padding: 15px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
     box-shadow: none !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
