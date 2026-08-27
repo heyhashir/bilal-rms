@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Printer, RefreshCcw, ScanLine, Trash2, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
@@ -566,7 +566,7 @@ function PosTerminal() {
 
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 
-  const addChoice = (choice: SaleChoice) => {
+  const addChoice = useCallback((choice: SaleChoice) => {
     if (choice.stock <= 0) {
       playScanBeep("error");
       toast.error(`Out of stock: ${choice.label} (${choice.subtitle || "Standard"})`);
@@ -592,9 +592,9 @@ function PosTerminal() {
     });
     setSearch("");
     searchInputRef.current?.focus();
-  };
+  }, []);
 
-  const handleScanOrSubmit = (codeToSearch: string) => {
+  const handleScanOrSubmit = useCallback((codeToSearch: string) => {
     const target = codeToSearch.trim();
     if (!target) return;
     const match = findBestScanMatch(target, choices);
@@ -606,7 +606,7 @@ function PosTerminal() {
     }
     setSearch("");
     searchInputRef.current?.focus();
-  };
+  }, [addChoice, choices]);
 
   // Global hardware presentation scanner listener (Honeywell Orbit MS7120)
   useEffect(() => {
@@ -656,7 +656,7 @@ function PosTerminal() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [choices, search]);
+  }, [handleScanOrSubmit, search]);
 
   const queueCurrentSale = () => {
     const saleNumber = `OFF-${Date.now().toString(36).toUpperCase()}`;
