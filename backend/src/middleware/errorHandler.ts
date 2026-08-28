@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import { NextFunction, Request, Response } from 'express';
 import multer from 'multer';
 import { ZodError } from 'zod';
@@ -23,7 +23,13 @@ export const errorHandler = (
     errors = err.errors;
   } else if (err instanceof ZodError) {
     statusCode = 400;
-    message = 'Validation failed';
+    const detail = err.issues
+      .map((issue) => {
+        const path = issue.path.filter((p) => p !== undefined).join('.');
+        return path ? `${path}: ${issue.message}` : issue.message;
+      })
+      .join('; ');
+    message = detail ? `Validation failed: ${detail}` : 'Validation failed';
     errors = err.issues;
   } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     switch (err.code) {

@@ -1,115 +1,134 @@
-# Bilal RMS QA Report
+# Bilal RMS Full QA Report
 
-**Run ID:** `QA-20260725-001`
-**Date:** 25 July 2026
-**Scope:** Non-destructive local release validation for storefront, admin, web POS, desktop POS runtime, security controls, and packaging.
+**Run ID:** `QA-20260828-LOCAL-AUDIT`
+
+**Date:** 28 August 2026
+
+**Scope:** Local, non-destructive audit of storefront, admin, hosted POS, backend, MariaDB logic, and Windows Electron POS.
+
+**Exclusions:** No Git push, Hostinger deployment, production database access, or desktop release publication was performed.
 
 ## Environment And Baseline
 
-| Item | Value |
+| Item | Evidence |
 | --- | --- |
 | Workspace | `F:\hashir\bilal-rms` |
-| Baseline commit | `ebd2d22` (QA changes are currently uncommitted) |
-| Local runtime | Node `24.11.0`, npm `11.6.1` |
-| Production target | Node `20.x` on Hostinger |
-| Database | Existing Docker MariaDB, `127.0.0.1:3308` |
-| Web/API target | `http://127.0.0.1:5000` |
-| Desktop package | Bilal RMS POS `0.1.1`, Electron `33.4.11` |
-| Windows installer | `desktop/dist/BilalRMS-Setup-0.1.1.exe`, 85,594,819 bytes |
+| Baseline revision | `8086920` on `main`; audit changes are intentionally uncommitted |
+| Runtime used | Windows 11, Node `24.11.0`, npm `11.6.1` |
+| Declared package manager | npm `10.8.2` |
+| Local database | Existing Docker MariaDB at `127.0.0.1:3308` |
+| Web target | Local production build at `http://127.0.0.1:5000` |
+| ORM | Prisma `7.10.0`; generated client checked through schema validation and migration deployment |
+| Desktop | Bilal RMS `0.3.1`, Electron `43.2.0` |
+| Installer | `desktop/dist/BilalRMS-Setup-0.3.1.exe`, 105,222,844 bytes |
+| Installer SHA-256 | `967DA0DF0C38B5B7F18FDDA5A10DC6CDB1506E2EC33559791525BE52AED63003` |
+| Installer signature | `NotSigned` |
 
-No MariaDB volume, existing business record, or desktop SQLite runtime data was reset or deleted. All browser QA data used a unique `qa-<suite>-<timestamp>` prefix and was selectively cleaned after each run.
+The existing MariaDB volume and desktop SQLite data were retained. Browser and integration writes used generated `qa-*` or `int-*` identifiers and cleanup in `finally`. No destructive reset was run.
 
 ## Release Test Matrix
 
-| Area | Coverage | Result | Evidence |
+| Area | Command / method | Result | Evidence |
 | --- | --- | --- | --- |
-| Build | Vite production client and TypeScript backend build | PASS | `npm run build` |
-| Schema | Prisma schema validation using `backend/.env.local` | PASS | `npm run db:validate` |
-| Health | Liveness and readiness endpoints | PASS | `/api/v1/health` and `/api/v1/health/ready` returned 200 |
-| Backend services | Inventory, POS, commission, checkout domain workflows | PASS | `npm run test:backend:services` |
-| Backend integration | Auth, CSRF, duplicate email, checkout, upload rejection, stock, POS/refund, reports, RBAC, sync idempotency, exports | PASS | `npm run test:backend:integration` |
-| CSV import | Valid import and XLSX rejection | PASS | `npm run test:backend:imports` |
-| Web smoke | Storefront, admin, POS sale/refund, commission and reporting | PASS | `npm run test:qa:smoke` |
-| Web regression | Retail entity creation, POS refund, commission reversal | PASS | `npm run test:qa:regression` |
-| Live-safe QA | Shop, POS history, commission visibility and normal navigation | PASS | `npm run test:qa:live` |
-| Customer QA | Search/no-results, category sorting, size guide, Buy Now, wishlist/cart, sale endpoint | PASS | `npm run test:qa:customer` |
-| Edge | Customer QA in Microsoft Edge | PASS | `npm run test:qa:edge` |
-| Tablet | Customer QA in iPad/WebKit emulation | PASS | `npm run test:qa:tablet` |
-| Mobile | Customer QA in Pixel/Chromium emulation | PASS | `npm run test:qa:mobile` |
-| Route scope | Controller architecture and deferred admin route checks | PASS | `npm run check:architecture`, `npm run check:deferred-routes` |
-| Frontend lint | TypeScript/React lint | PASS WITH WARNINGS | 0 errors; 16 non-blocking Fast Refresh/Hook dependency warnings |
-| Backend lint | Backend TypeScript lint | PASS | `npm run lint:backend` |
-| Desktop local data | Offline sale/refund persistence, local stock restoration, durable receipt, receipt HTML width | PASS | `npm run test:desktop:local` |
-| Desktop package | Windows x64 NSIS installer generation | PASS | `npm run desktop:dist` |
-| Dependency audit | Production dependency audit | PASS WITH LOWS | 0 moderate, high, or critical; 3 low development/transitive advisories |
+| Root clean install | `npm ci` | PASS | Postinstall generated Prisma client and built client/server |
+| Desktop clean install | `npm ci` in `desktop/` | PASS | Dependency tree installed; only transitive build-tool deprecation notices |
+| Frontend lint | `npm run lint` | PASS | No errors or warnings |
+| Backend lint | `npm run lint:backend` | PASS | No errors or warnings |
+| Client/backend build | `npm run build` | PASS | Vite production output and backend TypeScript compiled |
+| Prisma schema | `npm run db:validate` | PASS | Prisma 7 schema/config accepted |
+| Local migrations | `npm run db:deploy` | PASS | No pending migration failure; employee/account migration present |
+| Architecture | `npm run check:architecture` | PASS | Protected controller structure accepted |
+| Deferred routes | `npm run check:deferred-routes` | PASS | No unsupported admin menu route exposed |
+| Backend domain tests | `npm run test:backend:services` | PASS | Inventory, reporting, POS, employee security, catalog zero values |
+| Backend integration | `npm run test:backend:integration` | PASS | Auth, CSRF, RBAC, employee revocation, checkout, POS/refund, sync idempotency |
+| Import validation | `npm run test:backend:imports` | PASS | Supported import path and rejected invalid files |
+| Web smoke | `npm run test:qa:smoke` | PASS | Final rerun: 3 tests in 10.3 s; admin product create, 12-to-15 inventory adjustment, POS/refund and storefront |
+| Retail regression | `npm run test:qa:regression` | PASS | Product/employee creation, attributed sale, refund and commission reversal |
+| Full local write suite | `npm run test:qa:live` | PASS | 6.1 s; sticker setup, variant matrix, storefront, POS, receipt, commissions, invoice lookup/void |
+| Customer Chrome | `npm run test:qa:customer` | PASS | Search/no-result, categories, sorting, size guide, Buy Now, cart/wishlist |
+| Microsoft Edge | `npm run test:qa:edge` | PASS | Customer flow and responsive behavior |
+| Tablet emulation | `npm run test:qa:tablet` | PASS | iPad/WebKit project |
+| Mobile emulation | `npm run test:qa:mobile` | PASS | Pixel/Chromium project |
+| Read-only smoke | `npm run test:e2e:live` | PASS | Read-only target guard; no product, order, employee, or finance mutation |
+| Dependency audit | `npm audit --audit-level=high` | PASS | 0 vulnerabilities in root tree |
+| Desktop dependency audit | `npm audit --audit-level=high` in `desktop/` | PASS | 0 vulnerabilities |
+| Desktop local persistence | `npm run test:desktop:local` | PASS | Offline sale/refund, stock, receipt, queue and restart persistence |
+| Desktop update feed | `npm run test:desktop:update` | PASS | Local N to N+1 discovery, checksum/size and no-downgrade behavior |
+| Packaged desktop launch | Packaged executable smoke against local backend | PASS | Startup 1,722.9 ms; sign-in 317.9 ms; POS ready 309.5 ms |
+| Desktop package | `npm run desktop:pack` | PASS | Unpacked Windows application built |
+| Windows installer | `npm run desktop:dist` | PASS | NSIS installer built; signing correctly reported absent |
+| Diff integrity | `git diff --check` | PASS | No whitespace errors; Git only reported line-ending conversion notices |
 
 ## Performance Results
 
-Twenty local samples were taken after the final backend restart. The normal local API p95 budget is under 750 ms.
+Budgets: local API p95 under 750 ms, page usable under 3,000 ms, Electron usable under 4,000 ms, local POS persistence under 1,000 ms, and visible UI feedback under 250 ms.
 
-| Endpoint | Average | p95 | Budget | Result |
-| --- | ---: | ---: | ---: | --- |
-| `/api/v1/health` | 2.34 ms | 2.73 ms | < 750 ms | PASS |
-| `/api/v1/health/ready` | 2.12 ms | 4.06 ms | < 750 ms | PASS |
-| `/api/v1/catalog/bootstrap` | 7.30 ms | 9.23 ms | < 750 ms | PASS |
-| `/api/v1/catalog/products` | 6.58 ms | 7.65 ms | < 750 ms | PASS |
+| Measurement | Result | Budget | Status |
+| --- | ---: | ---: | --- |
+| `/api/v1/health` p95 | 2.4 ms | 750 ms | PASS |
+| `/api/v1/categories` p95 | 7.4 ms | 750 ms | PASS |
+| `/api/v1/catalog/settings` p95 | 2.6 ms | 750 ms | PASS |
+| `/api/v1/catalog/bootstrap` p95 | 8.8 ms | 750 ms | PASS |
+| Catalog products p95 | 6.0 ms | 750 ms | PASS |
+| Home usable state | 659.1 ms | 3,000 ms | PASS |
+| Shop usable state | 60.7 ms | 3,000 ms | PASS |
+| Search usable state | 43.7 ms | 3,000 ms | PASS |
+| Shop list-view feedback | 87.4 ms | 250 ms | PASS |
+| Electron usable state | 1,722.9 ms | 4,000 ms | PASS |
+| Desktop local sale persistence | about 5.6 ms | 1,000 ms | PASS |
+| Desktop local refund persistence | about 4.3 ms | 1,000 ms | PASS |
 
-Desktop local sale/refund persistence is covered by the local-store smoke and completes synchronously within its sub-second target. Full Electron launch-to-usable timing needs an interactive Windows desktop acceptance run because this environment cannot launch and control the packaged GUI window.
+The first home timing immediately after dependency installation was 3,440 ms, but two warm production-build reruns measured about 594 ms and 596 ms and the final gated run measured 659.1 ms. The initial result was not reproducible and is treated as build/startup warm-up, not an open regression.
 
 ## Defect Register
 
-| ID | Severity | Reproduction And Evidence | Root Cause | Fix | Regression Coverage |
-| --- | --- | --- | --- | --- | --- |
-| QA-001 | P1 | Finalized offline desktop sale left the cached product stock unchanged. | `persistOfflineSale` queued the sale but did not mutate the local stock snapshot. | Added local sale cache adjustment for simple and variant stock, including parent stock recalculation. | `npm run test:desktop:local` verifies decrement, refund restoration, queue durability, and receipt persistence. |
-| QA-002 | P2 | XP-T361U-targeted receipt HTML used 76 mm despite a 72 mm printable receipt profile. | Receipt CSS used the wrong paper width. | Set `@page` and body width to 72 mm with border-box sizing. | Desktop smoke asserts the exact page/body constraints. |
-| QA-003 | P2 | Size guide dialog could block product actions without responding to Escape. | Modal had click-close only. | Added keyboard Escape handling while the size guide is open. | Customer QA opens a bottoms size guide, validates its columns, presses Escape, and completes Buy Now. |
-| QA-004 | P2 | WebKit tablet emulation rendered a blank SPA at local HTTP. | Helmet emitted `upgrade-insecure-requests` and HSTS for local HTTP, causing WebKit to request local assets through HTTPS. | Keep these headers for production only; disable them in local/test HTTP mode. | WebKit iPad and Pixel/Chromium QA suites pass after the fix. |
-| QA-005 | P2 | Non-destructive QA could leave or remove the wrong records. | Earlier checks lacked a dedicated data prefix and cleanup utility. | Added generated QA prefixes, cleanup utility, and live-safe Playwright configuration. | Every QA browser command reports the removed prefix after completion. |
-| QA-006 | P2 | `prisma validate` could fail to find the local database environment. | Prisma command did not load `backend/.env.local`. | Added `db:validate` wrapper using the backend environment. | `npm run db:validate` passes. |
-| QA-007 | P2 | Root lint scanned generated Electron/runtime artifacts and backend lint used incompatible dependency resolution. | One root lint command crossed project boundaries; backend ESLint packages were mismatched after dependency upgrades. | Excluded generated output, scoped root lint to frontend source, aligned backend ESLint TypeScript packages, and removed obsolete disable comments. | Root lint has 0 errors; backend lint passes cleanly. |
-| QA-008 | P1 | Production audit contained vulnerable/unneeded packages and spreadsheet parsing added unnecessary attack surface. | Stale build packages and an XLSX parser were included in the runtime dependency graph. | Removed unused runtime packages, updated dependencies, and restricted catalog imports to bounded CSV parsing (max 5,000 rows). | Import smoke accepts CSV and rejects XLSX; production audit has 0 high/critical findings. |
+| ID | Severity | Defect / root cause | Resolution and regression evidence |
+| --- | --- | --- | --- |
+| QA-101 | P1 | Managers could provision employee login credentials, allowing role boundary escalation. | Credential fields and API mutations are admin-only; role escalation tests pass. |
+| QA-102 | P1 | Employee and STAFF account changes were not atomic and archive did not reliably revoke linked login access. | Added optional unique Employee-to-AdminAccount relation, transactional provisioning/update, account deactivation and session revocation. |
+| QA-103 | P1 | Online pending/processing/shipped orders could be counted as recognized revenue/profit. | Online revenue now recognizes only `DELIVERED`; operational order count remains separate. Reporting regressions cover pending exclusion and delivery recognition. |
+| QA-104 | P1 | POS cashier identity could be inferred from the first attributed salesperson on mixed-employee bills. | Added explicit cashier account relation and separate line-level salesperson reporting. Mixed-employee test passes. |
+| QA-105 | P1 | Refund display references were not guaranteed unique for multiple refunds on one invoice. | Refunds now receive unique displayed references; repeated-refund coverage passes. |
+| QA-106 | P1 | Write-enabled QA could be pointed at a remote URL and leave business records. | Local destructive guard, read-only remote suite, `finally` cleanup, and expanded register/sync cleanup implemented. |
+| QA-107 | P2 | Product validation used truthiness and could replace explicit zero price/cost; repository error handling could hide database failures. | Explicit null checks preserve zero values and database exceptions propagate. Service tests cover zero-value fields. |
+| QA-108 | P2 | Currency fallback ran only for a narrow failure path. | Secondary provider now handles network errors, non-success responses and malformed payloads; cached/fallback source is identified. CSP allows only the two configured providers. |
+| QA-109 | P2 | Standalone Size Guides navigation exposed deferred/duplicate management. | Removed the menu entry; supported per-product size-guide editing remains. Deferred-route check passes. |
+| QA-110 | P2 | Browser tests used stale product/barcode controls and could scan before the asynchronous POS catalog bootstrap completed. | Locators now match current labels and preset color workflow; scanner simulation waits for catalog readiness. Sticker controls gained programmatic labels. All browser projects pass. |
+| QA-111 | P2 | Desktop smoke could reuse operator SQLite state and did not prove update persistence/idempotency. | Tests use isolated temporary profiles, clean them, verify restart persistence, exactly-once sync, and a local N/N+1 update feed. |
+| QA-112 | P2 | Insecure default admin credentials could be accepted from source defaults. | `ADMIN_EMAIL` and `ADMIN_PASSWORD` are mandatory environment values; no demo credential is rendered or embedded. |
+| QA-113 | P2 | Prisma 5/runtime dependency state contained stale tooling and audit noise. | Migrated to Prisma 7 generated client/config, aligned lockfiles, moved test runners to `tsx`, and updated dependencies. Both audits report zero vulnerabilities. |
+| QA-114 | P2 | Sticker design, roll size, dimensions and orientation had visible labels without accessible associations. | Added explicit control IDs/labels; live Playwright selection now uses the visible labels. |
 
-## QA Data Cleanup Manifest
+No reproducible P0 or P1 defect remains open in this local run.
 
-The following QA datasets were created and selectively removed by `backend/src/tests/cleanup-qa.ts`:
+## Finance, Inventory And Cleanup Reconciliation
 
-| Suite | Final Run Prefix | Cleanup |
-| --- | --- | --- |
-| Smoke | `qa-smoke-ms02e0ok` | Completed |
-| Final smoke after WebKit fix | `qa-smoke-ms031zyk` | Completed |
-| Regression | `qa-regression-ms02pyev` | Completed |
-| Live-safe | `qa-live-ms02h2qm` | Completed |
-| Customer | `qa-customer-ms02eii7` | Completed |
-| Edge | `qa-edge-ms02ta88` | Completed |
-| Tablet retry | `qa-tablet-ms02ys4q` | Completed |
-| Mobile | `qa-mobile-ms02z111` | Completed |
+- Online sales contribute revenue and profit only after `DELIVERED`; pending through shipped remain operational counts.
+- POS sale, void/refund, inventory movement, receipt and commission paths were exercised together and reconciled by service/integration/browser tests.
+- Line salesperson and bill cashier are stored/reported independently.
+- Offline sale decrements cached stock; refund restores it; both survive restart and queue exactly once for sync.
+- Browser wrappers reported cleanup for every final prefix, including the latest product/inventory verification `qa-smoke-mtd3xiyk`, `qa-regression-mtcl6rf8`, `qa-customer-mtcl6zmr`, `qa-edge-mtcl74nb`, `qa-tablet-mtcl7b1v`, `qa-mobile-mtcl7jej`, and `qa-live-mtd2u2dg`.
+- Failed retries `qa-smoke-mtd3sqwj`, `qa-live-mtd2lbui`, and `qa-live-mtd2qbwc` were also cleaned automatically.
+- Integration fixtures cleaned their own `int-*` records in `finally`; desktop tests removed isolated temporary profiles.
+- No existing business catalog, customer, order, inventory, finance, or desktop operator record was intentionally removed.
 
-The earlier failed tablet prefix `qa-tablet-ms02u5t8` was also cleaned automatically. No base catalog, order, customer, employee, or persisted desktop data was intentionally deleted.
+## Residual And External Acceptance
 
-## Product And Security Notes
+These items are not software passes and must remain open until tested on the actual target:
 
-- Import is intentionally **CSV-only** for now. Convert XLS/XLSX spreadsheets to CSV before upload. The importer rejects non-CSV files and caps input at 5,000 rows.
-- Production audit result: three low transitive development advisories (`@babel/core`, `body-parser`, `esbuild`); zero moderate, high, or critical advisories. No high/critical production dependency is known.
-- Frontend lint reports 16 existing non-failing advisories: Fast Refresh export layout and Hook dependency stability. They do not block build or test behavior, but should be reduced in a code-quality pass.
-- The repository no longer contains an unused Cloudflare Wrangler runtime configuration. The supported runtime remains the single Express/Hostinger deployment model.
+- [ ] Scan real merchandise labels with the Honeywell Orbit scanner, including unreadable/duplicate scans and sustained counter throughput.
+- [ ] Print receipt and 38.1 x 25.4 mm label output through the physical Xprinter/driver; verify feed, cutter, density, barcode/QR scan quality and printer-unavailable recovery.
+- [ ] Install on a clean customer Windows PC and verify SmartScreen behavior. The current installer is **not signed**.
+- [ ] Complete code signing with a trusted Windows certificate and rebuild before broad distribution.
+- [ ] Validate storefront and checkout on physical Android and iOS devices; current mobile/tablet evidence is emulation.
+- [ ] Deploy to Hostinger staging/production only after approval, then verify Node 20 runtime, migrations, secure cookies, HTTPS, custom domain, database connectivity and runtime logs.
+- [ ] Confirm Hostinger preserves `storage/uploads` and `storage/desktop` across redeploy/restart and validate backup/restore procedures.
+- [ ] Run the final physical offline/reconnect day test and reconcile hosted stock, receipts, refunds, commissions and duplicate-job prevention.
 
-## Hardware And Deployment Acceptance Checklist
-
-These checks are deliberately **not** marked passed because they require real external systems or interactive hardware:
-
-- [ ] Run the built installer on a clean Windows PC with Node, Git, and Docker absent.
-- [ ] Measure actual Electron launch, login, POS readiness, and sign-in timing on that PC.
-- [ ] Select the real Xprinter XP-T361U in Windows and print a 72 mm receipt.
-- [ ] Check paper feed, cutter behavior, margins, barcode/QR scan quality, printer-unavailable handling, and reprint behavior on the physical printer.
-- [ ] Validate the 76 mm physical label workflow and raw ESC/POS/TSPL requirements if that printer mode is enabled for launch.
-- [ ] Code-sign the Windows installer and set a production application icon before client distribution; the package build correctly reported that signing was skipped.
-- [ ] Test the exact Node 20.x runtime used by Hostinger; this local verification ran on Node 24.11.0.
-- [ ] Deploy to Hostinger staging, run migrations/seed checks, verify HTTPS/cookies/custom domain, and confirm uploads survive a redeploy.
-- [ ] Run a real offline day: disconnect the billing PC, create sales/refunds, restart the desktop app, reconnect, and reconcile cloud inventory, receipts, and commissions.
-- [ ] Validate the final storefront on physical Android and iOS devices.
+The latest `electron-builder` still emits deprecation notices from transitive packaging tools (`inflight`, legacy `glob`/`rimraf`, and `boolean`). They are build-time dependencies, both audits are clean, and forced overrides would risk packaging behavior. Track upstream replacement as P3 maintenance.
 
 ## Release Recommendation
 
-**Local release gate: PASS, conditional.** No open reproducible P0 or P1 application defect remains in this QA run. Builds, schema validation, health checks, backend services/integration, non-destructive browser QA, POS reconciliation coverage, local desktop persistence, and Windows installer packaging all pass.
+**Local release candidate: PASS, conditional on external acceptance.** All local build, schema, security, data-integrity, browser, POS, performance, desktop persistence, update-feed and packaging gates pass. No unexplained test failure or backend 500 remained in the final run, and no P0/P1 defect is open.
 
-Do not mark the customer release as fully production-approved until the external acceptance checklist above is completed, especially Node 20/Hostinger staging, physical XP-T361U validation, an offline/reconnect desktop reconciliation run, and Windows code signing.
+This report does **not** authorize or claim a production deployment. Hostinger verification, physical scanner/printer testing, real mobile-device testing, clean-client installation and trusted Windows signing remain required release acceptance work.

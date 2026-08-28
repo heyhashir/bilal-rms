@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 import { catalogRepository } from '../repositories/catalog.repository';
 import { posRepository, posSaleInclude } from '../repositories/pos.repository';
@@ -70,6 +70,7 @@ export const posService = {
     notes?: string;
     deviceKey?: string;
     deviceName?: string;
+    cashierAccountId?: string | null;
     lines: Array<{
       productId: string;
       variantId?: string | null;
@@ -153,6 +154,7 @@ export const posService = {
           finalizedAt: input.status === 'finalized' ? new Date() : null,
           deviceId: device?.id ?? null,
           deviceName: device?.name ?? input.deviceName ?? null,
+          cashierAccountId: input.cashierAccountId ?? null,
         },
       });
 

@@ -217,7 +217,7 @@ ADMIN_PASSWORD=use-a-strong-unique-password
 ADMIN_EMAIL=admin@bilalgarments.pk
 ```
 
-`ADMIN_EMAIL` is optional and defaults to `admin@bilalgarments.pk`. Hostinger may still inject its own `PORT`; the application otherwise defaults to port `3000`. Copy `.env.hostinger.example` as the reference, and never upload real credentials to GitHub.
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` are required; there is no source-code credential fallback. Hostinger may still inject its own `PORT`; the application otherwise defaults to port `3000`. Copy `.env.hostinger.example` as the reference, and never upload real credentials to GitHub.
 
 ### What Happens On Each Deploy
 

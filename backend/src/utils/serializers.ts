@@ -26,7 +26,7 @@ import {
   Vendor,
   VendorPurchase,
   LedgerEntry,
-} from '@prisma/client';
+} from '../generated/prisma/client';
 
 type ProductWithRelations = Product & {
   category: Category;
@@ -362,13 +362,20 @@ export const serializeReturnRequest = (request: ReturnRequest) => ({
   createdAt: request.createdAt.getTime(),
 });
 
-export const serializeEmployee = (employee: Employee) => ({
+export const serializeEmployee = (
+  employee: Employee & {
+    loginAccount?: Pick<AdminAccount, 'id' | 'email' | 'role' | 'isActive'> | null;
+  },
+) => ({
   id: employee.id,
   name: employee.name,
   phone: employee.phone ?? '',
   commissionRate: decimalToNumber(employee.commissionRate) ?? 0,
   status: employee.status.toLowerCase(),
   notes: employee.notes,
+  email: employee.loginAccount?.email ?? '',
+  loginProvisioned: Boolean(employee.loginAccount),
+  loginActive: employee.loginAccount?.isActive ?? false,
   createdAt: employee.createdAt.getTime(),
   updatedAt: employee.updatedAt.getTime(),
 });

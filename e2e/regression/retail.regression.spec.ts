@@ -27,13 +27,14 @@ test.describe("Bilal RMS regression", () => {
     await page.getByLabel(/^Name$/).fill(testData.productName);
     await page.getByLabel(/^Slug$/).fill(testData.productSlug);
     await page.getByLabel(/^Description$/).fill("Regression product");
+    await page.locator("label", { hasText: "Category" }).locator("select").selectOption({ label: testData.categoryName });
     await page.getByLabel(/^Price$/).fill("3000");
     await page.getByLabel(/^Stock$/).fill("8");
     await page.getByLabel(/^Barcode$/).fill(testData.productBarcode);
     await page.getByLabel(/^QR code$/).fill(testData.productQrCode);
     await page.getByLabel(/^Sizes \(comma separated\)$/).fill("M");
-    await page.getByPlaceholder("Color name").fill("Black");
-    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await page.getByRole("button", { name: "Black", exact: true }).click();
+    await page.getByRole("button", { name: "Add Color" }).click();
     await page.locator('input[type="file"][accept="image/*"]').first().setInputFiles(productImagePath);
     await saveModal(page);
 
@@ -62,7 +63,7 @@ test.describe("Bilal RMS regression", () => {
     await expect(page.locator("tbody tr").filter({ hasText: testData.employeeName }).first()).toBeVisible();
 
     await page.goto("/pos");
-    await page.getByPlaceholder("Barcode, QR code, SKU, or product name").fill(testData.productBarcode);
+    await page.getByPlaceholder(/Scan barcode with Honeywell Orbit/).fill(testData.productBarcode);
     await page.getByRole("button", { name: testData.productName }).first().click();
     await page.locator("tbody select").first().selectOption({ label: testData.employeeName });
     await page.getByLabel(/^Customer name$/).fill(testData.customerName);

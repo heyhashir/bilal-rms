@@ -3,6 +3,7 @@ import { ApiResponse } from '../../utils/ApiResponse';
 import { serializeEmployee } from '../../utils/serializers';
 import { employeeService } from '../../services/employee.service';
 import { logAdminAudit } from '../../utils/adminAudit';
+import { ApiError } from '../../types/ApiError';
 
 export const listEmployees = async (_req: Request, res: Response) => {
   const employees = await employeeService.listEmployees();
@@ -18,7 +19,11 @@ export const saveEmployee = async (req: Request, res: Response) => {
     status: 'active' | 'inactive';
     notes?: string;
   };
-  const employee = await employeeService.saveEmployee(input);
+  const actorRole = req.currentUser?.role;
+  if (actorRole !== 'ADMIN' && actorRole !== 'MANAGER') {
+    throw new ApiError(403, 'Employee administration requires an administrator or manager');
+  }
+  const employee = await employeeService.saveEmployee(req.body, actorRole);
 
   logAdminAudit(req, {
     action: input.id ? 'employee.updated' : 'employee.created',

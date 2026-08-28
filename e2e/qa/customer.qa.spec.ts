@@ -71,13 +71,13 @@ test.describe('Bilal RMS customer QA', () => {
     await page.keyboard.press('Escape');
 
     await page.getByRole('button', { name: 'Buy now' }).click();
-    await expect(page.getByRole('heading', { name: 'Checkout.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Contact' })).toBeVisible();
     await expect(page.locator('aside').getByText(fixture.productName).last()).toBeVisible();
-    await page.getByRole('button', { name: 'Back to cart' }).click();
+    await page.goto('/cart');
     await expect(page.getByRole('heading', { name: 'Your bag is empty.' })).toBeVisible();
 
     await page.goto(`/product/${fixture.productSlug}`);
-    await page.getByRole('button', { name: 'Wishlist' }).click();
+    await page.getByRole('button', { name: 'Wishlist' }).first().click();
     await page.goto('/wishlist');
     await expect(page.getByRole('link', { name: fixture.productName }).first()).toBeVisible();
     await page.getByRole('button', { name: 'Move to cart' }).click();

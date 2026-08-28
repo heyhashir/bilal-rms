@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 
 export const posSaleInclude = {
@@ -11,6 +11,7 @@ export const posSaleInclude = {
   returns: true,
   receipt: true,
   voidedBy: true,
+  cashier: true,
 } satisfies Prisma.PosSaleInclude;
 
 type PosSaleListParams = {

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 
 type DateRange = {
@@ -18,11 +18,11 @@ const toCreatedAtRange = (range: DateRange): Prisma.DateTimeFilter | undefined =
 };
 
 export const reportRepository = {
-  listOrders(range: DateRange) {
+  listDeliveredOrders(range: DateRange) {
     return prisma.order.findMany({
       where: {
         createdAt: toCreatedAtRange(range),
-        orderStatus: { notIn: ['CANCELLED', 'RETURNED'] },
+        orderStatus: 'DELIVERED',
       },
       include: {
         items: {
@@ -37,6 +37,14 @@ export const reportRepository = {
         },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  },
+  countOperationalOrders(range: DateRange) {
+    return prisma.order.count({
+      where: {
+        createdAt: toCreatedAtRange(range),
+        orderStatus: { notIn: ['CANCELLED', 'RETURNED'] },
+      },
     });
   },
   listPosSales(range: DateRange) {
@@ -79,6 +87,7 @@ export const reportRepository = {
             saleItem: true,
           },
         },
+        cashier: true,
         voidedBy: true,
       },
       orderBy: { createdAt: 'desc' },

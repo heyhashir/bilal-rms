@@ -1,6 +1,6 @@
 import bwipjs from 'bwip-js';
 import PDFDocument from 'pdfkit';
-import type { StoreSetting } from '@prisma/client';
+import type { StoreSetting } from '../generated/prisma/client';
 import type { posService } from './pos.service';
 
 type PosSale = Awaited<ReturnType<typeof posService.getSale>>;

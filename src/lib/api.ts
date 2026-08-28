@@ -37,26 +37,41 @@ const normalizeFieldErrors = (errors: unknown): RequestFieldError[] => {
   }
 
   return errors.reduce<RequestFieldError[]>((normalized, entry) => {
-      if (!entry || typeof entry !== "object") {
-        return normalized;
-      }
-
-      const record = entry as Record<string, unknown>;
-      const message = typeof record.message === "string" ? record.message : null;
-      if (!message) {
-        return normalized;
-      }
-
-      normalized.push({
-        field: typeof record.field === "string" ? record.field : undefined,
-        message,
-      });
+    if (!entry || typeof entry !== "object") {
       return normalized;
-    }, []);
+    }
+
+    const record = entry as Record<string, unknown>;
+    const message = typeof record.message === "string" ? record.message : null;
+    if (!message) {
+      return normalized;
+    }
+
+    const field =
+      typeof record.field === "string"
+        ? record.field
+        : Array.isArray(record.path)
+        ? record.path.filter((p) => typeof p === "string" || typeof p === "number").join(".")
+        : undefined;
+
+    normalized.push({
+      field,
+      message,
+    });
+    return normalized;
+  }, []);
 };
 
 export const getErrorMessage = (error: unknown, fallback = "Request failed") => {
   if (error instanceof RequestError) {
+    if (error.errors && error.errors.length > 0) {
+      const details = error.errors
+        .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
+        .join("; ");
+      if (details && !error.message.includes(details)) {
+        return `${error.message}: ${details}`;
+      }
+    }
     return error.message || fallback;
   }
 

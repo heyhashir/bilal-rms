@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 import { catalogRepository } from '../repositories/catalog.repository';
 import { BarcodeInput, BrandInput, CategoryInput, ProductInput, productSchema } from '../schemas/admin/catalog.schemas';
@@ -14,6 +14,9 @@ export const catalogAdminService = {
   async saveProduct(input: ProductInput, productId?: string) {
     const existingProduct = productId ? await catalogRepository.findProductById(productId) : null;
     const category = await catalogRepository.findCategoryBySlug(input.categorySlug);
+    if (!category) {
+      throw new ApiError(400, `Category "${input.categorySlug}" was not found. Please select a valid category.`);
+    }
     const brand = input.brandSlug ? await catalogRepository.findBrandBySlug(input.brandSlug) : null;
     const normalizedSizeChart = input.sizeChart === 'auto' ? inferSizeChart(input.categorySlug) : input.sizeChart;
     const hasSizeChart = normalizedSizeChart !== 'none';
@@ -48,13 +51,13 @@ export const catalogAdminService = {
     const data: Prisma.ProductUncheckedCreateInput = {
       slug: input.slug,
       name: input.name,
-      description: input.description,
+      description: input.description || '',
       categoryId: category.id,
       brandId: brand?.id ?? null,
       stockMode: input.stockMode === 'variant' ? 'VARIANT' : 'SIMPLE',
       price: input.price,
-      salePrice: input.salePrice ?? null,
-      costPrice: input.costPrice ?? null,
+      salePrice: toNullableNumber(input.salePrice),
+      costPrice: toNullableNumber(input.costPrice),
       stock:
         input.stockMode === 'variant'
           ? activeVariantStock
@@ -82,8 +85,8 @@ export const catalogAdminService = {
 
       await catalogRepository.replaceProductImages(tx, savedProduct.id, input.images);
       await catalogRepository.deleteCommissionRulesForProduct(tx, savedProduct.id);
-      if (input.commissionRate !== null && input.commissionRate !== undefined) {
-        await catalogRepository.upsertCommissionRuleForProduct(tx, savedProduct.id, input.commissionRate);
+      if (input.commissionRate !== null && input.commissionRate !== undefined && (input.commissionRate as unknown) !== '') {
+        await catalogRepository.upsertCommissionRuleForProduct(tx, savedProduct.id, Number(input.commissionRate));
       }
 
       if (input.stockMode === 'simple') {
@@ -118,11 +121,11 @@ export const catalogAdminService = {
             sku: variant.sku,
             size: variant.size,
             colorName: variant.colorName,
-            colorHex: variant.colorHex,
+            colorHex: variant.colorHex || '#000000',
             image: normalizeOptionalString(variant.image),
             stock: variant.stock,
-            priceOverride: variant.priceOverride ?? null,
-            costPrice: variant.costPrice ?? null,
+            priceOverride: toNullableNumber(variant.priceOverride),
+            costPrice: toNullableNumber(variant.costPrice),
             isActive: variant.isActive,
             barcode: normalizeOptionalString(variant.barcode),
             qrCode: normalizeOptionalString(variant.qrCode),
@@ -136,8 +139,8 @@ export const catalogAdminService = {
             : await catalogRepository.createProductVariant(tx, variantData);
           retainedIds.push(savedVariant.id);
           await catalogRepository.deleteCommissionRulesForVariant(tx, savedVariant.id);
-          if (variant.commissionRate !== null && variant.commissionRate !== undefined) {
-            await catalogRepository.upsertCommissionRuleForVariant(tx, savedVariant.id, variant.commissionRate);
+          if (variant.commissionRate !== null && variant.commissionRate !== undefined && (variant.commissionRate as unknown) !== '') {
+            await catalogRepository.upsertCommissionRuleForVariant(tx, savedVariant.id, Number(variant.commissionRate));
           }
           const previousStock = matching?.stock ?? 0;
           const delta = variant.stock - previousStock;
@@ -394,6 +397,9 @@ const normalizeOptionalString = (value?: string | null): string | null => {
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
 };
+
+const toNullableNumber = (value: number | string | null | undefined): number | null =>
+  value === null || value === undefined || value === '' ? null : Number(value);
 
 const makeCode = (prefix: string, seed?: string): string => {
   const safePrefix = prefix.replace(/[^a-z0-9]/gi, '').toUpperCase() || 'BG';

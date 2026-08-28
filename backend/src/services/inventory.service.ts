@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 import { inventoryRepository } from '../repositories/inventory.repository';
 import { ApiError } from '../types/ApiError';

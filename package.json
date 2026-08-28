@@ -12,16 +12,14 @@
   ],
   "overrides": {
     "tsx": "4.23.1",
-    "@prisma/config": {
-      "deepmerge-ts": "^8.0.0"
-    }
+    "deepmerge-ts": "8.0.2"
   },
   "optionalDependencies": {
-    "lightningcss-linux-x64-gnu": "^1.30.2",
-    "lightningcss-win32-x64-msvc": "^1.30.2",
     "@emnapi/core": "^1.11.3",
     "@emnapi/runtime": "^1.11.3",
-    "@emnapi/wasi-threads": "^1.2.3"
+    "@emnapi/wasi-threads": "^1.2.3",
+    "lightningcss-linux-x64-gnu": "^1.30.2",
+    "lightningcss-win32-x64-msvc": "^1.30.2"
   },
   "scripts": {
     "dev": "vite dev",
@@ -44,6 +42,8 @@
     "desktop:publish-remote": "node scripts/publish-desktop-release-remote.mjs",
     "test:desktop:local": "node desktop/src/tests/local-store.smoke.mjs",
     "test:desktop:live": "npm --prefix desktop run test:live",
+    "test:desktop:update": "npm --prefix desktop run test:update",
+    "test:performance": "node scripts/qa-performance.mjs",
     "postinstall": "npm --workspace backend run prisma:generate && npm run build",
     "env:local": "node scripts/ensure-local-env.mjs",
     "db:up": "docker compose up -d mariadb",
@@ -53,7 +53,7 @@
     "db:wait": "node scripts/wait-for-port.mjs 127.0.0.1 3308 180000 MariaDB",
     "db:prepare": "npm run env:local && npm run db:wait && npm run db:deploy && npm run seed",
     "db:generate": "node scripts/run-backend-command.mjs npm --workspace backend run prisma:generate",
-    "db:validate": "node scripts/run-backend-command.mjs npx prisma validate --schema backend/prisma/schema.prisma",
+    "db:validate": "node scripts/run-backend-command.mjs npm --workspace backend run prisma:validate",
     "db:deploy": "node scripts/run-backend-command.mjs npm --workspace backend run prisma:deploy",
     "db:migrate": "node scripts/run-backend-command.mjs npm --workspace backend run prisma:migrate",
     "seed": "npm --workspace backend run seed",
@@ -64,15 +64,16 @@
     "test:e2e": "npm run test:e2e:smoke && npm run test:e2e:regression",
     "test:e2e:smoke": "playwright test --project=smoke",
     "test:e2e:regression": "playwright test --project=regression",
-    "test:e2e:live": "playwright test --config playwright.live.config.ts --project=live",
+    "test:e2e:live": "node scripts/run-readonly-e2e.mjs",
     "test:qa:smoke": "node scripts/run-qa-e2e.mjs qa-smoke",
     "test:qa:regression": "node scripts/run-qa-e2e.mjs qa-regression",
     "test:qa:live": "node scripts/run-qa-e2e.mjs qa-live",
+    "test:qa:local-write": "node scripts/run-qa-e2e.mjs qa-live",
     "test:qa:customer": "node scripts/run-qa-e2e.mjs qa-customer",
     "test:qa:edge": "node scripts/run-qa-e2e.mjs qa-edge",
     "test:qa:tablet": "node scripts/run-qa-e2e.mjs qa-tablet",
     "test:qa:mobile": "node scripts/run-qa-e2e.mjs qa-mobile",
-    "qa:cleanup": "node scripts/run-backend-command.mjs npx ts-node backend/src/tests/cleanup-qa.ts",
+    "qa:cleanup": "node scripts/run-backend-command.mjs npx tsx backend/src/tests/cleanup-qa.ts",
     "check:architecture": "node scripts/check-route-architecture.mjs",
     "check:deferred-routes": "node scripts/verify-deferred-admin-routes.mjs",
     "lint": "eslint src",
@@ -153,6 +154,8 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^15.15.0",
     "prettier": "^3.7.3",
+    "prisma": "7.10.0",
+    "tsx": "4.23.1",
     "typescript-eslint": "^8.65.0"
   }
 }

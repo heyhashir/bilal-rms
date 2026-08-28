@@ -69,6 +69,21 @@ const run = async () => {
     select: { id: true },
   });
   const employeeIds = employees.map((employee) => employee.id);
+  const adminAccounts = await prisma.adminAccount.findMany({
+    where: {
+      OR: [
+        { email: { startsWith: prefix } },
+        ...(employeeIds.length ? [{ employee: { is: { id: { in: employeeIds } } } }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  const adminAccountIds = adminAccounts.map((account) => account.id);
+  const registerDevices = await prisma.registerDevice.findMany({
+    where: { notes: { startsWith: prefix } },
+    select: { id: true },
+  });
+  const registerDeviceIds = registerDevices.map((device) => device.id);
 
   const sales = await prisma.posSale.findMany({
     where: {
@@ -97,6 +112,11 @@ const run = async () => {
   const orderIds = orders.map((order) => order.id);
 
   await prisma.$transaction(async (tx) => {
+    if (registerDeviceIds.length) {
+      await tx.syncJob.deleteMany({ where: { deviceId: { in: registerDeviceIds } } });
+      await tx.registerDevice.deleteMany({ where: { id: { in: registerDeviceIds } } });
+    }
+
     if (saleIds.length || productIds.length || employeeIds.length) {
       await tx.commissionEntry.deleteMany({
         where: {
@@ -163,6 +183,11 @@ const run = async () => {
 
     if (employeeIds.length) {
       await tx.employee.deleteMany({ where: { id: { in: employeeIds } } });
+    }
+
+    if (adminAccountIds.length) {
+      await tx.adminSession.deleteMany({ where: { accountId: { in: adminAccountIds } } });
+      await tx.adminAccount.deleteMany({ where: { id: { in: adminAccountIds } } });
     }
 
     if (brandIds.length) {

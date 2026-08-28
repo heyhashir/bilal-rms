@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _electron as electron } from "playwright";
@@ -8,6 +9,9 @@ import dotenv from "dotenv";
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const rootDir = path.resolve(desktopDir, "..");
 const packagedExecutable = process.env.BILAL_RMS_DESKTOP_EXECUTABLE?.trim();
+const remoteUrl = process.env.BILAL_RMS_REMOTE_URL?.trim() || "http://127.0.0.1:5000";
+const qaPrefix = process.env.QA_RUN_PREFIX?.trim() || `qa-desktop-${Date.now().toString(36)}`;
+const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), `${qaPrefix}-`));
 const electronExecutable =
   packagedExecutable ||
   path.join(
@@ -21,13 +25,14 @@ const electronExecutable =
 assert.ok(fs.existsSync(path.join(rootDir, "backend", "public", "index.html")), "Run npm run build before this test");
 assert.ok(fs.existsSync(electronExecutable), packagedExecutable ? "Packaged desktop executable was not found" : "Run npm run desktop:install before this test");
 
+const startupStartedAt = performance.now();
 const app = await electron.launch({
   executablePath: electronExecutable,
-  args: packagedExecutable ? [] : [desktopDir],
+  args: [...(packagedExecutable ? [] : [desktopDir]), `--user-data-dir=${userDataDir}`],
   cwd: rootDir,
   env: {
     ...process.env,
-    BILAL_RMS_REMOTE_URL: "https://balybybilalgarments.com",
+    BILAL_RMS_REMOTE_URL: remoteUrl,
   },
 });
 
@@ -35,10 +40,12 @@ let passed = false;
 try {
   const window = await app.firstWindow();
   await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/login$/);
+  const startupMs = performance.now() - startupStartedAt;
+  assert.ok(startupMs < 4_000, `Electron usable sign-in state exceeded 4 seconds (${startupMs.toFixed(1)} ms)`);
 
   const context = await window.evaluate(() => window.bilalDesktop.getDesktopContext());
   assert.match(context.cloudApiBaseUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
-  assert.equal(context.cloudOrigin, "https://balybybilalgarments.com");
+  assert.equal(context.cloudOrigin, new URL(remoteUrl).origin);
   const expectedCurrentVersion = process.env.BILAL_RMS_EXPECTED_CURRENT_VERSION?.trim();
   if (expectedCurrentVersion) {
     assert.equal(context.appVersion, expectedCurrentVersion);
@@ -58,7 +65,7 @@ try {
   assert.equal(categories.status, 200);
   assert.equal(categories.body.success, true);
 
-  const registration = await window.evaluate(async () => {
+  const registration = await window.evaluate(async (prefix) => {
     const context = window.bilalDesktop.getDesktopContext();
     const response = await fetch("/api/v1/sync/register", {
       method: "POST",
@@ -69,11 +76,11 @@ try {
       body: JSON.stringify({
         deviceKey: window.bilalDesktop.getDeviceKey(),
         name: context.appName,
-        notes: `Live connectivity smoke ${context.appVersion}`,
+        notes: `${prefix} connectivity smoke ${context.appVersion}`,
       }),
     });
     return { status: response.status, body: await response.json() };
-  });
+  }, qaPrefix);
   assert.equal(registration.status, 201);
   assert.equal(registration.body.success, true);
 
@@ -89,13 +96,16 @@ try {
 
   const adminEnvPath = process.env.BILAL_RMS_ADMIN_ENV?.trim();
   if (adminEnvPath) {
-    const adminEnv = dotenv.parse(fs.readFileSync(path.resolve(adminEnvPath)));
+    const resolvedAdminEnvPath = path.isAbsolute(adminEnvPath) ? adminEnvPath : path.resolve(rootDir, adminEnvPath);
+    const adminEnv = dotenv.parse(fs.readFileSync(resolvedAdminEnvPath));
     assert.ok(adminEnv.ADMIN_EMAIL && adminEnv.ADMIN_PASSWORD, "Admin credential file is incomplete");
 
     await window.getByLabel("Email").fill(adminEnv.ADMIN_EMAIL);
     await window.getByLabel("Password").fill(adminEnv.ADMIN_PASSWORD);
+    const signInStartedAt = performance.now();
     await window.getByRole("button", { name: "Sign in" }).click();
     await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/admin$/);
+    const signInMs = performance.now() - signInStartedAt;
     const authenticatedSession = await window.evaluate(async () => {
       const response = await fetch("/api/v1/auth/me");
       return await response.json();
@@ -107,6 +117,7 @@ try {
     await desktopBackButton.waitFor();
     await desktopBackButton.click();
     await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/admin$/);
+    const posStartedAt = performance.now();
     await window.goto(new URL("/pos", window.url()).toString());
     await window.waitForURL(/^http:\/\/127\.0\.0\.1:\d+\/pos$/);
     const reloadedSession = await window.evaluate(async () => {
@@ -114,10 +125,11 @@ try {
       return await response.json();
     });
     assert.equal(reloadedSession.data?.user?.role, "admin");
-    await window.waitForFunction(() => document.body.innerText.length > 0);
+    await window.getByText("Desktop updates", { exact: true }).waitFor({ timeout: 15_000 });
+    const posUsableMs = performance.now() - posStartedAt;
+    assert.ok(posUsableMs < 4_000, `Electron POS usable state exceeded 4 seconds (${posUsableMs.toFixed(1)} ms)`);
     const posBody = await window.locator("body").innerText();
     assert.match(posBody, /desktop updates/i, `Desktop update section did not render. POS body: ${posBody.slice(0, 500)}`);
-    await window.getByText("Desktop updates", { exact: true }).waitFor({ timeout: 15_000 });
     await window.getByRole("button", { name: "Check now" }).click();
     await window.getByRole("button", { name: "Check now" }).waitFor();
     const expectedLatestVersion = process.env.BILAL_RMS_EXPECTED_LATEST_VERSION?.trim() || context.appVersion;
@@ -171,7 +183,9 @@ try {
         headers: { "X-Requested-With": "XMLHttpRequest" },
       });
     });
-    console.log("Desktop authenticated live sync smoke passed");
+    console.log(
+      `Desktop authenticated live sync smoke passed (startup ${startupMs.toFixed(1)} ms, sign-in ${signInMs.toFixed(1)} ms, POS ${posUsableMs.toFixed(1)} ms)`,
+    );
   }
 
   console.log("Desktop live connectivity smoke passed");
@@ -188,6 +202,7 @@ try {
   if (!appProcess.killed) {
     appProcess.kill();
   }
+  fs.rmSync(userDataDir, { recursive: true, force: true });
 }
 
 if (!passed) {

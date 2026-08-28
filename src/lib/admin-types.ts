@@ -21,6 +21,8 @@ export type Employee = {
   phone: string;
   email?: string;
   password?: string;
+  loginProvisioned?: boolean;
+  loginActive?: boolean;
   commissionRate: number;
   status: "active" | "inactive";
   notes: string;
@@ -195,6 +197,7 @@ export type ReportSummary = {
   };
   overview: {
     onlineOrders: number;
+    operationalOnlineOrders: number;
     onlineRevenue: number;
     posSales: number;
     posRevenue: number;
@@ -410,6 +413,7 @@ export type BillWiseRow = {
   receiptNumber: string;
   receiptType: "Sales" | "Refund";
   cashier: string;
+  salespeople: string[];
   paymentMethod: string;
   qtySold: number;
   total: number;

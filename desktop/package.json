@@ -1,7 +1,7 @@
 {
   "name": "bilal-rms-desktop",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Bilal RMS Windows POS desktop runtime",
   "author": "Bilal RMS",
   "main": "src/main.mjs",
@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "test:live": "node src/tests/live-connectivity.smoke.mjs",
+    "test:update": "node src/tests/update-feed.smoke.mjs",
     "dist": "node scripts/build-windows.mjs",
     "pack": "electron-builder --dir"
   },

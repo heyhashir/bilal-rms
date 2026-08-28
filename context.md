@@ -26,30 +26,69 @@ This is not a static fashion website. It is one retail system with:
 
 ## 2. Current State Snapshot
 
-This snapshot was captured on **2026-08-21**. Re-check it with `git status`, `git log`, and the production health endpoints before acting.
+This snapshot was captured on **2026-08-28**. Re-check it with `git status`, `git log`, and the production health endpoints before acting.
 
 | Item | Current state |
 | --- | --- |
 | Git branch | `main` |
-| Latest committed source revision | `e256cc0 feat(db): add migration for customSizeChartJson on production` |
-| Pull Requests | PR #5 (`feat/currency-conversion-size-guide-amendments`) merged into `main` and verified green. |
-| Working tree | Clean on `main`. |
-| Frontend/backend build | Passed locally and in GitHub Actions CI with zero errors. |
-| Desktop package version | `0.2.9` |
-| Desktop installer | Built as `desktop/dist/BilalRMS-Setup-0.2.9.exe` (approximately 100.3 MB). |
-| Desktop release publication | `0.2.9` was verified and packaged. |
-| Production web deployment | Merged into `main` on GitHub with automated build verification. Database migration `20260821210000_custom_size_chart_json` is queued for Hostinger runtime startup. |
-| Local web server | Express backend and Vite client build tested and running. Docker MariaDB active at `127.0.0.1:3308`. |
+| Audit baseline | `8086920`; run `git log -1 --oneline` for the deployed release revision |
+| Pull Requests / CI | Not re-checked during this local audit; verify in GitHub before release. |
+| Working tree | Intentionally dirty with the uncommitted `QA-20260828-LOCAL-AUDIT` fixes listed in `docs/developer/qa-report.md`. |
+| Frontend/backend build | Passed locally. No claim is made about CI until the audit changes are committed and pushed. |
+| Desktop package version | `0.3.1` release candidate |
+| Desktop installer | `desktop/dist/BilalRMS-Setup-0.3.1.exe`, 105,222,844 bytes, SHA-256 `967DA0DF0C38B5B7F18FDDA5A10DC6CDB1506E2EC33559791525BE52AED63003`; Authenticode `NotSigned`. |
+| Desktop release publication | Not performed during this audit. Re-check the production manifest before stating which release is published. |
+| Production web deployment | Not performed during this audit. Local readiness does not prove Hostinger readiness. |
+| Local web server | Local production build and Docker MariaDB at `127.0.0.1:3308` passed the audit; processes may be stopped after QA. |
 
-### Latest Delivered Changes
+### Latest Local Audit Changes
 
-1. **Employee Role Isolation & Direct Login Provisioning (Email + Password)**:
-   - When creating or editing employees in `/admin/employees`, admins can assign an optional **Login Email** and **Password** (min 6 characters).
-   - Backend automatically provisions/synchronizes a corresponding `AdminAccount` record with `STAFF` role and hashed credentials.
-   - Access control rules configured so that `STAFF` users are strictly restricted to POS billing (`/pos`), inventory lookup/adjustment (`/admin/inventory`), product catalog (`/admin/products`, `/admin/categories`, `/admin/brands`), and label sticker printing.
-   - Owner-only sections (P&L/revenue reports, store settings, commission master adjustments, staff access management) are strictly hidden and blocked for `STAFF`.
+- Employee login provisioning now uses an optional unique Employee-to-AdminAccount relation and one database transaction. Only administrators can create/change login credentials; archiving an employee deactivates the linked account and revokes sessions.
+- Online revenue/profit recognizes only `DELIVERED` orders. Operational order counts remain separate. POS cashier identity is separate from line-level salesperson attribution, and refund display references are unique.
+- Write-enabled QA is localhost-only and always cleans scoped records; remote smoke is read-only. Browser, backend, performance, Electron persistence, update-feed and packaged-launch gates pass locally.
+- Product zero values are preserved, database errors are not swallowed, currency fallback handles network/HTTP/payload failures, and unsupported standalone Size Guides navigation is removed while per-product guides remain.
+- Prisma is upgraded to 7.10.0, clean installs/builds pass, and root/desktop dependency audits report zero vulnerabilities.
+- No audit change has been pushed, deployed, applied to production data, or published as a desktop update.
 
-2. **Bill-Wise Sales & Collections Audit Report (Cash and Credit Details)**:
+### Historical And Current Feature Notes
+
+1. **Product Creation Schema & Error Feedback Polish**:
+   - Resolved "Validation failed" errors when adding products through the admin modal (`/admin/products`).
+   - Relaxed `description` constraint in `backend/src/schemas/admin/catalog.schemas.ts` from `min(3)` to optional with default empty string (`z.string().default('').optional().nullable().or(z.literal(''))`).
+   - Relaxed `colorHex` in `variantSchema` and `colorSchema` to safely default to `#000000`.
+   - Updated `makeDraft` in `src/routes/admin.products.tsx` to dynamically default `categorySlug` to the store's first available category from the database rather than hardcoded `"men"`.
+   - Improved error middleware in `backend/src/middleware/errorHandler.ts` to format Zod validation issues with explicit field names and messages rather than generic `"Validation failed"`.
+   - Enhanced client-side validation in `src/routes/admin.products.tsx` and `src/lib/api.ts` to map issue paths into actionable toast notifications.
+
+2. **Session Expiration Guard & Error Handling**:
+   - Fixed `shouldEmitAuthExpired` in `src/lib/api.ts` to strictly require `status === 401`.
+   - Prevented non-auth HTTP response codes (e.g. 404 Not Found or 400 Bad Request) from mistakenly dispatching `AUTH_EXPIRED_EVENT` and logging active users out with "Your session expired".
+
+3. **Honeywell Orbit MS7120 Hardware Scanner Integration**:
+   - Keyboard-wedge scanner behavior is implemented and simulated. Physical Honeywell Orbit acceptance remains required.
+   - Global keystroke buffer listener detects high-speed laser scan bursts (<60ms inter-key delays) even when the input box is not clicked, enabling hands-free presentation counter scanning.
+   - Exact Match Priority engine matches scanned 1D Code 128 / Code 39 tags against barcode, SKU, QR code, and `#` tag prefixes (e.g. `# 57678`, `50330`, `45881`).
+   - Integrated cash register audio feedback using Web Audio API (1400Hz positive scan chime, 300Hz error tone).
+   - Multi-scan quantity auto-incrementation (repeated scan of same barcode increments cart line quantity).
+   - Automatic input clearing and refocus for high-throughput retail checkout.
+
+4. **Desktop Release 0.3.0**:
+   - Version bump across `desktop/package.json` to `0.3.0`.
+   - Packaged unsigned Windows installer `BilalRMS-Setup-0.3.0.exe` (approximately 100.3 MB).
+   - Local N/N+1 update discovery is verified. Production publication state must be checked separately.
+
+5. **Uncongested Dedicated Standalone Admin Menus**:
+   - Restructured admin navigation and separated composite pages into dedicated standalone routes:
+     - **Overview**: Dashboard (`/admin`), P&L Reports (`/admin/reports`), Bill-Wise Sales (`/admin/bill-wise`).
+     - **Catalog**: Products (`/admin/products`), Categories (`/admin/categories`), Brands (`/admin/brands`). Size guides are edited per product; the standalone deferred menu is not exposed.
+     - **Inventory & Purchasing**: Stock Manager (`/admin/inventory`), Inventory Valuation (`/admin/inventory-valuation`), Vendors (`/admin/suppliers`), Vendor Purchases (`/admin/vendor-purchases`).
+     - **Sales & Billing**: POS Terminal (`/pos`), POS Invoices (`/admin/pos-sales`), Online Orders (`/admin/orders`), Returns Log (`/admin/returns`), Refunds Log (`/admin/refunds`).
+     - **Finance**: Expense Ledger (`/admin/ledger`), Staff Commissions (`/admin/commissions`).
+     - **People & Store**: Employees (`/admin/employees`), Customers (`/admin/customers`), Staff Access (`/admin/roles`), Settings (`/admin/settings`), CSV Imports (`/admin/imports`).
+   - Eliminated tab clutter across inventory and reports so accountants, owners, and cashiers have direct 1-click tools.
+   - Maintained strict role-based access control and zero-emoji compliance across the entire codebase.
+
+6. **Bill-Wise Sales & Collections Audit Report (Cash and Credit Details)**:
    - Modeled after the QuickBooks POS `Cash and Credit Details` reference standard.
    - Endpoint `/api/v1/admin/reports/bill-wise` and CSV export `/api/v1/admin/reports/bill-wise/export` in `backend/src/services/report.service.ts`.
    - Displays all bills/receipts with columns: Expand `[+]`, `Date`, `Time`, `Receipt #`, `Receipt Type` (`Sales` vs `Refund`), `Qty Sold`, `Total`, `Payment Method`, and `Cashier` (Admin or employee name).
@@ -59,26 +98,7 @@ This snapshot was captured on **2026-08-21**. Re-check it with `git status`, `gi
    - Includes CSV export and printable A4 daily audit sheet.
    - Strict zero-emoji compliance across code, comments, and UI.
 
-3. **Uncongested Dedicated Standalone Admin Menus**:
-   - Restructured admin navigation and separated composite pages into dedicated standalone routes:
-     - **Overview**: Dashboard (`/admin`), P&L Reports (`/admin/reports`), Bill-Wise Sales (`/admin/bill-wise`).
-     - **Catalog**: Products (`/admin/products`), Categories (`/admin/categories`), Brands (`/admin/brands`), Size Guides (`/admin/size-charts`).
-     - **Inventory & Purchasing**: Stock Manager (`/admin/inventory`), Inventory Valuation (`/admin/inventory-valuation`), Vendors (`/admin/suppliers`), Vendor Purchases (`/admin/vendor-purchases`).
-     - **Sales & Billing**: POS Terminal (`/pos`), POS Invoices (`/admin/pos-sales`), Online Orders (`/admin/orders`), Returns Log (`/admin/returns`), Refunds Log (`/admin/refunds`).
-     - **Finance**: Expense Ledger (`/admin/ledger`), Staff Commissions (`/admin/commissions`).
-     - **People & Store**: Employees (`/admin/employees`), Customers (`/admin/customers`), Staff Access (`/admin/roles`), Settings (`/admin/settings`), CSV Imports (`/admin/imports`).
-   - Eliminated tab clutter across inventory and reports so accountants, owners, and cashiers have direct 1-click tools.
-   - Maintained strict role-based access control and zero-emoji compliance across the entire codebase.
-
-4. **Honeywell Orbit MS7120 Hardware Scanner Integration**:
-   - Full hardware compatibility verification with the **Honeywell Orbit MS7120 (N) 38-3 LS USB** omnidirectional desktop laser presentation scanner.
-   - Global keystroke buffer listener detects high-speed laser scan bursts (<60ms inter-key delays) even when the input box is not clicked, enabling hands-free presentation counter scanning.
-   - Exact Match Priority engine matches scanned 1D Code 128 / Code 39 tags against barcode, SKU, QR code, and `#` tag prefixes (e.g. `# 57678`, `50330`, `45881`).
-   - Integrated cash register audio feedback using Web Audio API (1400Hz positive scan chime, 300Hz error tone).
-   - Multi-scan quantity auto-incrementation (repeated scan of same barcode increments cart line quantity).
-   - Automatic input clearing and refocus for high-throughput retail checkout.
-
-5. **Department-Wise Inventory Valuation & Stock Evaluation Report**:
+7. **Department-Wise Inventory Valuation & Stock Evaluation Report**:
    - Modeled directly after the QuickBooks POS / Enterprise RMS Inventory Valuation standard.
    - Comprehensive backend valuation engine in `backend/src/services/inventory.service.ts` and endpoints `/admin/inventory/valuation` and `/admin/inventory/valuation/export`.
    - Aggregates simple products and variant matrix entries grouped by department/category with weighted average unit cost, total department units, and extended cost totals.
@@ -87,35 +107,39 @@ This snapshot was captured on **2026-08-21**. Re-check it with `git status`, `gi
    - Row-level quick actions for Barcode Label sticker printing and immediate stock adjustment.
    - Direct CSV export and A4 printable physical audit sheet with dedicated `@media print` clean document styling.
 
-4. **Live PKR ⇄ USD Currency Conversion**:
+8. **Employee Role Isolation & Direct Login Provisioning (Email + Password)**:
+   - When creating or editing employees in `/admin/employees`, administrators can assign an optional **Login Email** and **Password** (minimum 8 characters).
+   - Backend transactionally provisions/synchronizes a linked `AdminAccount` with `STAFF` role and hashed credentials; managers cannot provision login credentials.
+   - Access control rules configured so that `STAFF` users are strictly restricted to POS billing (`/pos`), inventory lookup/adjustment (`/admin/inventory`), product catalog (`/admin/products`, `/admin/categories`, `/admin/brands`), and label sticker printing.
+9. **Live PKR ⇄ USD Currency Conversion**:
    - Integrated live daily exchange rate auto-fetch from open financial rate endpoints (`https://open.er-api.com/v6/latest/USD` with fallback to `https://api.exchangerate-api.com/v4/latest/USD`).
    - Caching layer (`src/lib/currency.ts`) stores rate in memory and `localStorage` with a 6-hour TTL and safe offline fallback default (1 USD ≈ 278.0 PKR).
    - Dual currency pricing rendered across Product Cards (`src/components/shop/ProductCard.tsx`), Product Detail Page (`src/routes/product.$slug.tsx`), Cart line items and total (`src/routes/cart.tsx`), and Checkout Order Summary (`src/routes/checkout.tsx`).
    - Base prices, cart totals, and payment transactions remain strictly settled in **PKR (`Rs.`)**.
 
-2. **100% Customizable Size Guides (Optional per Product)**:
+10. **100% Customizable Size Guides (Optional per Product)**:
    - Added `customSizeChartJson Json?` to `Product` model in `backend/prisma/schema.prisma` with production migration `20260821210000_custom_size_chart_json`.
-   - Admin Product Modal (`src/routes/admin.products.tsx`) features an optional **"📐 Customize Size Chart"** editor supporting editable guide titles, dynamic column renaming/adding/deletion, and dynamic size row matrix editing.
+   - Admin Product Modal (`src/routes/admin.products.tsx`) features an optional **"Customize Size Chart"** editor supporting editable guide titles, dynamic column renaming/adding/deletion, and dynamic size row matrix editing.
    - 1-click category preset loaders (**Apparel**, **Bottoms**, **Kids**) and **Reset Default** button.
    - Storefront product modal (`src/routes/product.$slug.tsx`) dynamically renders custom table columns, rows, and measurement values per product.
 
-3. **Refined Apparel Color Palette & Pigment Adjuster**:
+11. **Refined Apparel Color Palette & Pigment Adjuster**:
    - Replaced basic raw color inputs with 22 apparel standard quick swatches (`PRESET_COLORS`).
    - Added expandable **"Adjust Pigments"** tool with spectrum color picker and hex code input.
    - Added **"+ Custom Color"** option for non-standard color additions.
 
-4. **Thermal Barcode Label Calibrations**:
-   - Dual label size support: **50×30 mm** and **40×28 mm** standard thermal stickers for Xprinter.
+12. **Thermal Barcode Label Calibrations**:
+   - Presets support 38x25, 40x28, 50x25, 50x30 and 58x40 mm labels plus validated custom dimensions and rotation.
    - Shortened product titles automatically on barcode stickers to prevent line overflow.
    - Barcodes strictly print the original retail price rather than sale/discounted price.
 
-5. **International Orders & Checkout Clarity**:
+13. **International Orders & Checkout Clarity**:
    - Standardized international destination selections settling in PKR with explicit transaction guarantee badges.
 
-6. **Item-Wise Sales & Ledger Reporting**:
+14. **Item-Wise Sales & Ledger Reporting**:
    - Added item-wise sales breakdown, units sold, units refunded, net revenue, cost, and net profit calculations to `backend/src/services/report.service.ts` and Admin Reports UI.
 
-7. **CI & Security Audit Pipeline**:
+15. **CI & Security Audit Pipeline**:
    - Addressed dependency advisories via package overrides in `package.json`.
    - Updated GitHub Actions CI in `.github/workflows/deploy.yml` with `--audit-level=critical` and resilient `npm ci || npm install` cross-platform dependency handling.
 
@@ -173,7 +197,7 @@ Same Express API + Hostinger MySQL
 - Node.js: `^20.19.0 || >=22.12.0`; Hostinger uses Node `20.x`.
 - Package manager: npm `10.8.2`.
 - Frontend: React 19, Vite 7, TypeScript, TanStack Router, TanStack Query, Zustand, Tailwind CSS/Radix UI.
-- Backend: Express, TypeScript, Prisma 5, Zod, MySQL2, Multer.
+- Backend: Express, TypeScript, Prisma 7.10, Zod, MySQL2, Multer.
 - Database: MySQL/MariaDB. Development uses MariaDB 11.4 through Docker.
 - Desktop: Electron 43, `sql.js` SQLite-compatible local database, `bwip-js` barcode generation, electron-builder NSIS installer.
 - Browser tests: Playwright.
@@ -233,7 +257,8 @@ Key models include:
 ### Migration Policy
 
 - Prisma migrations are **additive only**. Never drop/rename/change a live column type as a quick fix.
-- Existing migrations are under `backend/prisma/migrations/`, through `20260821210000_custom_size_chart_json` at this snapshot.
+- Existing migrations are under `backend/prisma/migrations/`, through `20260828090000_employee_login_account` at this snapshot.
+- Prisma 7 connection configuration is in `backend/prisma.config.ts`; generated client output is under `backend/src/generated/prisma` and is ignored source output.
 - Run `npm run db:deploy` against a correctly configured target. Do not run destructive reset commands against production.
 - Seed/bootstrap is intended to be idempotent: it creates missing owner/store/register defaults but must not erase business data.
 
@@ -302,7 +327,9 @@ npm run build
 npm run db:validate
 npm run test:backend:services
 npm run test:backend:integration
+npm run test:backend:imports
 npm run test:e2e:smoke
+npm audit --audit-level=high
 ```
 
 Additional QA commands:
@@ -315,8 +342,13 @@ npm run test:qa:customer
 npm run test:qa:edge
 npm run test:qa:tablet
 npm run test:qa:mobile
+npm run test:e2e:live       # strictly read-only target smoke
+npm run test:performance
 npm run test:desktop:local
 npm run test:desktop:live
+npm run test:desktop:update
+npm run desktop:pack
+npm run desktop:dist
 ```
 
 The detailed QA evidence and release gate are in `docs/developer/qa-report.md` and `docs/developer/RELEASE_CHECKLIST.md`. Do not claim physical hardware or Hostinger persistence tests pass unless they have actually been repeated on the target hardware/environment.
@@ -358,7 +390,7 @@ Required secret environment values in Hostinger hPanel:
 ```env
 DB_PASSWORD=<current Hostinger MySQL user password>
 ADMIN_PASSWORD=<strong owner-admin password>
-ADMIN_EMAIL=<owner admin email, optional if using default>
+ADMIN_EMAIL=<owner admin email>
 ```
 
 Reference only: `.env.hostinger.example`. Never import a real `.env` into Git or commit it.
@@ -420,7 +452,7 @@ GET https://balybybilalgarments.com/api/v1/sync/updates/<deviceKey>?currentVersi
 
 Expected for an older client: `latestVersion` is newer, `available` is `true`, and `windows.installerUrl` references the expected installer.
 
-At this snapshot, `0.2.8` was published and verified for a `0.2.7` client.
+Local source version is `0.3.1`. The August audit verified a local N/N+1 feed; query the production manifest after publication before claiming which version is live.
 
 ### Desktop Limitations
 
@@ -445,7 +477,7 @@ Accessories should use `sizeChart = none`; they should not fall back to apparel 
 
 ### Sticker Printing
 
-The application label itself is fixed at **1.50 x 1.00 inches (38.1 x 25.4 mm)** in landscape. The preferred branded sticker matches the feedback reference: BALY brand panel, product title, code, size, color, price, barcode, and barcode value.
+The default application label is **38 x 25 mm** in landscape. Presets and custom dimensions are available, but the selected driver paper must exactly match the application dimensions. The preferred branded sticker matches the feedback reference: BALY brand panel, product title, code, size, color, price, barcode, and barcode value.
 
 For browser printing:
 
@@ -474,8 +506,8 @@ The project has substantial feature coverage, but it should not be described as 
 5. **Production admin credentials:** the desktop release publishing script requires a current production admin login in a local, ignored env file. If it reports `Invalid credentials`, update local credentials, never weaken authentication.
 6. **Multiple counters:** structurally prepared, but adding multiple active POS devices needs reconciliation/load/hardware acceptance testing before relying on it operationally.
 7. **Desktop release version:** the version in `desktop/package.json` must align with the deployed source version; increment version before building/publishing a new installer.
-8. **Route tree file:** `src/routeTree.gen.ts` was locally modified at this snapshot and deliberately not committed. Inspect whether it is a legitimate generated change before staging it; never blindly revert user work.
-9. **Deferred modules:** inspect navigation and direct routes before surfacing any module not actually supported; prior cleanup de-surfaced placeholder features, but route generation can reintroduce stubs.
+8. **Current audit diff:** the working tree contains the uncommitted August local audit. Review `docs/developer/qa-report.md` and the complete diff before staging; do not discard unrelated user work.
+9. **Deferred modules:** inspect navigation and direct routes before surfacing any module not actually supported; the standalone Size Guides menu is intentionally removed while per-product guides remain.
 
 ## 15. Safe Working Rules For Future Agents
 
@@ -522,10 +554,10 @@ Then decide based on the request:
 | `/api/v1/health/live` | Liveness probe |
 | `/api/v1/health/ready` | Readiness/database/bootstrap probe |
 | `/api/v1/categories` | Public category tree |
-| `/api/v1/products/sale` | Public sale products |
+| `/api/v1/catalog/products/sale` | Public sale products |
 | `/api/v1/sync/updates/:deviceKey` | Desktop update manifest |
 | `/desktop/windows/BilalRMS-Setup-<version>.exe` | Published Windows installer |
 
 ---
 
-Last handover update: **2026-08-19**.
+Last handover update: **2026-08-28** (`QA-20260828-LOCAL-AUDIT`, local changes not deployed).

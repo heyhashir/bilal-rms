@@ -35,7 +35,8 @@ export type DashboardStats = {
 export const dashboardService = {
   async getStats(): Promise<DashboardStats> {
     const [
-      orderAggregate,
+      deliveredOrderAggregate,
+      operationalOrders,
       pendingOrders,
       products,
       returns,
@@ -47,7 +48,8 @@ export const dashboardService = {
       recentPosSales,
       employeesWithPendingCommission,
     ] = await Promise.all([
-      dashboardRepository.getOrderAggregate(),
+      dashboardRepository.getDeliveredOrderAggregate(),
+      dashboardRepository.countOperationalOrders(),
       dashboardRepository.countPendingOrders(),
       dashboardRepository.listProductStockSnapshot(),
       dashboardRepository.countReturns(),
@@ -104,8 +106,8 @@ export const dashboardService = {
     }));
 
     return {
-      revenue: Number(orderAggregate._sum.total ?? 0),
-      orders: orderAggregate._count._all,
+      revenue: Number(deliveredOrderAggregate._sum.total ?? 0),
+      orders: operationalOrders,
       pendingOrders,
       lowStock: lowStockItems.length,
       returns,

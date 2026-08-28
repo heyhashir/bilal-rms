@@ -132,7 +132,11 @@ function AdminReports() {
       ) : tab === "overview" ? (
         <>
           <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
-            <StatCard label="Online Revenue" value={formatPrice(summary.overview.onlineRevenue)} hint={`${summary.overview.onlineOrders} orders`} />
+            <StatCard
+              label="Online Revenue"
+              value={formatPrice(summary.overview.onlineRevenue)}
+              hint={`${summary.overview.onlineOrders} delivered · ${summary.overview.operationalOnlineOrders} operational`}
+            />
             <StatCard label="POS Revenue" value={formatPrice(summary.overview.posRevenue)} hint={`${summary.overview.posSales} in-store bills`} />
             <StatCard label="POS Refunds" value={formatPrice(summary.overview.posRefundAmount)} tone="down" hint="Customer returns" />
             <StatCard label="Wholesale Purchases" value={formatPrice(summary.wholesale?.totalSpend ?? 0)} hint={`${summary.wholesale?.totalUnits ?? 0} pcs intake`} />

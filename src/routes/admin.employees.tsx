@@ -8,6 +8,7 @@ import { adminEmployeesApi } from "@/lib/admin-employees-api";
 import type { Employee } from "@/lib/admin-types";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
+import { useAuth } from "@/store/auth";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, SelectField, StatusPill, Toolbar } from "@/components/admin/primitives";
 
 export const Route = createFileRoute("/admin/employees")({
@@ -28,6 +29,7 @@ const emptyEmployee = (): Employee => ({
 });
 
 function AdminEmployees() {
+  const isAdmin = useAuth((state) => state.user?.role === "admin");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Employee | null>(null);
   const { data: employees = [] } = useQuery({
@@ -146,8 +148,7 @@ function AdminEmployees() {
                     id: editing.id || undefined,
                     name: editing.name,
                     phone: editing.phone,
-                    email: editing.email || undefined,
-                    password: editing.password || undefined,
+                    ...(isAdmin ? { email: editing.email || undefined, password: editing.password || undefined } : {}),
                     commissionRate: editing.commissionRate,
                     status: editing.status,
                     notes: editing.notes,
@@ -162,20 +163,24 @@ function AdminEmployees() {
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Full name" value={editing.name} autoFocus onChange={(value) => setEditing({ ...editing, name: value })} />
             <Field label="Phone" value={editing.phone} onChange={(value) => setEditing({ ...editing, phone: value })} />
-            <Field
-              label="Login Email (Optional)"
-              type="email"
-              placeholder="staff@baly.local"
-              value={editing.email ?? ""}
-              onChange={(value) => setEditing({ ...editing, email: value })}
-            />
-            <Field
-              label={editing.id ? "Reset Password (Min 6 chars)" : "Login Password (Min 6 chars)"}
-              type="password"
-              placeholder={editing.id ? "Leave blank to keep unchanged" : "••••••••"}
-              value={editing.password ?? ""}
-              onChange={(value) => setEditing({ ...editing, password: value })}
-            />
+            {isAdmin && (
+              <>
+                <Field
+                  label="Login Email (Optional)"
+                  type="email"
+                  placeholder="staff@baly.local"
+                  value={editing.email ?? ""}
+                  onChange={(value) => setEditing({ ...editing, email: value })}
+                />
+                <Field
+                  label={editing.id ? "Reset Password (Min 8 chars)" : "Login Password (Min 8 chars)"}
+                  type="password"
+                  placeholder={editing.id ? "Leave blank to keep unchanged" : "Minimum 8 characters"}
+                  value={editing.password ?? ""}
+                  onChange={(value) => setEditing({ ...editing, password: value })}
+                />
+              </>
+            )}
             <Field
               label="Commission %"
               type="number"

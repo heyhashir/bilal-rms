@@ -60,6 +60,11 @@ export const createApp = (): Application => {
       // Keep the protection for real HTTPS deployments only.
       contentSecurityPolicy: {
         directives: {
+          connectSrc: [
+            "'self'",
+            'https://open.er-api.com',
+            'https://api.exchangerate-api.com',
+          ],
           upgradeInsecureRequests: env.isProduction ? [] : null,
         },
       },

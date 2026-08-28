@@ -61,7 +61,7 @@ const PROMO_CODES: Record<string, { percent?: number; amount?: number; label: st
 function Checkout() {
   const navigate = useNavigate();
   const { lines, buyNowLine, clear, clearBuyNow } = useCart();
-  const { formatUsdShort, pkrPerUsd } = useExchangeRate();
+  const { formatUsdShort, pkrPerUsd, source: exchangeRateSource } = useExchangeRate();
   const checkoutLines = buyNowLine ? [buyNowLine] : lines;
   const { data: user } = useCurrentUser();
   const { data } = useQuery({
@@ -976,7 +976,7 @@ function Checkout() {
                   <span className="text-foreground font-semibold">≈ {formatUsdShort(total)} USD</span>
                 </div>
                 <div className="text-[11px] text-muted-foreground">
-                  Including {formatPrice(estimatedTax)} in taxes (Rate: $1 ≈ Rs. {pkrPerUsd.toFixed(2)})
+                  Including {formatPrice(estimatedTax)} in taxes (Rate: $1 ≈ Rs. {pkrPerUsd.toFixed(2)}, {exchangeRateSource})
                 </div>
                 <div className="rounded bg-secondary/80 px-2.5 py-1.5 text-[11px] text-muted-foreground text-center font-medium border border-border/60">
                   🇵🇰 All prices & transactions are charged in <strong>PKR (Pakistani Rupees)</strong>

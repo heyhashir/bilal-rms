@@ -36,6 +36,7 @@ try {
   });
   store.savePosCache(cache);
 
+  const saleStartedAt = performance.now();
   const receipt = store.persistOfflineSale({
     sale: {
       saleNumber: 'QA-OFFLINE-001',
@@ -46,11 +47,14 @@ try {
     employees: [],
     settings: { receiptPrefix: 'REC', invoicePrefix: 'INV', logoPrimaryText: 'BALY' },
   });
+  const salePersistenceMs = performance.now() - saleStartedAt;
+  assert.ok(salePersistenceMs < 1_000, `offline sale persistence exceeded 1 second (${salePersistenceMs.toFixed(1)} ms)`);
 
   assert.equal(store.loadPosCache().products[0].stock, 3, 'offline sale must decrement local stock immediately');
   assert.equal(store.loadQueuedSales().length, 1, 'offline sale must enter the durable sync queue');
   assert.equal(store.getOfflineReceipt(receipt.saleNumber)?.receipt?.receiptNumber, 'REC-QA-OFFLINE-001');
 
+  const refundStartedAt = performance.now();
   const refunded = store.persistOfflineRefund({
     refund: {
       jobKey: 'qa-refund-001',
@@ -59,6 +63,8 @@ try {
       items: [{ saleItemId: receipt.items[0].id, qty: 1 }],
     },
   });
+  const refundPersistenceMs = performance.now() - refundStartedAt;
+  assert.ok(refundPersistenceMs < 1_000, `offline refund persistence exceeded 1 second (${refundPersistenceMs.toFixed(1)} ms)`);
   assert.ok(refunded, 'offline refund must find its local receipt');
   assert.equal(store.loadPosCache().products[0].stock, 4, 'offline refund must restore local stock immediately');
   assert.equal(store.loadQueuedRefunds().length, 1, 'offline refund must enter the durable sync queue');
@@ -74,7 +80,7 @@ try {
   assert.match(html, /@page \{ size: 72mm auto; margin: 0; \}/, 'receipt must target 72 mm printable width');
   assert.match(html, /width: 72mm;/, 'receipt body must not exceed the printer printable width');
 
-  console.log('Desktop local-store smoke passed');
+  console.log(`Desktop local-store smoke passed (sale ${salePersistenceMs.toFixed(1)} ms, refund ${refundPersistenceMs.toFixed(1)} ms)`);
 } finally {
   await fs.rm(runtimeDir, { recursive: true, force: true });
 }

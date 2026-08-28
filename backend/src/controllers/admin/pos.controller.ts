@@ -31,7 +31,7 @@ export const findPosSale = async (req: Request, res: Response) => {
 };
 
 export const createPosSale = async (req: Request, res: Response) => {
-  const sale = await posService.createSale(req.body);
+  const sale = await posService.createSale({ ...req.body, cashierAccountId: req.currentUser!.id });
   logAdminAudit(req, {
     action: 'pos-sale.created',
     targetType: 'pos-sale',

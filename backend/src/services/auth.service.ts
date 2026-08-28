@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import { env } from '../config/env';
 import { authRepository } from '../repositories/auth.repository';
 import { ApiError } from '../types/ApiError';

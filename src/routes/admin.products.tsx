@@ -102,12 +102,12 @@ type Draft = {
   }>;
 };
 
-const makeDraft = (product?: Product): Draft => ({
+const makeDraft = (product?: Product, defaultCategory?: string): Draft => ({
   id: product?.id,
   slug: product?.slug ?? "",
   name: product?.name ?? "",
   description: product?.description ?? "",
-  categorySlug: product?.category ?? "men",
+  categorySlug: product?.category ?? defaultCategory ?? "men",
   brandSlug: product?.brandSlug ?? "",
   stockMode: product?.stockMode ?? "simple",
   price: product?.price ?? 0,
@@ -191,7 +191,7 @@ function AdminProducts() {
       <PageHeader
         eyebrow="Catalog"
         title={`Products (${products.length})`}
-        action={<ActionButton onClick={() => setEditing(makeDraft())}><Plus className="h-3.5 w-3.5" /> Add product</ActionButton>}
+        action={<ActionButton onClick={() => setEditing(makeDraft(undefined, categoryOptions[0]?.slug))}><Plus className="h-3.5 w-3.5" /> Add product</ActionButton>}
       />
 
       <div className="overflow-x-auto border border-border">
@@ -582,11 +582,32 @@ function ProductModal({
   };
 
   const submit = async () => {
+    const trimmedName = form.name.trim();
+    if (!trimmedName) {
+      toast.error("Please enter a product name");
+      return;
+    }
+    const finalSlug = form.slug.trim() || slugify(trimmedName);
+    if (!finalSlug) {
+      toast.error("Please enter a product slug");
+      return;
+    }
+    if (!form.categorySlug) {
+      toast.error("Please select a product category");
+      return;
+    }
+    const sizes = isAccessory ? ["Standard"] : matrixSizes;
+    if (form.stockMode === "variant" && form.variants.length === 0) {
+      toast.error("Please add colors/sizes and generate the variant matrix before saving");
+      return;
+    }
+
     try {
-      const sizes = isAccessory ? ["Standard"] : matrixSizes;
       const variants = form.stockMode === "variant" ? form.variants : [];
       const result = await adminCatalogApi.saveProduct({
         ...form,
+        name: trimmedName,
+        slug: finalSlug,
         sizes,
         tags: tagText.split(",").map((v) => v.trim()).filter(Boolean),
         variants,
@@ -1093,8 +1114,9 @@ function ProductModal({
                 </div>
               ) : (
                 <div>
-                  <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">1. Sizes (comma separated)</span>
+                  <label htmlFor="variant-sizes" className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">1. Sizes (comma separated)</label>
                   <input
+                    id="variant-sizes"
                     value={sizeText}
                     onChange={(event) => setSizeText(event.target.value)}
                     placeholder="S, M, L, XL or 28, 30, 32, 34, 36"

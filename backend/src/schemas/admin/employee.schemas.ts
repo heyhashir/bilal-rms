@@ -5,7 +5,7 @@ export const employeeSchema = z.object({
   name: z.string().min(2),
   phone: z.string().optional().or(z.literal('')),
   email: z.string().email().optional().or(z.literal('')),
-  password: z.string().min(6).optional().or(z.literal('')),
+  password: z.string().min(8).optional().or(z.literal('')),
   commissionRate: z.coerce.number().min(0).max(100).default(0),
   status: z.enum(['active', 'inactive']).default('active'),
   notes: z.string().optional().or(z.literal('')),

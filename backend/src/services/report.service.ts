@@ -27,8 +27,9 @@ const toRange = (from?: string, to?: string) => {
 export const reportService = {
   async getSummary(input: { from?: string; to?: string }) {
     const range = toRange(input.from, input.to);
-    const [orders, posSales, commissions, ledgerEntries, vendorPurchases] = await Promise.all([
-      reportRepository.listOrders(range),
+    const [orders, operationalOnlineOrders, posSales, commissions, ledgerEntries, vendorPurchases] = await Promise.all([
+      reportRepository.listDeliveredOrders(range),
+      reportRepository.countOperationalOrders(range),
       reportRepository.listPosSales(range),
       reportRepository.listCommissionEntries(range),
       reportRepository.listLedgerEntries(range),
@@ -117,6 +118,7 @@ export const reportService = {
     let totalProfit = 0;
 
     for (const order of orders) {
+      totalProfit += Number(order.shippingFee);
       for (const item of order.items) {
         const unitPrice = Number(item.unitPrice);
         const unitCost = Number(item.unitCost ?? item.variant?.costPrice ?? item.product.costPrice ?? 0);
@@ -232,6 +234,7 @@ export const reportService = {
       },
       overview: {
         onlineOrders: orders.length,
+        operationalOnlineOrders,
         onlineRevenue: orders.reduce((sum, order) => sum + Number(order.total), 0),
         posSales: posSales.length,
         posRevenue: posSales.reduce(
@@ -290,6 +293,7 @@ export const reportService = {
       receiptNumber: string;
       receiptType: 'Sales' | 'Refund';
       cashier: string;
+      salespeople: string[];
       paymentMethod: string;
       qtySold: number;
       total: number;
@@ -310,10 +314,8 @@ export const reportService = {
     const rows: BillRow[] = [];
 
     for (const sale of posSales) {
-      const cashierName =
-        sale.items.find((i) => i.employee?.name)?.employee?.name ||
-        sale.deviceName ||
-        'Admin';
+      const cashierName = sale.cashier?.name || sale.deviceName || 'Admin';
+      const salespeople = Array.from(new Set(sale.items.flatMap((item) => (item.employee?.name ? [item.employee.name] : []))));
 
       const paymentMethod = (sale.paymentMethod || sale.payments[0]?.method || 'CASH').toUpperCase();
       const saleDate = sale.createdAt.toISOString().slice(0, 10);
@@ -330,6 +332,7 @@ export const reportService = {
         receiptNumber: sale.saleNumber,
         receiptType: 'Sales',
         cashier: cashierName,
+        salespeople,
         paymentMethod,
         qtySold,
         total,
@@ -360,9 +363,10 @@ export const reportService = {
             date: retDate,
             time: retTime,
             timestamp: ret.createdAt.getTime(),
-            receiptNumber: `${sale.saleNumber}-RET`,
+            receiptNumber: `${sale.saleNumber}-RET-${ret.id.slice(-6).toUpperCase()}`,
             receiptType: 'Refund',
             cashier: cashierName,
+            salespeople,
             paymentMethod,
             qtySold: -retQty,
             total: -retAmount,
@@ -417,6 +421,7 @@ export const reportService = {
         const matches =
           r.receiptNumber.toLowerCase().includes(q) ||
           r.cashier.toLowerCase().includes(q) ||
+          r.salespeople.some((name) => name.toLowerCase().includes(q)) ||
           r.customerName.toLowerCase().includes(q) ||
           r.customerPhone.toLowerCase().includes(q);
         if (!matches) return false;
@@ -488,6 +493,7 @@ export const reportService = {
       'Receipt #': b.receiptNumber,
       'Receipt Type': b.receiptType,
       Cashier: b.cashier,
+      Salespeople: b.salespeople.join(', '),
       'Payment Method': b.paymentMethod,
       'Qty Sold': b.qtySold,
       'Total (PKR)': b.total,

@@ -331,13 +331,13 @@ const run = async () => {
   const reportAfterOrderVoid = await reportService.getSummary({});
   assert.equal(
     dashboardAfterOrderVoid.revenue,
-    dashboardBeforeOrderVoid.revenue - Number(correctionOrder.total),
-    'voided online orders should leave dashboard revenue',
+    dashboardBeforeOrderVoid.revenue,
+    'voiding an undelivered online order should not change recognized dashboard revenue',
   );
   assert.equal(
     reportAfterOrderVoid.overview.onlineRevenue,
-    reportBeforeOrderVoid.overview.onlineRevenue - Number(correctionOrder.total),
-    'voided online orders should leave report revenue',
+    reportBeforeOrderVoid.overview.onlineRevenue,
+    'voiding an undelivered online order should not change recognized report revenue',
   );
   assert.notEqual(
     voidCandidate.receipt?.receiptNumber,

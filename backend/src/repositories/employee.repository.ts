@@ -3,6 +3,11 @@ import prisma from '../config/prisma';
 export const employeeRepository = {
   listEmployees: () =>
     prisma.employee.findMany({
+      include: {
+        loginAccount: {
+          select: { id: true, email: true, role: true, isActive: true },
+        },
+      },
       orderBy: { name: 'asc' },
     }),
   createEmployee: (data: {

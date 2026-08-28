@@ -10,12 +10,15 @@ type RateCache = {
 };
 
 let inMemoryRate: number = DEFAULT_PKR_PER_USD;
+export type ExchangeRateSource = "live" | "cached" | "fallback";
+let inMemorySource: ExchangeRateSource = "fallback";
 let isFetching = false;
-const listeners = new Set<(rate: number) => void>();
+const listeners = new Set<(rate: number, source: ExchangeRateSource) => void>();
 
-function notify(rate: number) {
+function notify(rate: number, source: ExchangeRateSource) {
   inMemoryRate = rate;
-  listeners.forEach((cb) => cb(rate));
+  inMemorySource = source;
+  listeners.forEach((cb) => cb(rate, source));
 }
 
 // Load cached rate on startup
@@ -26,6 +29,7 @@ if (typeof window !== "undefined") {
       const parsed = JSON.parse(raw) as RateCache;
       if (parsed.pkrPerUsd && Date.now() - parsed.timestamp < CACHE_DURATION_MS) {
         inMemoryRate = parsed.pkrPerUsd;
+        inMemorySource = "cached";
       }
     }
   } catch {
@@ -43,7 +47,7 @@ export async function fetchLiveExchangeRate(): Promise<number> {
     if (raw) {
       const parsed = JSON.parse(raw) as RateCache;
       if (parsed.pkrPerUsd && Date.now() - parsed.timestamp < CACHE_DURATION_MS) {
-        notify(parsed.pkrPerUsd);
+        notify(parsed.pkrPerUsd, "cached");
         return parsed.pkrPerUsd;
       }
     }
@@ -53,48 +57,43 @@ export async function fetchLiveExchangeRate(): Promise<number> {
 
   isFetching = true;
   try {
-    // Primary API
-    const res = await fetch("https://open.er-api.com/v6/latest/USD");
-    if (res.ok) {
-      const data = await res.json();
-      const rate = Number(data?.rates?.PKR);
-      if (rate && rate > 0) {
-        const rounded = Math.round(rate * 100) / 100;
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ pkrPerUsd: rounded, timestamp: Date.now() }));
-        notify(rounded);
-        return rounded;
-      }
-    }
-  } catch {
-    // Fallback to secondary API
-    try {
-      const res = await fetch("https://api.exchangerate-api.com/v4/latest/USD");
-      if (res.ok) {
+    for (const endpoint of [
+      "https://open.er-api.com/v6/latest/USD",
+      "https://api.exchangerate-api.com/v4/latest/USD",
+    ]) {
+      try {
+        const res = await fetch(endpoint);
+        if (!res.ok) continue;
         const data = await res.json();
         const rate = Number(data?.rates?.PKR);
         if (rate && rate > 0) {
           const rounded = Math.round(rate * 100) / 100;
           localStorage.setItem(CACHE_KEY, JSON.stringify({ pkrPerUsd: rounded, timestamp: Date.now() }));
-          notify(rounded);
+          notify(rounded, "live");
           return rounded;
         }
+      } catch {
+        // Try the next provider.
       }
-    } catch {
-      // Use fallback default
     }
   } finally {
     isFetching = false;
   }
 
+  notify(inMemoryRate, inMemorySource);
   return inMemoryRate;
 }
 
 // React Hook to access live exchange rate
 export function useExchangeRate() {
   const [rate, setRate] = useState<number>(inMemoryRate);
+  const [source, setSource] = useState<ExchangeRateSource>(inMemorySource);
 
   useEffect(() => {
-    const handler = (newRate: number) => setRate(newRate);
+    const handler = (newRate: number, newSource: ExchangeRateSource) => {
+      setRate(newRate);
+      setSource(newSource);
+    };
     listeners.add(handler);
     void fetchLiveExchangeRate();
     return () => {
@@ -119,6 +118,7 @@ export function useExchangeRate() {
 
   return {
     pkrPerUsd: rate,
+    source,
     convertPkrToUsd,
     formatUsd,
     formatUsdShort,

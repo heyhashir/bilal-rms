@@ -12,9 +12,12 @@ test.describe("Bilal RMS live-safe smoke", () => {
         credentials: "include",
       });
       const categoriesPayload = await categoriesResponse.json();
-      const categorySlug = categoriesPayload.data.categories[0]?.slug;
-      if (!categorySlug) {
-        throw new Error("No category available for live smoke fixture");
+      const category = categoriesPayload.data.categories.find(
+        (entry: { name: string; slug: string }) => !/accessor|watch|jewel|bag|wallet|shoe|perfume/i.test(`${entry.name} ${entry.slug}`),
+      );
+      const categorySlug = category?.slug;
+      if (!categorySlug || !category?.name) {
+        throw new Error("No sized category available for live smoke fixture");
       }
 
       const employeeName = `${prefix} Employee`;
@@ -82,6 +85,7 @@ test.describe("Bilal RMS live-safe smoke", () => {
         productName,
         productSlug,
         barcode,
+        categoryName: category.name as string,
       };
     }, qaPrefix);
 
@@ -89,18 +93,18 @@ test.describe("Bilal RMS live-safe smoke", () => {
     const productRow = page.locator("tr").filter({ hasText: fixture.productName });
     await productRow.getByTitle("Print barcode stickers").click();
     await expect(page.getByRole("heading", { name: `Barcode stickers - ${fixture.productName}` })).toBeVisible();
-    await expect(page.getByText("Labels print at 1.50 x 1.00 inches in landscape.")).toBeVisible();
-    await expect(page.getByLabel("Label template for this print job")).toHaveValue(/branded|compact/);
-    await page.getByLabel("Label template for this print job").selectOption("compact");
-    await expect(page.getByLabel("Label template for this print job")).toHaveValue("compact");
+    await expect(page.getByText("Thermal Printer & Label Calibration", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Sticker Design")).toHaveValue("standard");
+    await page.getByLabel("Sticker Design").selectOption("compact");
+    await expect(page.getByLabel("Sticker Design")).toHaveValue("compact");
     await page.getByRole("button", { name: "Close" }).click();
 
     await page.getByRole("button", { name: "Add product" }).click();
+    await page.locator("label", { hasText: "Category" }).locator("select").selectOption({ label: fixture.categoryName });
     await page.getByLabel("Stock mode").selectOption("variant");
-    await page.getByLabel("Sizes (comma separated)").fill("S, M");
-    const colorInput = page.getByPlaceholder("Color name");
-    await colorInput.fill("Black");
-    await colorInput.locator("..").getByRole("button", { name: "Add" }).click();
+    await page.getByLabel(/Sizes \(comma separated\)/).fill("S, M");
+    await page.getByRole("button", { name: "Black", exact: true }).click();
+    await page.getByRole("button", { name: "Add Color", exact: true }).click();
     await page.getByRole("button", { name: "Generate matrix" }).click();
     await expect(page.getByLabel("S Black stock")).toBeEnabled();
     await expect(page.getByLabel("M Black stock")).toBeEnabled();
@@ -125,7 +129,7 @@ test.describe("Bilal RMS live-safe smoke", () => {
     await expect(page.getByRole("heading", { name: /Orders \(/ })).toBeVisible();
 
     await page.goto("/pos");
-    await page.getByPlaceholder("Barcode, QR code, SKU, or product name").fill(fixture.barcode);
+    await page.getByPlaceholder(/Scan barcode with Honeywell Orbit/).fill(fixture.barcode);
     await page.locator("button").filter({ hasText: fixture.productName }).first().click();
     await page.locator("tbody select").first().selectOption({ label: fixture.employeeName });
     await page.getByLabel(/^Customer name$/).fill(`${qaPrefix} Customer`);

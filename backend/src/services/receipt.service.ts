@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { Prisma, StoreSetting } from '@prisma/client';
+import { Prisma, StoreSetting } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 import { ApiError } from '../types/ApiError';
 

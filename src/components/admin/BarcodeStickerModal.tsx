@@ -283,10 +283,11 @@ export function BarcodeStickerModal({
           <div className="grid gap-4 sm:grid-cols-3">
             {/* Label Size Preset */}
             <div>
-              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="barcode-label-roll-size" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Label Roll Size
               </label>
               <select
+                id="barcode-label-roll-size"
                 value={sizePreset}
                 onChange={(e) => setSizePreset(e.target.value)}
                 className="w-full rounded border border-border bg-background px-3 py-2 text-xs font-medium outline-none focus:border-foreground"
@@ -303,10 +304,11 @@ export function BarcodeStickerModal({
             {sizePreset === "custom" ? (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <label htmlFor="barcode-label-width" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Width (mm)
                   </label>
                   <input
+                    id="barcode-label-width"
                     type="number"
                     min={20}
                     max={150}
@@ -316,10 +318,11 @@ export function BarcodeStickerModal({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <label htmlFor="barcode-label-height" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Height (mm)
                   </label>
                   <input
+                    id="barcode-label-height"
                     type="number"
                     min={15}
                     max={150}
@@ -332,10 +335,11 @@ export function BarcodeStickerModal({
             ) : (
               /* Label Template */
               <div>
-                <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <label htmlFor="barcode-sticker-design" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Sticker Design
                 </label>
                 <select
+                  id="barcode-sticker-design"
                   value={template}
                   onChange={(event) => setTemplate(event.target.value as "standard" | "compact" | "branded")}
                   className="w-full rounded border border-border bg-background px-3 py-2 text-xs font-medium outline-none focus:border-foreground"
@@ -349,11 +353,12 @@ export function BarcodeStickerModal({
 
             {/* Orientation / Rotation */}
             <div>
-              <label className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <label htmlFor="barcode-print-orientation" className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <span>Print Orientation</span>
                 <span className="text-[10px] text-amber-600 font-bold">Fix Rotation</span>
               </label>
               <select
+                id="barcode-print-orientation"
                 value={String(rotation)}
                 onChange={(e) => setRotation(Number(e.target.value) as 0 | 90 | 180 | 270)}
                 className="w-full rounded border border-border bg-background px-3 py-2 text-xs font-medium outline-none focus:border-foreground"

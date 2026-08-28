@@ -10,15 +10,15 @@ export default defineConfig({
   fullyParallel: false,
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:5000",
+    baseURL: process.env.QA_BASE_URL ?? "http://127.0.0.1:5000",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
   projects: [
     {
-      name: "live",
-      testMatch: /live\/.*\.spec\.ts/,
+      name: "live-readonly",
+      testMatch: /readonly\/.*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
       },

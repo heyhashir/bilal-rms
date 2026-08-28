@@ -648,11 +648,16 @@ const run = async () => {
     assert.equal(employeesBefore.status, 200, 'employee list should load');
     const employeeCountBefore = employeesBefore.payload?.data.employees.length ?? 0;
 
-    const savedEmployee = await adminRequest<{ employee: { id: string; status: string; name: string } }>('/admin/employees', {
+    const employeeLoginEmail = `${prefix}-employee@example.com`;
+    const savedEmployee = await adminRequest<{
+      employee: { id: string; status: string; name: string; email: string; loginProvisioned: boolean; loginActive: boolean };
+    }>('/admin/employees', {
       method: 'POST',
       body: JSON.stringify({
         name: 'Integration Employee',
         phone: '03005551234',
+        email: employeeLoginEmail,
+        password: 'employee123',
         commissionRate: 5,
         status: 'active',
         notes: 'Created in integration smoke',
@@ -660,6 +665,9 @@ const run = async () => {
     });
     assert.equal(savedEmployee.status, 201, 'employee save should succeed');
     assert.equal(savedEmployee.payload?.data.employee.status, 'active');
+    assert.equal(savedEmployee.payload?.data.employee.email, employeeLoginEmail);
+    assert.equal(savedEmployee.payload?.data.employee.loginProvisioned, true);
+    assert.equal(savedEmployee.payload?.data.employee.loginActive, true);
     const employeeId = savedEmployee.payload?.data.employee.id;
     assert.ok(employeeId, 'employee save should return an id');
 
@@ -691,6 +699,7 @@ const run = async () => {
       method: 'PATCH',
       body: JSON.stringify({
         paymentStatus: 'verified',
+        orderStatus: 'delivered',
       }),
     });
     assert.equal(verifiedWalletOrder.status, 200, 'wallet-proof orders should support payment verification');
@@ -750,7 +759,17 @@ const run = async () => {
     assert.match(generatedCodes.payload?.data.barcode ?? '', /^BG-|^[A-Z0-9]+-/i, 'generated barcode should include a prefix');
     assert.ok((generatedCodes.payload?.data.qrCode ?? '').length > 0, 'generated QR code should be returned');
 
-    const createdAdminProduct = await adminRequest<{ product: { id: string; slug: string; stock: number } }>('/admin/products', {
+    const createdAdminProduct = await adminRequest<{
+      product: {
+        id: string;
+        slug: string;
+        stock: number;
+        salePrice: number | null;
+        costPrice: number | null;
+        sizes: string[];
+        colors: Array<{ name: string; hex: string }>;
+      };
+    }>('/admin/products', {
       method: 'POST',
       body: JSON.stringify({
         slug: `${prefix}-admin-product`,
@@ -760,11 +779,12 @@ const run = async () => {
         brandSlug: `${prefix}-admin-brand`,
         stockMode: 'simple',
         price: 2250,
-        salePrice: null,
+        salePrice: 0,
+        costPrice: 0,
         stock: 4,
         sizeChart: 'apparel',
-        sizes: [],
-        colors: [],
+        sizes: ['M'],
+        colors: [{ name: 'Black', hex: '#000000' }],
         tags: ['integration'],
         seoTitle: 'Admin Integration Product',
         seoDescription: 'Admin integration description',
@@ -781,6 +801,10 @@ const run = async () => {
     });
     assert.equal(createdAdminProduct.status, 201, 'admin product create should succeed');
     assert.equal(createdAdminProduct.payload?.data.product.slug, `${prefix}-admin-product`);
+    assert.equal(createdAdminProduct.payload?.data.product.salePrice, 0, 'explicit zero sale price must be preserved');
+    assert.equal(createdAdminProduct.payload?.data.product.costPrice, 0, 'explicit zero cost must be preserved');
+    assert.deepEqual(createdAdminProduct.payload?.data.product.sizes, ['M'], 'simple-product sizes must persist');
+    assert.deepEqual(createdAdminProduct.payload?.data.product.colors, [{ name: 'Black', hex: '#000000' }], 'simple-product colors must persist');
     const adminProductId = createdAdminProduct.payload?.data.product.id;
     assert.ok(adminProductId, 'admin product create should return the new product id');
 
@@ -914,6 +938,13 @@ const run = async () => {
     const archivedEmployeeRow = employeesAfter.payload?.data.employees.find((employee) => employee.id === employeeId);
     assert.equal(archivedEmployeeRow?.status, 'inactive', 'employee archive should persist inactive status');
 
+    const archivedEmployeeRequest = createJsonRequest(baseUrl, new CookieJar());
+    const archivedEmployeeLogin = await archivedEmployeeRequest<{ user: { role: string } }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: employeeLoginEmail, password: 'employee123' }),
+    });
+    assert.equal(archivedEmployeeLogin.status, 401, 'archiving an employee should revoke the linked STAFF login');
+
     const archivedBrand = await adminRequest<{ ok: boolean }>(`/admin/brands/${prefix}-admin-brand`, {
       method: 'DELETE',
     });
@@ -992,10 +1023,11 @@ const run = async () => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const reportSummary = await adminRequest<{
-      summary: { overview: { onlineOrders: number; posSales: number; onlineRevenue: number; posRevenue: number }; profit: { total: number } };
+      summary: { overview: { onlineOrders: number; operationalOnlineOrders: number; posSales: number; onlineRevenue: number; posRevenue: number }; profit: { total: number } };
     }>(`/admin/reports/summary?from=${today}&to=${today}`);
     assert.equal(reportSummary.status, 200, 'admin report summary should load');
-    assert.ok((reportSummary.payload?.data.summary.overview.onlineOrders ?? 0) >= 2, 'report should include online orders');
+    assert.ok((reportSummary.payload?.data.summary.overview.onlineOrders ?? 0) >= 1, 'report should include delivered online orders');
+    assert.ok((reportSummary.payload?.data.summary.overview.operationalOnlineOrders ?? 0) >= 1, 'report should expose operational online orders separately');
     assert.ok((reportSummary.payload?.data.summary.overview.posSales ?? 0) >= 1, 'report should include POS sales');
     assert.ok((reportSummary.payload?.data.summary.overview.onlineRevenue ?? 0) > 0, 'report should include online revenue');
     assert.ok((reportSummary.payload?.data.summary.profit.total ?? 0) >= 0, 'report should calculate profit');
@@ -1053,6 +1085,18 @@ const run = async () => {
     assert.equal(managerVendors.status, 403, 'manager should be blocked from vendor financial views');
     const managerStaffAccounts = await managerRequest<unknown>('/admin/staff-accounts');
     assert.equal(managerStaffAccounts.status, 403, 'manager should be blocked from staff account administration');
+    const managerCredentialEscalation = await managerRequest<unknown>('/admin/employees', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Blocked takeover attempt',
+        email: env.ADMIN_EMAIL,
+        password: 'takeover123',
+        commissionRate: 0,
+        status: 'active',
+        notes: 'Must never update an administrator account',
+      }),
+    });
+    assert.equal(managerCredentialEscalation.status, 403, 'manager must not provision credentials through employee administration');
 
     const staffRequest = createJsonRequest(baseUrl, new CookieJar());
     const staffLogin = await staffRequest<{ user: { role: string } }>('/auth/login', {

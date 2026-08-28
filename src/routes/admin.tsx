@@ -24,7 +24,6 @@ import {
   Calculator,
   Truck,
   BookOpen,
-  Ruler,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
@@ -47,7 +46,6 @@ const groups = [
       { to: "/admin/products", label: "Products", icon: Package },
       { to: "/admin/categories", label: "Categories", icon: Tag },
       { to: "/admin/brands", label: "Brands", icon: Award },
-      { to: "/admin/size-charts", label: "Size Guides", icon: Ruler },
     ],
   },
   {

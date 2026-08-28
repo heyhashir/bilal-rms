@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
 
 type CatalogClient = Prisma.TransactionClient | typeof prisma;
@@ -123,7 +123,7 @@ export const catalogRepository = {
       include: productInclude,
     }),
   findCategoryBySlug: (slug: string) =>
-    prisma.category.findUniqueOrThrow({
+    prisma.category.findUnique({
       where: { slug },
     }),
   findCategoryById: (id: string) =>

@@ -313,6 +313,7 @@ function AdminBillWiseReport() {
                   <th className="p-3 text-right">Total</th>
                   <th className="p-3 text-left">Payment</th>
                   <th className="p-3 text-left">Cashier</th>
+                  <th className="p-3 text-left">Salesperson</th>
                 </tr>
               </thead>
               <tbody>
@@ -355,12 +356,13 @@ function AdminBillWiseReport() {
                         </td>
                         <td className="p-3 uppercase text-xs font-medium">{bill.paymentMethod}</td>
                         <td className="p-3 font-medium text-xs">{bill.cashier}</td>
+                        <td className="p-3 text-xs text-muted-foreground">{bill.salespeople.join(", ") || "-"}</td>
                       </tr>
 
                       {/* Expanded Bill Line Items Drilldown */}
                       {isExpanded && bill.items.length > 0 && (
                         <tr className="border-t border-border bg-secondary/30">
-                          <td colSpan={9} className="p-4 pl-12">
+                          <td colSpan={10} className="p-4 pl-12">
                             <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
                               Items on receipt {bill.receiptNumber} ({bill.items.length} lines):
                             </div>
