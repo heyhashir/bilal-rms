@@ -117,6 +117,23 @@ No reproducible P0 or P1 defect remains open in this local run.
 - Failed retries `qa-smoke-mtd3sqwj`, `qa-live-mtd2lbui`, and `qa-live-mtd2qbwc` were also cleaned automatically.
 - Integration fixtures cleaned their own `int-*` records in `finally`; desktop tests removed isolated temporary profiles.
 - No existing business catalog, customer, order, inventory, finance, or desktop operator record was intentionally removed.
+- Production verification created `qa-release-1788189007119`; create/read/update/archive/restore all passed, but permanent delete correctly returned `409` after stock history existed. The record remains archived (`isActive = false`) and is not visible on the storefront.
+- Production update verification registered scoped `qa-update-*` devices. They contain no sales, refunds, payments, or financial entries.
+
+## Production Release Evidence
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Source release | PASS | `dd870ee` pushed to `main`; CI workflow hardening followed in `3bbc213` |
+| GitHub verification | PASS | Strict `npm ci`, high-severity audit, lint, Prisma validation, and build passed with no annotations |
+| Hostinger readiness | PASS | `/api/v1/health/ready` and `/api/v1/catalog/bootstrap` returned `200` |
+| Live storefront | PASS | Home, shop, and search rendered with no browser console errors or retry/error fallback state |
+| Live admin product | PASS | Create `201`, public read `200`, update `200`, stock persisted as 11, inventory/report reads `200`, archive `200`, hidden read `404`, restore `200` |
+| Desktop publication | PASS | `0.3.2`, 105,224,098 bytes, SHA-256 `8EB19CD7C850CFB56D83AAEAF9F831B654A58E089FA2D17B3B745CBEF57DFE0D` |
+| Desktop update detection | PASS | A `0.3.1` manifest request returned `available: true`, latest `0.3.2`, and the expected installer URL/hash/size |
+| Packaged desktop live smoke | PASS | Warm packaged run: startup 1,853.2 ms, sign-in 499.5 ms, POS ready 422.5 ms |
+
+The first packaged launch after creating `win-unpacked` took 15,036.2 ms and exceeded the 4-second budget. An immediate rerun passed at 1,853.2 ms. This is retained as a cold package extraction/Windows security-scan risk for clean-client acceptance rather than hidden as a pass.
 
 ## Residual And External Acceptance
 
@@ -127,7 +144,7 @@ These items are not software passes and must remain open until tested on the act
 - [ ] Install on a clean customer Windows PC and verify SmartScreen behavior. The current installer is **not signed**.
 - [ ] Complete code signing with a trusted Windows certificate and rebuild before broad distribution.
 - [ ] Validate storefront and checkout on physical Android and iOS devices; current mobile/tablet evidence is emulation.
-- [ ] Deploy to Hostinger staging/production only after approval, then verify Node 20 runtime, migrations, secure cookies, HTTPS, custom domain, database connectivity and runtime logs.
+- [x] Deploy to Hostinger and verify migrations, HTTPS, custom domain, database connectivity, readiness and catalog behavior.
 - [ ] Confirm Hostinger preserves `storage/uploads` and `storage/desktop` across redeploy/restart and validate backup/restore procedures.
 - [ ] Run the final physical offline/reconnect day test and reconcile hosted stock, receipts, refunds, commissions and duplicate-job prevention.
 
@@ -135,6 +152,6 @@ The latest `electron-builder` still emits deprecation notices from transitive pa
 
 ## Release Recommendation
 
-**Local release candidate: PASS, conditional on external acceptance.** All local build, schema, security, data-integrity, browser, POS, performance, desktop persistence, update-feed and packaging gates pass. No unexplained test failure or backend 500 remained in the final run, and no P0/P1 defect is open.
+**Production release: PASS, conditional on external acceptance.** All local build, schema, security, data-integrity, browser, POS, performance, desktop persistence, update-feed and packaging gates pass. Hostinger is ready, live catalog/admin operations pass, and desktop `0.3.2` is published. No backend 500 or open P0/P1 defect remains.
 
-This report does **not** authorize or claim a production deployment. Hostinger verification, physical scanner/printer testing, real mobile-device testing, clean-client installation and trusted Windows signing remain required release acceptance work.
+Physical scanner/printer testing, real mobile-device testing, clean-client cold-start acceptance, Hostinger storage persistence, and trusted Windows signing remain required release acceptance work.

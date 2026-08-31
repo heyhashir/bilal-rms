@@ -31,14 +31,14 @@ This snapshot was refreshed on **2026-08-31**. Re-check it with `git status`, `g
 | Item | Current state |
 | --- | --- |
 | Git branch | `main` |
-| Audit baseline | `552e379`; run `git log -1 --oneline` for the deployed release revision |
-| Pull Requests / CI | Not re-checked during this local audit; verify in GitHub before release. |
-| Working tree | `QA-20260831-RELEASE-VALIDATION` changes were locally verified; run `git status` to confirm whether the release commit has been pushed. |
-| Frontend/backend build | Passed locally. No claim is made about CI until the audit changes are committed and pushed. |
-| Desktop package version | `0.3.2` release candidate |
+| Audit baseline | Release code `dd870ee`; CI workflow update `3bbc213` |
+| Pull Requests / CI | GitHub Build Verification passed strict install, high-severity audit, lint, Prisma validation, and build without annotations. |
+| Working tree | Release code and CI changes are pushed; documentation may contain a later evidence-only commit. |
+| Frontend/backend build | Passed locally and in GitHub CI. |
+| Desktop package version | `0.3.2`, published |
 | Desktop installer | `desktop/dist/BilalRMS-Setup-0.3.2.exe`, 105,224,098 bytes, SHA-256 `8EB19CD7C850CFB56D83AAEAF9F831B654A58E089FA2D17B3B745CBEF57DFE0D`; Authenticode `NotSigned`. |
-| Desktop release publication | Not performed during this audit. Re-check the production manifest before stating which release is published. |
-| Production web deployment | Not performed during this audit. Local readiness does not prove Hostinger readiness. |
+| Desktop release publication | Published and server-verified; `0.3.1` clients receive `available: true` for `0.3.2`. |
+| Production web deployment | Hostinger readiness/catalog checks and scoped live product CRUD passed on 2026-08-31. |
 | Local web server | Local production build and Docker MariaDB at `127.0.0.1:3308` passed the audit; processes may be stopped after QA. |
 
 ### Latest Local Audit Changes
@@ -52,7 +52,7 @@ This snapshot was refreshed on **2026-08-31**. Re-check it with `git status`, `g
 - Storefront/admin query failures show explicit retry states rather than false empty data. Desktop bootstrap failures retain update checking and recoverable retry/offline behavior.
 - Release `0.3.2` uses the patched deduplicated `mariadb@3.5.3` connector and requires environment-supplied Playwright admin credentials.
 - Contact-page email/phone reconciliation is intentionally deferred at the owner's request; do not silently overwrite it from store settings.
-- No audit change has been pushed, deployed, applied to production data, or published as a desktop update.
+- Release code is deployed and desktop `0.3.2` is published. Live QA left one archived `qa-release-1788189007119` product because its stock history correctly blocks permanent deletion; it is not customer-visible.
 
 ### Historical And Current Feature Notes
 
@@ -261,7 +261,7 @@ Key models include:
 ### Migration Policy
 
 - Prisma migrations are **additive only**. Never drop/rename/change a live column type as a quick fix.
-- Existing migrations are under `backend/prisma/migrations/`, through `20260828090000_employee_login_account` at this snapshot.
+- Existing migrations are under `backend/prisma/migrations/`, through `20260831150000_product_variant_image` at this snapshot.
 - Prisma 7 connection configuration is in `backend/prisma.config.ts`; generated client output is under `backend/src/generated/prisma` and is ignored source output.
 - Run `npm run db:deploy` against a correctly configured target. Do not run destructive reset commands against production.
 - Seed/bootstrap is intended to be idempotent: it creates missing owner/store/register defaults but must not erase business data.
@@ -510,7 +510,7 @@ The project has substantial feature coverage, but it should not be described as 
 5. **Production admin credentials:** the desktop release publishing script requires a current production admin login in a local, ignored env file. If it reports `Invalid credentials`, update local credentials, never weaken authentication.
 6. **Multiple counters:** structurally prepared, but adding multiple active POS devices needs reconciliation/load/hardware acceptance testing before relying on it operationally.
 7. **Desktop release version:** the version in `desktop/package.json` must align with the deployed source version; increment version before building/publishing a new installer.
-8. **Current audit diff:** the working tree contains the uncommitted August local audit. Review `docs/developer/qa-report.md` and the complete diff before staging; do not discard unrelated user work.
+8. **Production QA residue:** one archived `qa-release-1788189007119` product remains because its stock history correctly blocks permanent deletion. It is not customer-visible; remove it only through an approved history-aware maintenance process.
 9. **Deferred modules:** inspect navigation and direct routes before surfacing any module not actually supported; the standalone Size Guides menu is intentionally removed while per-product guides remain.
 
 ## 15. Safe Working Rules For Future Agents
