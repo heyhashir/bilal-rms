@@ -58,6 +58,30 @@ export function EmptyState({ title, hint, cta }: { title: string; hint?: string;
   );
 }
 
+export function QueryErrorState({
+  title,
+  hint = "The server could not load this data. Try again before making changes.",
+  onRetry,
+}: {
+  title: string;
+  hint?: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div role="alert">
+      <EmptyState
+        title={title}
+        hint={hint}
+        cta={
+          <ActionButton variant="ghost" onClick={onRetry}>
+            Try again
+          </ActionButton>
+        }
+      />
+    </div>
+  );
+}
+
 export function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     active: "bg-accent text-accent-foreground",

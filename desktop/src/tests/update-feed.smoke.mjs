@@ -7,8 +7,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const rootDir = path.resolve(desktopDir, "..");
-const currentVersion = "0.3.0";
-const nextVersion = "0.3.1";
+const desktopPackage = JSON.parse(await fs.readFile(path.join(desktopDir, "package.json"), "utf8"));
+const nextVersion = desktopPackage.version;
+const versionParts = nextVersion.split(".").map(Number);
+assert.equal(versionParts.length, 3, "desktop package version must use semantic versioning");
+assert.ok(versionParts.every(Number.isInteger), "desktop package version must contain numeric parts");
+assert.ok(versionParts[2] > 0, "desktop update smoke requires a version with a previous patch release");
+const currentVersion = `${versionParts[0]}.${versionParts[1]}.${versionParts[2] - 1}`;
+const newerVersion = `${versionParts[0]}.${versionParts[1]}.${versionParts[2] + 1}`;
 const releaseRoot = await fs.mkdtemp(path.join(os.tmpdir(), "bilal-rms-update-feed-"));
 const windowsDir = path.join(releaseRoot, "windows");
 const installerFile = `BilalRMS-Setup-${nextVersion}.exe`;
@@ -47,7 +53,7 @@ try {
   const current = await syncService.getUpdateManifest("", nextVersion);
   assert.equal(current.available, false, "current version must not be offered as an update");
 
-  const newer = await syncService.getUpdateManifest("", "0.3.2");
+  const newer = await syncService.getUpdateManifest("", newerVersion);
   assert.equal(newer.available, false, "the update feed must never advertise a downgrade");
 
   console.log("Desktop local N/N+1 update-feed smoke passed");

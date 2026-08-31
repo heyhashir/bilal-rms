@@ -24,7 +24,7 @@ import { getErrorMessage } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import type { Brand, Category, Product, SizeChart } from "@/lib/catalog-types";
-import { ActionButton, Field, Modal, PageHeader, SelectField } from "@/components/admin/primitives";
+import { ActionButton, EmptyState, Field, Modal, PageHeader, QueryErrorState, SelectField } from "@/components/admin/primitives";
 import { formatPrice } from "@/lib/format";
 import { BarcodeStickerModal } from "@/components/admin/BarcodeStickerModal";
 import { sizeCharts } from "@/config/site";
@@ -143,7 +143,12 @@ const invalidateCatalogAfterMutation = async () => {
 function AdminProducts() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [printing, setPrinting] = useState<Product | null>(null);
-  const { data: products = [] } = useQuery({
+  const {
+    data: products = [],
+    isLoading: isProductsLoading,
+    isError: isProductsError,
+    refetch: refetchProducts,
+  } = useQuery({
     queryKey: queryKeys.admin.products,
     queryFn: async () => (await adminCatalogApi.products()).products,
   });
@@ -194,6 +199,13 @@ function AdminProducts() {
         action={<ActionButton onClick={() => setEditing(makeDraft(undefined, categoryOptions[0]?.slug))}><Plus className="h-3.5 w-3.5" /> Add product</ActionButton>}
       />
 
+      {isProductsLoading ? (
+        <EmptyState title="Loading products" hint="Reading the catalog from the database." />
+      ) : isProductsError ? (
+        <QueryErrorState title="Products could not be loaded" onRetry={() => void refetchProducts()} />
+      ) : products.length === 0 ? (
+        <EmptyState title="No products found" hint="Create the first product with the Add product button." />
+      ) : (
       <div className="overflow-x-auto border border-border">
         <table className="min-w-[760px] w-full text-sm">
           <thead className="bg-secondary text-xs uppercase tracking-widest">
@@ -268,6 +280,7 @@ function AdminProducts() {
           </tbody>
         </table>
       </div>
+      )}
 
       {editing && (
         <ProductModal

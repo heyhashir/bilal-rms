@@ -19,7 +19,7 @@ function SearchPage() {
   const [term, setTerm] = useState(q);
   const query = term.trim();
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError, refetch } = useQuery({
     queryKey: queryKeys.catalog.productsList({ search: query, inStock: true }),
     queryFn: async () => catalogApi.products({ search: query, inStock: true, sort: "popular" }),
     enabled: query.length > 0,
@@ -98,6 +98,14 @@ function SearchPage() {
               </div>
             </div>
           )}
+        </div>
+      ) : isError ? (
+        <div className="bg-secondary p-12 text-center" role="alert">
+          <p className="font-medium">Search is temporarily unavailable.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Your search was not treated as an empty result.</p>
+          <button onClick={() => void refetch()} className="mt-4 text-xs uppercase tracking-widest underline underline-offset-4">
+            Try again
+          </button>
         </div>
       ) : isFetching && results.length === 0 ? (
         <div className="py-24 text-center text-muted-foreground">Searching the catalog...</div>

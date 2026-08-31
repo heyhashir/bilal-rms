@@ -26,17 +26,17 @@ This is not a static fashion website. It is one retail system with:
 
 ## 2. Current State Snapshot
 
-This snapshot was captured on **2026-08-28**. Re-check it with `git status`, `git log`, and the production health endpoints before acting.
+This snapshot was refreshed on **2026-08-31**. Re-check it with `git status`, `git log`, and the production health endpoints before acting.
 
 | Item | Current state |
 | --- | --- |
 | Git branch | `main` |
-| Audit baseline | `8086920`; run `git log -1 --oneline` for the deployed release revision |
+| Audit baseline | `552e379`; run `git log -1 --oneline` for the deployed release revision |
 | Pull Requests / CI | Not re-checked during this local audit; verify in GitHub before release. |
-| Working tree | Intentionally dirty with the uncommitted `QA-20260828-LOCAL-AUDIT` fixes listed in `docs/developer/qa-report.md`. |
+| Working tree | `QA-20260831-RELEASE-VALIDATION` changes were locally verified; run `git status` to confirm whether the release commit has been pushed. |
 | Frontend/backend build | Passed locally. No claim is made about CI until the audit changes are committed and pushed. |
-| Desktop package version | `0.3.1` release candidate |
-| Desktop installer | `desktop/dist/BilalRMS-Setup-0.3.1.exe`, 105,222,844 bytes, SHA-256 `967DA0DF0C38B5B7F18FDDA5A10DC6CDB1506E2EC33559791525BE52AED63003`; Authenticode `NotSigned`. |
+| Desktop package version | `0.3.2` release candidate |
+| Desktop installer | `desktop/dist/BilalRMS-Setup-0.3.2.exe`, 105,224,098 bytes, SHA-256 `8EB19CD7C850CFB56D83AAEAF9F831B654A58E089FA2D17B3B745CBEF57DFE0D`; Authenticode `NotSigned`. |
 | Desktop release publication | Not performed during this audit. Re-check the production manifest before stating which release is published. |
 | Production web deployment | Not performed during this audit. Local readiness does not prove Hostinger readiness. |
 | Local web server | Local production build and Docker MariaDB at `127.0.0.1:3308` passed the audit; processes may be stopped after QA. |
@@ -48,6 +48,10 @@ This snapshot was captured on **2026-08-28**. Re-check it with `git status`, `gi
 - Write-enabled QA is localhost-only and always cleans scoped records; remote smoke is read-only. Browser, backend, performance, Electron persistence, update-feed and packaged-launch gates pass locally.
 - Product zero values are preserved, database errors are not swallowed, currency fallback handles network/HTTP/payload failures, and unsupported standalone Size Guides navigation is removed while per-product guides remain.
 - Prisma is upgraded to 7.10.0, clean installs/builds pass, and root/desktop dependency audits report zero vulnerabilities.
+- Production startup reconciles known additive columns/indexes if shared-hosting migration history and restored schema drift apart. Readiness verifies critical catalog, inventory, employee, and POS columns.
+- Storefront/admin query failures show explicit retry states rather than false empty data. Desktop bootstrap failures retain update checking and recoverable retry/offline behavior.
+- Release `0.3.2` uses the patched deduplicated `mariadb@3.5.3` connector and requires environment-supplied Playwright admin credentials.
+- Contact-page email/phone reconciliation is intentionally deferred at the owner's request; do not silently overwrite it from store settings.
 - No audit change has been pushed, deployed, applied to production data, or published as a desktop update.
 
 ### Historical And Current Feature Notes
@@ -452,7 +456,7 @@ GET https://balybybilalgarments.com/api/v1/sync/updates/<deviceKey>?currentVersi
 
 Expected for an older client: `latestVersion` is newer, `available` is `true`, and `windows.installerUrl` references the expected installer.
 
-Local source version is `0.3.1`. The August audit verified a local N/N+1 feed; query the production manifest after publication before claiming which version is live.
+Local source version is `0.3.2`. The August 31 audit verified a local N/N+1 feed; query the production manifest after publication before claiming which version is live.
 
 ### Desktop Limitations
 
@@ -560,4 +564,4 @@ Then decide based on the request:
 
 ---
 
-Last handover update: **2026-08-28** (`QA-20260828-LOCAL-AUDIT`, local changes not deployed).
+Last handover update: **2026-08-31** (`QA-20260831-RELEASE-VALIDATION`; verify the Git revision and production manifest before claiming deployment).

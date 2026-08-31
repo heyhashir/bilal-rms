@@ -38,12 +38,17 @@ function CategoryPage() {
   const { slug } = Route.useParams();
   const [sort, setSort] = useState<CategorySort>("newest");
   const [page, setPage] = useState(1);
-  const { data: bootstrap } = useQuery({
+  const {
+    data: bootstrap,
+    isLoading: isBootstrapLoading,
+    isError: isBootstrapError,
+    refetch: refetchBootstrap,
+  } = useQuery({
     queryKey: queryKeys.catalog.bootstrap,
     queryFn: catalogApi.bootstrap,
   });
   const allCategories = flattenCategories(bootstrap?.categories ?? []);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.catalog.productsList({ category: slug, inStock: true, sort }),
     queryFn: async () => catalogApi.products({ category: slug, inStock: true, sort }),
     enabled: Boolean(bootstrap),
@@ -67,8 +72,16 @@ function CategoryPage() {
     throw notFound();
   }
 
+  if (isBootstrapLoading) {
+    return <CategoryStatus title="Loading the collection..." />;
+  }
+
+  if (isBootstrapError) {
+    return <CategoryStatus title="This collection could not be loaded." onRetry={() => void refetchBootstrap()} />;
+  }
+
   if (!category) {
-    return null;
+    return <CategoryStatus title="Loading the collection..." />;
   }
 
   return (
@@ -91,7 +104,9 @@ function CategoryPage() {
           </select>
         </label>
       </div>
-      {isLoading ? (
+      {isError ? (
+        <CategoryStatus title="Products could not be loaded." onRetry={() => void refetch()} embedded />
+      ) : isLoading ? (
         <div className="py-24 text-center text-muted-foreground">Loading the collection...</div>
       ) : products.length === 0 ? (
         <div className="py-24 text-center text-muted-foreground">Nothing here yet. Check back soon.</div>
@@ -116,6 +131,27 @@ function CategoryPage() {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+function CategoryStatus({
+  title,
+  onRetry,
+  embedded = false,
+}: {
+  title: string;
+  onRetry?: () => void;
+  embedded?: boolean;
+}) {
+  return (
+    <div className={embedded ? "py-24 text-center" : "container-bg py-24 text-center"} role={onRetry ? "alert" : undefined}>
+      <p className="text-muted-foreground">{title}</p>
+      {onRetry && (
+        <button onClick={onRetry} className="mt-4 text-xs uppercase tracking-widest underline underline-offset-4">
+          Try again
+        </button>
       )}
     </div>
   );

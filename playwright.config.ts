@@ -1,4 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
+import dotenv from "dotenv";
+import { existsSync, readFileSync } from "fs";
+import path from "path";
+
+const localEnvPath = path.resolve(process.cwd(), "backend", ".env.local");
+if (existsSync(localEnvPath)) {
+  const localEnv = dotenv.parse(readFileSync(localEnvPath));
+  process.env.ADMIN_EMAIL ||= localEnv.ADMIN_EMAIL;
+  process.env.ADMIN_PASSWORD ||= localEnv.ADMIN_PASSWORD;
+}
+delete process.env.NO_COLOR;
 
 const testPort = process.env.PLAYWRIGHT_PORT ?? "5001";
 const testBaseUrl = `http://127.0.0.1:${testPort}`;

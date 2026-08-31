@@ -157,6 +157,8 @@ function PosTerminal() {
   const [refundQtys, setRefundQtys] = useState<Record<string, number>>({});
   const [queueCount, setQueueCount] = useState(0);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState("");
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [initialCache] = useState(() => loadPosCache());
   const deviceKey = useMemo(() => getPosDeviceKey(), []);
   const [syncState, setSyncState] = useState<PosSyncState>(
@@ -392,6 +394,7 @@ function PosTerminal() {
   useEffect(() => {
     const bootstrapPos = async () => {
       try {
+        setBootstrapError("");
         if (desktopContext) {
           await syncApi.registerDevice({
             deviceKey,
@@ -426,19 +429,21 @@ function PosTerminal() {
           queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
         });
         void syncQueuedSales();
-        if (desktopBridge) {
-          void checkDesktopUpdate();
-        }
       } catch (error) {
+        const message = getErrorMessage(error, "Unable to reach sync bootstrap");
         setOfflineMode(true);
+        setBootstrapError(message);
         updateSyncState({
           lastSyncAttemptAt: Date.now(),
-          lastSyncError: getErrorMessage(error, "Unable to reach sync bootstrap"),
+          lastSyncError: message,
           queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
         });
       } finally {
         setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
         setStoredReceipts(loadOfflineReceipts());
+        if (desktopBridge) {
+          void checkDesktopUpdate();
+        }
       }
     };
 
@@ -448,7 +453,7 @@ function PosTerminal() {
     // Device/bootstrap changes are the intended triggers; queue helpers use the
     // latest persisted queue state internally and must not restart bootstrap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canLoadPos, deviceKey]);
+  }, [bootstrapAttempt, canLoadPos, deviceKey]);
 
   const installDesktopUpdate = async () => {
     const bridge = getDesktopBridge();
@@ -859,7 +864,37 @@ function PosTerminal() {
       />
 
       {!settings || productsQuery.isLoading || employeesQuery.isLoading || settingsQuery.isLoading ? (
-        <EmptyState title="Loading POS data" hint="Trying live data first, then falling back to the local cache." />
+        <div className="space-y-4">
+          {bootstrapError ? (
+            <EmptyState
+              title="POS data is unavailable"
+              hint={`${bootstrapError}. No local catalog cache is available, so billing is disabled to protect inventory accuracy.`}
+              cta={
+                <ActionButton variant="ghost" onClick={() => setBootstrapAttempt((current) => current + 1)}>
+                  <RefreshCcw className="mr-2 h-3.5 w-3.5" /> Retry POS sync
+                </ActionButton>
+              }
+            />
+          ) : (
+            <EmptyState title="Loading POS data" hint="Trying live data first, then falling back to the local cache." />
+          )}
+          {desktopContext && (
+            <div className="border border-border p-5">
+              <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Desktop updates</div>
+              <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                <div>Installed: <span className="font-medium text-foreground">{desktopContext.appVersion}</span></div>
+                <div>Latest: <span className="font-medium text-foreground">{desktopUpdate?.latestVersion ?? "Check required"}</span></div>
+              </div>
+              {updateMessage && <div className="mt-2 text-sm text-muted-foreground">{updateMessage}</div>}
+              <div className="mt-4">
+                <ActionButton variant="ghost" onClick={() => void checkDesktopUpdate(true)} disabled={isCheckingUpdate || isInstallingUpdate}>
+                  <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isCheckingUpdate ? "animate-spin" : ""}`} />
+                  {isCheckingUpdate ? "Checking..." : "Check now"}
+                </ActionButton>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-5">

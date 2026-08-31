@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Printer } from "lucide-react";
-import { ActionButton, EmptyState, PageHeader, StatCard, Toolbar } from "@/components/admin/primitives";
+import { ActionButton, EmptyState, PageHeader, QueryErrorState, StatCard, Toolbar } from "@/components/admin/primitives";
 import { adminInventoryApi } from "@/lib/admin-inventory-api";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import { formatPrice } from "@/lib/format";
@@ -27,7 +27,12 @@ function AdminInventoryValuation() {
     queryFn: async () => (await adminCatalogApi.brands()).brands,
   });
 
-  const { data: valuationData, isLoading: isValuationLoading } = useQuery({
+  const {
+    data: valuationData,
+    isLoading: isValuationLoading,
+    isError: isValuationError,
+    refetch: refetchValuation,
+  } = useQuery({
     queryKey: queryKeys.admin.inventoryValuation({ categoryId: valCategory, brandId: valBrand, inStockOnly: valInStockOnly, query }),
     queryFn: async () =>
       adminInventoryApi.inventoryValuation({
@@ -162,7 +167,9 @@ function AdminInventoryValuation() {
       </div>
 
       {/* Main Grouped Valuation Table */}
-      {isValuationLoading ? (
+      {isValuationError ? (
+        <QueryErrorState title="Inventory valuation could not be calculated" onRetry={() => void refetchValuation()} />
+      ) : isValuationLoading ? (
         <div className="py-16 text-center text-sm text-muted-foreground">Calculating inventory valuation...</div>
       ) : valuationGroups.length === 0 ? (
         <EmptyState title="No items found" hint="Try clearing or adjusting your department or brand filters." />

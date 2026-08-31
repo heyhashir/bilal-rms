@@ -529,15 +529,18 @@ const createMainWindow = async () => {
 app.whenReady().then(async () => {
   configureStartupLog();
   logStartupStage("electron-ready");
-  store = await createLocalStore({
-    userDataPath: path.join(app.getPath("userData"), "runtime"),
-    cloudApiBaseUrl: remoteBaseUrl,
-    appVersion: desktopPackage.version,
-    moduleBasePath: path.join(__dirname, ".."),
-  });
-  logStartupStage("local-store-ready");
   const frontendDir = resolveFrontendDir();
-  const { server, origin } = await startStaticServer(frontendDir);
+  const [nextStore, { server, origin }] = await Promise.all([
+    createLocalStore({
+      userDataPath: path.join(app.getPath("userData"), "runtime"),
+      cloudApiBaseUrl: remoteBaseUrl,
+      appVersion: desktopPackage.version,
+      moduleBasePath: path.join(__dirname, ".."),
+    }),
+    startStaticServer(frontendDir),
+  ]);
+  store = nextStore;
+  logStartupStage("local-store-ready");
   localServer = server;
   localOrigin = origin;
   logStartupStage("static-server-ready");

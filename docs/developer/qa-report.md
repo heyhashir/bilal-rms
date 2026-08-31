@@ -1,36 +1,36 @@
 # Bilal RMS Full QA Report
 
-**Run ID:** `QA-20260828-LOCAL-AUDIT`
+**Run ID:** `QA-20260831-RELEASE-VALIDATION`
 
-**Date:** 28 August 2026
+**Date:** 31 August 2026
 
-**Scope:** Local, non-destructive audit of storefront, admin, hosted POS, backend, MariaDB logic, and Windows Electron POS.
+**Scope:** Local release regression of storefront, admin, hosted POS, backend, MariaDB schema recovery, and Windows Electron POS, followed by controlled production deployment validation.
 
-**Exclusions:** No Git push, Hostinger deployment, production database access, or desktop release publication was performed.
+**Exclusions:** Physical scanner/printer behavior, trusted Windows signing, and real mobile hardware remain external acceptance checks. Production verification must use scoped `qa-*` data and remove it after testing.
 
 ## Environment And Baseline
 
 | Item | Evidence |
 | --- | --- |
 | Workspace | `F:\hashir\bilal-rms` |
-| Baseline revision | `8086920` on `main`; audit changes are intentionally uncommitted |
+| Baseline revision | `552e379` on `main`; release changes were validated before commit |
 | Runtime used | Windows 11, Node `24.11.0`, npm `11.6.1` |
 | Declared package manager | npm `10.8.2` |
 | Local database | Existing Docker MariaDB at `127.0.0.1:3308` |
 | Web target | Local production build at `http://127.0.0.1:5000` |
 | ORM | Prisma `7.10.0`; generated client checked through schema validation and migration deployment |
-| Desktop | Bilal RMS `0.3.1`, Electron `43.2.0` |
-| Installer | `desktop/dist/BilalRMS-Setup-0.3.1.exe`, 105,222,844 bytes |
-| Installer SHA-256 | `967DA0DF0C38B5B7F18FDDA5A10DC6CDB1506E2EC33559791525BE52AED63003` |
+| Desktop | Bilal RMS `0.3.2`, Electron `43.2.0` |
+| Installer | `desktop/dist/BilalRMS-Setup-0.3.2.exe`, 105,224,098 bytes |
+| Installer SHA-256 | `8EB19CD7C850CFB56D83AAEAF9F831B654A58E089FA2D17B3B745CBEF57DFE0D` |
 | Installer signature | `NotSigned` |
 
-The existing MariaDB volume and desktop SQLite data were retained. Browser and integration writes used generated `qa-*` or `int-*` identifiers and cleanup in `finally`. No destructive reset was run.
+The release Playwright runs used an isolated/recreated local MariaDB test volume. Integration writes used generated `qa-*` or `int-*` identifiers and cleanup in `finally`. Production business data was not reset. Desktop SQLite smoke tests used isolated temporary profiles and did not alter an installed operator profile.
 
 ## Release Test Matrix
 
 | Area | Command / method | Result | Evidence |
 | --- | --- | --- | --- |
-| Root clean install | `npm ci` | PASS | Postinstall generated Prisma client and built client/server |
+| Root clean install | `npm ci --ignore-scripts` | PASS | 714 packages installed from the committed lockfile; Prisma generation/build were then run explicitly |
 | Desktop clean install | `npm ci` in `desktop/` | PASS | Dependency tree installed; only transitive build-tool deprecation notices |
 | Frontend lint | `npm run lint` | PASS | No errors or warnings |
 | Backend lint | `npm run lint:backend` | PASS | No errors or warnings |
@@ -52,7 +52,7 @@ The existing MariaDB volume and desktop SQLite data were retained. Browser and i
 | Read-only smoke | `npm run test:e2e:live` | PASS | Read-only target guard; no product, order, employee, or finance mutation |
 | Dependency audit | `npm audit --audit-level=high` | PASS | 0 vulnerabilities in root tree |
 | Desktop dependency audit | `npm audit --audit-level=high` in `desktop/` | PASS | 0 vulnerabilities |
-| Desktop local persistence | `npm run test:desktop:local` | PASS | Offline sale/refund, stock, receipt, queue and restart persistence |
+| Desktop local persistence | `npm run test:desktop:local` | PASS | Offline sale 6.3 ms, refund 3.6 ms, stock, receipt, queue and restart persistence |
 | Desktop update feed | `npm run test:desktop:update` | PASS | Local N to N+1 discovery, checksum/size and no-downgrade behavior |
 | Packaged desktop launch | Packaged executable smoke against local backend | PASS | Startup 1,722.9 ms; sign-in 317.9 ms; POS ready 309.5 ms |
 | Desktop package | `npm run desktop:pack` | PASS | Unpacked Windows application built |
@@ -65,20 +65,20 @@ Budgets: local API p95 under 750 ms, page usable under 3,000 ms, Electron usable
 
 | Measurement | Result | Budget | Status |
 | --- | ---: | ---: | --- |
-| `/api/v1/health` p95 | 2.4 ms | 750 ms | PASS |
-| `/api/v1/categories` p95 | 7.4 ms | 750 ms | PASS |
-| `/api/v1/catalog/settings` p95 | 2.6 ms | 750 ms | PASS |
-| `/api/v1/catalog/bootstrap` p95 | 8.8 ms | 750 ms | PASS |
-| Catalog products p95 | 6.0 ms | 750 ms | PASS |
-| Home usable state | 659.1 ms | 3,000 ms | PASS |
-| Shop usable state | 60.7 ms | 3,000 ms | PASS |
-| Search usable state | 43.7 ms | 3,000 ms | PASS |
-| Shop list-view feedback | 87.4 ms | 250 ms | PASS |
+| `/api/v1/health` p95 | 3.3 ms | 750 ms | PASS |
+| `/api/v1/categories` p95 | 15.3 ms | 750 ms | PASS |
+| `/api/v1/catalog/settings` p95 | 4.6 ms | 750 ms | PASS |
+| `/api/v1/catalog/bootstrap` p95 | 21.2 ms | 750 ms | PASS |
+| Catalog products p95 | 11.2 ms | 750 ms | PASS |
+| Home usable state | 941.6 ms | 3,000 ms | PASS |
+| Shop usable state | 98.8 ms | 3,000 ms | PASS |
+| Search usable state | 82.3 ms | 3,000 ms | PASS |
+| Shop list-view feedback | 115.7 ms | 250 ms | PASS |
 | Electron usable state | 1,722.9 ms | 4,000 ms | PASS |
-| Desktop local sale persistence | about 5.6 ms | 1,000 ms | PASS |
-| Desktop local refund persistence | about 4.3 ms | 1,000 ms | PASS |
+| Desktop local sale persistence | 6.3 ms | 1,000 ms | PASS |
+| Desktop local refund persistence | 3.6 ms | 1,000 ms | PASS |
 
-The first home timing immediately after dependency installation was 3,440 ms, but two warm production-build reruns measured about 594 ms and 596 ms and the final gated run measured 659.1 ms. The initial result was not reproducible and is treated as build/startup warm-up, not an open regression.
+The first home timing immediately after starting the browser was 4,046.3 ms. The immediate repeat measured 941.6 ms while all other routes stayed below 102 ms, so the isolated result is recorded as browser cold-start overhead rather than a reproducible homepage regression.
 
 ## Defect Register
 
@@ -98,6 +98,12 @@ The first home timing immediately after dependency installation was 3,440 ms, bu
 | QA-112 | P2 | Insecure default admin credentials could be accepted from source defaults. | `ADMIN_EMAIL` and `ADMIN_PASSWORD` are mandatory environment values; no demo credential is rendered or embedded. |
 | QA-113 | P2 | Prisma 5/runtime dependency state contained stale tooling and audit noise. | Migrated to Prisma 7 generated client/config, aligned lockfiles, moved test runners to `tsx`, and updated dependencies. Both audits report zero vulnerabilities. |
 | QA-114 | P2 | Sticker design, roll size, dimensions and orientation had visible labels without accessible associations. | Added explicit control IDs/labels; live Playwright selection now uses the visible labels. |
+| QA-115 | P1 | Hostinger could report migrations as applied while restored tables still lacked additive product, variant, inventory, employee and cashier columns, causing catalog/admin API 500 responses. | Added an additive production schema reconciler, a missing `product_variants.image` migration, and readiness checks for critical columns. Fresh-schema and integration tests pass. |
+| QA-116 | P2 | Storefront/admin query failures could be rendered as empty product, inventory, purchase, or report data, hiding backend failures. | Added explicit retryable query-error states and disabled dependent mutations while reference data is unavailable. |
+| QA-117 | P2 | Desktop POS could remain blocked by catalog bootstrap failure and checked for updates only after bootstrap succeeded. | Bootstrap failure now exposes retry/offline-safe behavior and update checks execute independently; local store and N/N+1 tests pass. |
+| QA-118 | P2 | Playwright retained demo admin credential fallbacks. | Test authentication now requires environment credentials and the config loads only the two required values from the ignored local env file. |
+| QA-119 | P2 | Prisma's MariaDB adapter resolved a vulnerable nested connector release. | Hoisted and pinned `mariadb@3.5.3` through npm overrides; root and desktop audits report zero vulnerabilities. |
+| QA-120 | P2 deferred | Contact page details differ from admin/store settings. | Intentionally left unchanged at owner request; reconcile the authoritative email/phone in a later content pass. |
 
 No reproducible P0 or P1 defect remains open in this local run.
 

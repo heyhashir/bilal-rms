@@ -1,9 +1,16 @@
 import path from "path";
 import { expect, type Page } from "@playwright/test";
 
+const adminEmail = process.env.ADMIN_EMAIL?.trim();
+const adminPassword = process.env.ADMIN_PASSWORD;
+
+if (!adminEmail || !adminPassword) {
+  throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required for authenticated local browser tests");
+}
+
 export const adminCredentials = {
-  email: "admin@bilalgarments.pk",
-  password: "admin123",
+  email: adminEmail,
+  password: adminPassword,
 };
 
 const qaPrefix = process.env.QA_RUN_PREFIX?.trim() || "Playwright";

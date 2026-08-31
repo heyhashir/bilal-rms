@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { EmptyState, PageHeader, StatCard, Tabs } from "@/components/admin/primitives";
+import { EmptyState, PageHeader, QueryErrorState, StatCard, Tabs } from "@/components/admin/primitives";
 import { adminReportsApi } from "@/lib/admin-reports-api";
 import { formatPrice } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
@@ -28,7 +28,7 @@ function AdminReports() {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
 
-  const { data: summaryData, isLoading } = useQuery({
+  const { data: summaryData, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.reports({ from, to }),
     queryFn: async () => adminReportsApi.summary({ from: from || undefined, to: to || undefined }),
   });
@@ -127,7 +127,9 @@ function AdminReports() {
 
       <Tabs items={reportTabs} active={tab} onChange={setTab} />
 
-      {isLoading || !summary ? (
+      {isError ? (
+        <QueryErrorState title="Reports could not be calculated" onRetry={() => void refetch()} />
+      ) : isLoading || !summary ? (
         <EmptyState title="Loading reports" hint="Calculating date-range totals from live cloud data." />
       ) : tab === "overview" ? (
         <>

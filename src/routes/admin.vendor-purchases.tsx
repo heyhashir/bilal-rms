@@ -8,7 +8,7 @@ import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import { getErrorMessage } from "@/lib/api";
 import type { Product } from "@/lib/catalog-types";
 import { queryClient } from "@/lib/query-client";
-import { ActionButton, EmptyState, Field, Modal, PageHeader, SelectField, StatCard } from "@/components/admin/primitives";
+import { ActionButton, EmptyState, Field, Modal, PageHeader, QueryErrorState, SelectField, StatCard } from "@/components/admin/primitives";
 import { formatPrice } from "@/lib/format";
 
 export const Route = createFileRoute("/admin/vendor-purchases")({
@@ -33,12 +33,16 @@ function AdminVendorPurchases() {
     queryFn: async () => (await adminBackofficeApi.vendors()).vendors,
   });
 
-  const { data: purchases = [], isLoading } = useQuery({
+  const { data: purchases = [], isLoading, isError, refetch } = useQuery({
     queryKey: ["admin", "vendor-purchases"],
     queryFn: async () => (await adminBackofficeApi.vendorPurchases()).purchases,
   });
 
-  const { data: products = [] } = useQuery({
+  const {
+    data: products = [],
+    isError: isProductsError,
+    refetch: refetchProducts,
+  } = useQuery({
     queryKey: ["admin", "products"],
     queryFn: async () => (await adminCatalogApi.products()).products as Product[],
   });
@@ -146,6 +150,7 @@ function AdminVendorPurchases() {
             <Field label="Purchase Date" type="date" value={purchase.purchasedAt} onChange={(value) => setPurchase((current) => ({ ...current, purchasedAt: value }))} />
             <Field label="Note / Bill #" value={purchase.note} placeholder="e.g. Lot #, Invoice #" onChange={(value) => setPurchase((current) => ({ ...current, note: value }))} textarea />
             <ActionButton
+              disabled={isProductsError}
               onClick={() => {
                 if (!purchase.vendorId) return toast.error("Select a vendor");
                 if (!purchase.productId) return toast.error("Select a product");
@@ -185,7 +190,9 @@ function AdminVendorPurchases() {
             </select>
           </div>
 
-          {isLoading ? (
+          {isError ? (
+            <QueryErrorState title="Purchase history could not be loaded" onRetry={() => void refetch()} />
+          ) : isLoading ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Loading purchases...</div>
           ) : filteredPurchases.length === 0 ? (
             <EmptyState title="No purchases recorded" hint="Use the intake form on the left to record incoming vendor stock." />
@@ -245,6 +252,16 @@ function AdminVendorPurchases() {
           )}
         </section>
       </div>
+
+      {isProductsError && (
+        <div className="mt-4">
+          <QueryErrorState
+            title="Products could not be loaded for stock intake"
+            hint="Purchase creation is disabled until product inventory is available."
+            onRetry={() => void refetchProducts()}
+          />
+        </div>
+      )}
 
       {purchaseReversal && (
         <Modal

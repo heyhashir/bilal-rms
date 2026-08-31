@@ -17,7 +17,12 @@ export const Route = createFileRoute("/shop")({
 type Sort = NonNullable<CatalogListParams["sort"]>;
 
 function Shop() {
-  const { data: bootstrap } = useQuery({
+  const {
+    data: bootstrap,
+    isLoading: isBootstrapLoading,
+    isError: isBootstrapError,
+    refetch: refetchBootstrap,
+  } = useQuery({
     queryKey: queryKeys.catalog.bootstrap,
     queryFn: catalogApi.bootstrap,
   });
@@ -173,15 +178,12 @@ function Shop() {
 
           {isFetching && !isLoading && <div className="mb-4 text-xs uppercase tracking-widest text-muted-foreground">Refreshing catalog...</div>}
 
-          {!bootstrap || isLoading ? (
+          {isBootstrapError ? (
+            <CatalogError onRetry={() => void refetchBootstrap()} />
+          ) : isBootstrapLoading || !bootstrap || isLoading ? (
             <div className="py-24 text-center text-muted-foreground">Loading collection...</div>
           ) : isError ? (
-            <div className="py-24 text-center">
-              <p className="text-muted-foreground">The catalog could not be loaded right now.</p>
-              <button onClick={() => void refetch()} className="mt-4 text-xs uppercase tracking-widest underline underline-offset-4">
-                Try again
-              </button>
-            </div>
+            <CatalogError onRetry={() => void refetch()} />
           ) : products.length === 0 ? (
             <div className="py-24 text-center text-muted-foreground">No products match your filters.</div>
           ) : view === "grid" ? (
@@ -199,6 +201,18 @@ function Shop() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CatalogError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="py-24 text-center" role="alert">
+      <p className="font-medium">The catalog could not be loaded.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Please try again. If this continues, contact the store.</p>
+      <button onClick={onRetry} className="mt-4 text-xs uppercase tracking-widest underline underline-offset-4">
+        Try again
+      </button>
     </div>
   );
 }

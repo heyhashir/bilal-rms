@@ -7,7 +7,7 @@ import { getErrorMessage } from "@/lib/api";
 import { adminInventoryApi } from "@/lib/admin-inventory-api";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
-import { ActionButton, EmptyState, Field, Modal, PageHeader, Pagination, SelectField, StatCard, Tabs, Toolbar } from "@/components/admin/primitives";
+import { ActionButton, EmptyState, Field, Modal, PageHeader, Pagination, QueryErrorState, SelectField, StatCard, Tabs, Toolbar } from "@/components/admin/primitives";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import type { Product } from "@/lib/catalog-types";
 import { BarcodeStickerModal } from "@/components/admin/BarcodeStickerModal";
@@ -29,15 +29,29 @@ function AdminInventory() {
   const [adjustment, setAdjustment] = useState<{ productId: string; variantId?: string; delta: number; note: string } | null>(null);
   const [printProduct, setPrintProduct] = useState<Product | null>(null);
 
-  const { data: products = [], isLoading: isProductsLoading } = useQuery({
+  const {
+    data: products = [],
+    isLoading: isProductsLoading,
+    isError: isProductsError,
+    refetch: refetchProducts,
+  } = useQuery({
     queryKey: queryKeys.admin.inventorySnapshot,
     queryFn: async () => (await adminInventoryApi.inventorySnapshot()).products,
   });
-  const { data: catalogProducts = [] } = useQuery({
+  const {
+    data: catalogProducts = [],
+    isError: isCatalogProductsError,
+    refetch: refetchCatalogProducts,
+  } = useQuery({
     queryKey: queryKeys.admin.products,
     queryFn: async () => (await adminCatalogApi.products()).products,
   });
-  const { data: ledgerResponse, isLoading: isLedgerLoading } = useQuery({
+  const {
+    data: ledgerResponse,
+    isLoading: isLedgerLoading,
+    isError: isLedgerError,
+    refetch: refetchLedger,
+  } = useQuery({
     queryKey: queryKeys.admin.inventoryLedgerList({ page: ledgerPage, query }),
     queryFn: async () => adminInventoryApi.inventoryLedger({ page: ledgerPage, pageSize: 50, query }),
     enabled: tab === "ledger",
@@ -113,7 +127,9 @@ function AdminInventory() {
       <Toolbar search={query} onSearch={setQuery} placeholder="Search stock by product name, SKU, or category..." />
 
       {tab === "ledger" ? (
-        isLedgerLoading ? (
+        isLedgerError ? (
+          <QueryErrorState title="Stock movements could not be loaded" onRetry={() => void refetchLedger()} />
+        ) : isLedgerLoading ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Loading stock movements...</div>
         ) : movements.length === 0 ? (
           <EmptyState title="No stock movements recorded" hint="Movements from sales, returns, vendor purchases, and manual adjustments will appear here." />
@@ -166,7 +182,9 @@ function AdminInventory() {
           </div>
         )
       ) : (
-        isProductsLoading ? (
+        isProductsError ? (
+          <QueryErrorState title="Inventory could not be loaded" onRetry={() => void refetchProducts()} />
+        ) : isProductsLoading ? (
           <div className="p-8 text-center text-sm text-muted-foreground">Loading stock levels...</div>
         ) : rows.length === 0 ? (
           <EmptyState title="No products found" hint="Try adjusting your search query or check the catalog." />
@@ -219,6 +237,7 @@ function AdminInventory() {
                       <div className="flex justify-end gap-2">
                         <ActionButton
                           variant="ghost"
+                          disabled={isCatalogProductsError}
                           onClick={() => {
                             const full = catalogProducts.find((p) => p.id === product.id);
                             if (full) setPrintProduct(full);
@@ -240,6 +259,16 @@ function AdminInventory() {
             </table>
           </div>
         )
+      )}
+
+      {isCatalogProductsError && (
+        <div className="mt-4">
+          <QueryErrorState
+            title="Sticker product details could not be loaded"
+            hint="Stock is visible, but printing is disabled until the catalog details are available."
+            onRetry={() => void refetchCatalogProducts()}
+          />
+        </div>
       )}
 
       {/* Adjust Stock Modal */}
