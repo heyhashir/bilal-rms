@@ -10,6 +10,13 @@ const require = createRequire(import.meta.url);
 const prisma = { $transaction: async operation => operation({}) };
 const prismaPath = require.resolve("../../backend/dist/config/prisma.js");
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { __esModule: true, default: prisma } };
+// Barcode operations must not load local credentials or touch managed uploads.
+const maintenancePath = require.resolve("../../backend/dist/utils/file-maintenance.js");
+const unexpectedFileAccess = () => { throw new Error("Barcode test must not access managed files"); };
+require.cache[maintenancePath] = { id: maintenancePath, filename: maintenancePath, loaded: true, exports: {
+  collectMissingManagedFiles: unexpectedFileAccess,
+  deleteUploadIfManaged: unexpectedFileAccess,
+} };
 const { catalogAdminService } = require("../../backend/dist/services/catalog-admin.service.js");
 const { catalogRepository } = require("../../backend/dist/repositories/catalog.repository.js");
 
