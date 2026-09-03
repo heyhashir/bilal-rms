@@ -134,6 +134,7 @@ export const brandSchema = z.object({
 });
 
 export const barcodeSchema = z.object({
+  format: z.enum(['short', 'numeric', 'legacy']).optional(),
   prefix: z.string().optional().or(z.literal('')),
   qrPrefix: z.string().optional().or(z.literal('')),
   seed: z.string().optional().or(z.literal('')),

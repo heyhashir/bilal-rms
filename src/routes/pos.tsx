@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Printer, RefreshCcw, ScanLine, Trash2, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
@@ -14,35 +14,16 @@ import type { DesktopUpdateManifest } from "@/lib/desktop-bridge";
 import { applySaleToCachedStock, findOfflineReceipt, getPosDeviceKey, loadPosCache, loadOfflineReceipts, loadQueuedRefunds, loadPosSyncState, loadQueuedSales, patchPosSyncState, persistOfflineSale, persistOfflineRefund, type PosRefundQueueItem, rememberReceipt, removeQueuedRefund, removeQueuedSale, savePosCache, type PosSyncState } from "@/lib/pos-local";
 import { getDesktopBridge } from "@/lib/desktop-bridge";
 import { formatPrice } from "@/lib/format";
-import { getEffectiveAmount } from "@/lib/format";
+import { buildSaleChoices, matchSaleChoices, type SaleChoice } from "@/lib/pos-catalog";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { syncApi } from "@/lib/sync-api";
-import type { Product, ProductVariant, StorefrontSettings } from "@/lib/catalog-types";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, SelectField, StatusPill } from "@/components/admin/primitives";
 import { PosReceipt } from "@/components/pos/PosReceipt";
 
 export const Route = createFileRoute("/pos")({
   component: PosTerminal,
 });
-
-type SaleChoice = {
-  key: string;
-  productId: string;
-  variantId?: string;
-  label: string;
-  subtitle: string;
-  unitPrice: number;
-  stock: number;
-  image: string;
-  barcode: string;
-  sku: string;
-  qrCode: string;
-  size: string;
-  color: string;
-  brand: string;
-  category: string;
-};
 
 type CartLine = SaleChoice & {
   qty: number;
@@ -56,6 +37,7 @@ const playScanBeep = (type: "success" | "error" = "success") => {
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
+    osc.onended = () => { void ctx.close(); };
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -80,49 +62,6 @@ const playScanBeep = (type: "success" | "error" = "success") => {
   }
 };
 
-function findBestScanMatch(query: string, choices: SaleChoice[]): SaleChoice | null {
-  const raw = query.trim();
-  if (!raw) return null;
-  const clean = raw.replace(/^#\s*/, "").toLowerCase();
-  const rawLower = raw.toLowerCase();
-
-  // Priority 1: Exact match on barcode (raw or stripped #)
-  const exactBarcode = choices.find((c) => {
-    const b = c.barcode.trim().toLowerCase();
-    return b && (b === rawLower || b === clean || b.replace(/^#\s*/, "") === clean);
-  });
-  if (exactBarcode) return exactBarcode;
-
-  // Priority 2: Exact match on SKU
-  const exactSku = choices.find((c) => {
-    const s = (c.sku || "").trim().toLowerCase();
-    return s && (s === rawLower || s === clean || s.replace(/^#\s*/, "") === clean);
-  });
-  if (exactSku) return exactSku;
-
-  // Priority 3: Exact match on QR code
-  const exactQr = choices.find((c) => {
-    const q = (c.qrCode || "").trim().toLowerCase();
-    return q && (q === rawLower || q === clean);
-  });
-  if (exactQr) return exactQr;
-
-  // Priority 4: Exact match on subtitle or product slug
-  const exactSub = choices.find((c) => {
-    const sub = (c.subtitle || "").trim().toLowerCase();
-    return sub && (sub === rawLower || sub === clean);
-  });
-  if (exactSub) return exactSub;
-
-  // Priority 5: Fallback to first filtered choice
-  const filtered = choices.filter((c) =>
-    `${c.label} ${c.subtitle} ${c.sku} ${c.barcode} ${c.qrCode} ${c.brand} ${c.category} ${c.size} ${c.color}`
-      .toLowerCase()
-      .includes(clean),
-  );
-  return filtered[0] || null;
-}
-
 type PosQuerySource = "live" | "cache";
 
 const paymentOptions = [
@@ -138,6 +77,7 @@ function PosTerminal() {
   const [search, setSearch] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [visibleChoiceCount, setVisibleChoiceCount] = useState(12);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PosSaleInput["paymentMethod"]>("cash");
   const [customerName, setCustomerName] = useState("");
@@ -159,6 +99,8 @@ function PosTerminal() {
   const [offlineMode, setOfflineMode] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
+  const bootstrapInFlight = useRef(false);
   const [initialCache] = useState(() => loadPosCache());
   const deviceKey = useMemo(() => getPosDeviceKey(), []);
   const [syncState, setSyncState] = useState<PosSyncState>(
@@ -265,7 +207,7 @@ function PosTerminal() {
     },
   });
 
-  const products = useMemo(() => (productsQuery.data?.products ?? []).filter((product) => product.stock > 0 || product.stockMode === "variant"), [productsQuery.data]);
+  const products = useMemo(() => (productsQuery.data?.products ?? []).filter((product) => product.isActive !== false), [productsQuery.data]);
   const employees = useMemo(() => (employeesQuery.data?.employees ?? []).filter((employee) => employee.status === "active"), [employeesQuery.data]);
   const settings = settingsQuery.data?.settings ?? null;
 
@@ -393,8 +335,19 @@ function PosTerminal() {
 
   useEffect(() => {
     const bootstrapPos = async () => {
+      if (bootstrapInFlight.current) return;
+      bootstrapInFlight.current = true;
+      setIsRefreshingCatalog(true);
       try {
         setBootstrapError("");
+        if (loadQueuedSales().length + loadQueuedRefunds().length > 0) {
+          await syncQueuedSales();
+          if (loadQueuedSales().length + loadQueuedRefunds().length > 0) {
+            setOfflineMode(true);
+            setBootstrapError("Unable to sync queued bills and refunds. Local stock has been preserved; retry sync when connected.");
+            return;
+          }
+        }
         if (desktopContext) {
           await syncApi.registerDevice({
             deviceKey,
@@ -403,6 +356,11 @@ function PosTerminal() {
           });
         }
         const bootstrap = await syncApi.syncBootstrap(deviceKey, syncState.lastCursor ?? undefined);
+        if (loadQueuedSales().length + loadQueuedRefunds().length > 0) {
+          setOfflineMode(true);
+          setBootstrapError("Local bills are awaiting sync. Cached stock has been preserved.");
+          return;
+        }
         const nextCache = {
           products: bootstrap.products,
           employees: bootstrap.employees,
@@ -422,6 +380,7 @@ function PosTerminal() {
           settings: bootstrap.settings,
           source: "live" as PosQuerySource,
         });
+        setOfflineMode(false);
         updateSyncState({
           lastCursor: bootstrap.cursor,
           lastBootstrapAt: Date.now(),
@@ -439,6 +398,8 @@ function PosTerminal() {
           queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
         });
       } finally {
+        bootstrapInFlight.current = false;
+        setIsRefreshingCatalog(false);
         setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
         setStoredReceipts(loadOfflineReceipts());
         if (desktopBridge) {
@@ -454,6 +415,23 @@ function PosTerminal() {
     // latest persisted queue state internally and must not restart bootstrap.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrapAttempt, canLoadPos, deviceKey]);
+
+  useEffect(() => {
+    if (!canLoadPos) return;
+    const refresh = () => {
+      if (navigator.onLine && document.visibilityState === "visible" && !bootstrapInFlight.current) {
+        setBootstrapAttempt((current) => current + 1);
+      }
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    const timer = window.setInterval(refresh, 60_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      window.clearInterval(timer);
+    };
+  }, [canLoadPos]);
 
   const installDesktopUpdate = async () => {
     const bridge = getDesktopBridge();
@@ -493,64 +471,20 @@ function PosTerminal() {
   }, [receipt?.saleNumber]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const catalogReady = Boolean(settings);
 
   // Auto-focus scan input on load
   useEffect(() => {
-    searchInputRef.current?.focus();
-  }, [settingsQuery.data]);
+    if (catalogReady) searchInputRef.current?.focus();
+  }, [catalogReady]);
 
-  const choices = useMemo<SaleChoice[]>(() => {
-    const rows: SaleChoice[] = [];
-    for (const product of products) {
-      if (product.stockMode === "variant" && product.variants.length > 0) {
-        for (const variant of product.variants.filter((entry) => entry.isActive)) {
-          rows.push({
-            key: `${product.id}:${variant.id}`,
-            productId: product.id,
-            variantId: variant.id,
-            label: product.name,
-            subtitle: [variant.sku, variant.size, variant.colorName].filter(Boolean).join(" | "),
-            unitPrice: variant.priceOverride ?? getEffectiveAmount(product.price, product.salePrice),
-            stock: variant.stock,
-            image: product.images[0] ?? "",
-            barcode: variant.barcode ?? product.barcode ?? "",
-            sku: variant.sku ?? product.sku ?? "",
-            qrCode: variant.qrCode ?? product.qrCode ?? "",
-            size: variant.size,
-            color: variant.colorName,
-            brand: product.brandName ?? "",
-            category: product.categoryName,
-          });
-        }
-      } else {
-        rows.push({
-          key: product.id,
-          productId: product.id,
-          label: product.name,
-          subtitle: product.slug,
-          unitPrice: getEffectiveAmount(product.price, product.salePrice),
-          stock: product.stock,
-          image: product.images[0] ?? "",
-          barcode: product.barcode ?? "",
-          sku: product.sku ?? product.slug ?? "",
-          qrCode: product.qrCode ?? "",
-          size: "",
-          color: "",
-          brand: product.brandName ?? "",
-          category: product.categoryName,
-        });
-      }
-    }
-    return rows;
-  }, [products]);
+  const choices = useMemo(() => buildSaleChoices(products), [products]);
 
   const brandOptions = useMemo(() => Array.from(new Set(choices.map((choice) => choice.brand).filter(Boolean))).sort((left, right) => left.localeCompare(right)), [choices]);
   const categoryOptions = useMemo(() => Array.from(new Set(choices.map((choice) => choice.category).filter(Boolean))).sort((left, right) => left.localeCompare(right)), [choices]);
 
   const filteredChoices = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term && !brandFilter && !categoryFilter) return [];
-    return choices
+    return matchSaleChoices(search, choices)
       .filter((choice) => {
         if (brandFilter && choice.brand !== brandFilter) {
           return false;
@@ -560,13 +494,9 @@ function PosTerminal() {
           return false;
         }
 
-        if (!term) {
-          return true;
-        }
-
-        return `${choice.label} ${choice.subtitle} ${choice.sku} ${choice.barcode} ${choice.qrCode} ${choice.brand} ${choice.category} ${choice.size} ${choice.color}`.toLowerCase().includes(term);
+        return true;
       })
-      .slice(0, 8);
+      .sort((left, right) => Number(right.stock > 0) - Number(left.stock > 0));
   }, [brandFilter, categoryFilter, choices, search]);
 
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
@@ -602,16 +532,29 @@ function PosTerminal() {
   const handleScanOrSubmit = useCallback((codeToSearch: string) => {
     const target = codeToSearch.trim();
     if (!target) return;
-    const match = findBestScanMatch(target, choices);
-    if (match) {
-      addChoice(match);
-    } else {
-      playScanBeep("error");
-      toast.error(`No product found for barcode / SKU "${target}"`);
+    if (isRefreshingCatalog && choices.length === 0) {
+      toast.info("Catalog is loading. Please scan again when products appear.");
+      return;
     }
-    setSearch("");
+    const matches = matchSaleChoices(target, choices);
+    if (matches.length === 1) {
+      addChoice(matches[0]);
+    } else {
+      setSearch(target);
+      setBrandFilter("");
+      setCategoryFilter("");
+      setVisibleChoiceCount(12);
+      if (matches.length > 1) {
+        toast.info("Choose the correct product, size and color from the results.");
+      } else {
+        playScanBeep("error");
+        toast.error(`No matching product in the loaded catalog. Refresh products and try again.`);
+      }
+    }
     searchInputRef.current?.focus();
-  }, [addChoice, choices]);
+  }, [addChoice, choices, isRefreshingCatalog]);
+
+  const submitScannerCode = useEffectEvent(handleScanOrSubmit);
 
   // Global hardware presentation scanner listener (Honeywell Orbit MS7120)
   useEffect(() => {
@@ -619,14 +562,15 @@ function PosTerminal() {
     let lastKeyTime = 0;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const target = e.target as HTMLElement | null;
-      const isOtherInput =
+      const isInput =
         target &&
-        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT") &&
-        target !== searchInputRef.current;
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 
       // Do not intercept human typing if user is actively filling customer forms or select dropdowns
-      if (isOtherInput) {
+      if (isInput) {
+        buffer = "";
         return;
       }
 
@@ -635,33 +579,26 @@ function PosTerminal() {
       lastKeyTime = currentTime;
 
       if (e.key === "Enter") {
-        if (buffer.length >= 2) {
+        if (buffer.length >= 2 && isHardwareSpeed) {
           e.preventDefault();
-          handleScanOrSubmit(buffer);
-          buffer = "";
-        } else if (target === searchInputRef.current && search.trim()) {
-          e.preventDefault();
-          handleScanOrSubmit(search);
+          submitScannerCode(buffer);
         }
+        buffer = "";
         return;
       }
 
       if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-        if (target === searchInputRef.current) {
-          buffer = "";
+        if (isHardwareSpeed || buffer.length === 0) {
+          buffer += e.key;
         } else {
-          if (isHardwareSpeed || buffer.length === 0) {
-            buffer += e.key;
-          } else {
-            buffer = e.key;
-          }
+          buffer = e.key;
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleScanOrSubmit, search]);
+  }, []);
 
   const queueCurrentSale = () => {
     const saleNumber = `OFF-${Date.now().toString(36).toUpperCase()}`;
@@ -779,6 +716,7 @@ function PosTerminal() {
       });
       await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }), queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.products })]);
       toast.success("Refund processed");
+      setBootstrapAttempt((current) => current + 1);
     } catch (error) {
       toast.error(getErrorMessage(error, "Unable to process refund"));
     }
@@ -825,6 +763,7 @@ function PosTerminal() {
       setCustomerEmail("");
       setNotes("");
       toast.success("POS sale saved");
+      setBootstrapAttempt((current) => current + 1);
       setOfflineMode(false);
       await Promise.all([queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }), queryClient.invalidateQueries({ queryKey: queryKeys.pos.products }), queryClient.invalidateQueries({ queryKey: queryKeys.admin.products })]);
     } catch (error) {
@@ -853,8 +792,12 @@ function PosTerminal() {
               {offlineMode ? "Offline cache" : "Live sync"}
             </div>
             <div className="inline-flex items-center gap-2 border border-border px-3 py-2 text-xs uppercase tracking-widest">Queue {queueCount}</div>
-            <ActionButton onClick={() => void syncQueuedSales()} variant="ghost">
+            <ActionButton onClick={() => setBootstrapAttempt((current) => current + 1)} variant="ghost" disabled={isRefreshingCatalog}>
               <RefreshCcw className="h-3.5 w-3.5" /> Sync queued
+            </ActionButton>
+            <ActionButton onClick={() => setBootstrapAttempt((current) => current + 1)} variant="ghost" disabled={isRefreshingCatalog}>
+              <RefreshCcw className={`h-3.5 w-3.5 ${isRefreshingCatalog ? "animate-spin" : ""}`} />
+              {isRefreshingCatalog ? "Refreshing products..." : "Refresh products"}
             </ActionButton>
             <Link to="/admin" className="inline-flex items-center gap-2 border border-border px-4 py-2.5 text-xs uppercase tracking-widest hover:bg-secondary">
               <ArrowLeft className="h-3.5 w-3.5" /> Management dashboard
@@ -899,17 +842,21 @@ function PosTerminal() {
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-5">
             <div className="border border-border p-4">
-              <label className="mb-2 block text-xs uppercase tracking-[0.3em] text-muted-foreground">Scan or search</label>
+              <label htmlFor="pos-search" className="mb-2 block text-xs uppercase tracking-[0.3em] text-muted-foreground">Scan or search</label>
+              <p className="mb-3 text-sm text-muted-foreground" role="status">{products.length} products loaded{offlineMode ? " from offline cache" : ""}. Scan the striped barcode; Orbit MS7120 does not read QR codes.</p>
+              {bootstrapError && <p role="alert" className="mb-3 text-sm text-destructive">{bootstrapError}</p>}
               <div className="relative">
                 <ScanLine className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
+                  id="pos-search"
                   ref={searchInputRef}
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => { setSearch(event.target.value); setVisibleChoiceCount(12); }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
-                      handleScanOrSubmit(search);
+                      event.stopPropagation();
+                      handleScanOrSubmit(event.currentTarget.value);
                     }
                   }}
                   placeholder="Scan barcode with Honeywell Orbit or search by name / SKU..."
@@ -917,7 +864,7 @@ function PosTerminal() {
                 />
               </div>
               <div className="mt-3 grid gap-2 md:grid-cols-2">
-                <select value={brandFilter} onChange={(event) => setBrandFilter(event.target.value)} className="border border-border bg-background px-3 py-2 text-sm">
+                <select aria-label="Filter POS brands" value={brandFilter} onChange={(event) => { setBrandFilter(event.target.value); setVisibleChoiceCount(12); }} className="border border-border bg-background px-3 py-2 text-sm">
                   <option value="">All brands</option>
                   {brandOptions.map((brand) => (
                     <option key={brand} value={brand}>
@@ -925,7 +872,7 @@ function PosTerminal() {
                     </option>
                   ))}
                 </select>
-                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="border border-border bg-background px-3 py-2 text-sm">
+                <select aria-label="Filter POS categories" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setVisibleChoiceCount(12); }} className="border border-border bg-background px-3 py-2 text-sm">
                   <option value="">All categories</option>
                   {categoryOptions.map((category) => (
                     <option key={category} value={category}>
@@ -935,8 +882,8 @@ function PosTerminal() {
                 </select>
               </div>
               {filteredChoices.length > 0 && (
-                <div className="mt-3 grid gap-2">
-                  {filteredChoices.map((choice) => (
+                <div className="mt-3 grid max-h-80 gap-2 overflow-y-auto" aria-label="POS product results">
+                  {filteredChoices.slice(0, visibleChoiceCount).map((choice) => (
                     <button key={choice.key} onClick={() => addChoice(choice)} className="flex items-center justify-between border border-border px-3 py-3 text-left hover:bg-secondary">
                       <div>
                         <div className="font-medium">{choice.label}</div>
@@ -944,12 +891,14 @@ function PosTerminal() {
                       </div>
                       <div className="text-right">
                         <div className="font-semibold">{formatPrice(choice.unitPrice)}</div>
-                        <div className="text-xs text-muted-foreground">{choice.stock} in stock</div>
+                        <div className={`text-xs ${choice.stock > 0 ? "text-muted-foreground" : "text-destructive"}`}>{choice.stock > 0 ? `${choice.stock} in stock` : "Out of stock"}</div>
                       </div>
                     </button>
                   ))}
+                  {filteredChoices.length > visibleChoiceCount && <ActionButton variant="ghost" onClick={() => setVisibleChoiceCount((current) => current + 12)}>Show more products ({filteredChoices.length - visibleChoiceCount} remaining)</ActionButton>}
                 </div>
               )}
+              {filteredChoices.length === 0 && <p role="status" className="mt-3 text-sm text-muted-foreground">{choices.length ? "No matching products. Clear the filters or refresh products." : "No active products are available. Refresh products or check the catalog in Management."}</p>}
             </div>
 
             <div className="border border-border overflow-x-auto">

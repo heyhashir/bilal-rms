@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { randomInt } from 'node:crypto';
 import path from 'node:path';
 import { Prisma } from '../generated/prisma/client';
 import prisma from '../config/prisma';
@@ -297,7 +298,11 @@ export const catalogAdminService = {
   async generateCodes(input: BarcodeInput) {
     const settings = await catalogRepository.findStoreSettings();
     return {
-      barcode: makeCode(input.prefix || settings.barcodePrefix, input.seed),
+      barcode: input.format === 'legacy'
+        ? makeCode(input.prefix || settings.barcodePrefix, input.seed)
+        : input.format === 'numeric'
+          ? String(randomInt(100_000_000_000, 1_000_000_000_000))
+          : await makeShortCode(),
       qrCode: makeCode(input.qrPrefix || settings.qrPrefix, input.seed),
     };
   },
@@ -309,8 +314,8 @@ export const catalogAdminService = {
     }
 
     const settings = await catalogRepository.findStoreSettings();
-    const barcode = variant?.barcode || product.barcode || makeCode(settings.barcodePrefix, variant?.sku ?? product.slug);
-    const qrCode = variant?.qrCode || product.qrCode || makeCode(settings.qrPrefix, variant?.sku ?? product.slug);
+    const barcode = (variant ? variant.barcode : product.barcode) || await makeShortCode();
+    const qrCode = (variant ? variant.qrCode : product.qrCode) || makeCode(settings.qrPrefix, variant?.sku ?? product.slug);
 
     await prisma.$transaction(async (tx) => {
       if (variant) {
@@ -406,6 +411,15 @@ const makeCode = (prefix: string, seed?: string): string => {
   const safeSeed = (seed ?? '').replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 8);
   const suffix = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   return [safePrefix, safeSeed, suffix].filter(Boolean).join('-');
+};
+
+const makeShortCode = async () => {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const letters = String.fromCharCode(65 + randomInt(26), 65 + randomInt(26));
+    const code = `${letters}-${String(randomInt(10_000)).padStart(4, '0')}`;
+    if (!await catalogRepository.barcodeExists(code)) return code;
+  }
+  throw new ApiError(409, 'Unable to allocate an unused barcode. Please try again.');
 };
 
 const readImportRows = async (workbookPath: string): Promise<Array<Record<string, string>>> => {

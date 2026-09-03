@@ -44,7 +44,7 @@ export const adminCatalogApi = {
       missingProductImages: string[];
       missingPaymentProofs: string[];
     }>("/admin/uploads/diagnostics"),
-  generateCodes: (payload?: { prefix?: string; qrPrefix?: string; seed?: string }) =>
+  generateCodes: (payload?: { prefix?: string; qrPrefix?: string; seed?: string; format?: "short" | "numeric" | "legacy" }) =>
     api.post<{ barcode: string; qrCode: string }>("/admin/barcodes/generate", payload ?? {}),
   barcodeLabels: (payload: { productId: string; variantId?: string | null }) =>
     api.post<{

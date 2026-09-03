@@ -33,6 +33,13 @@ const categoryTreeInclude = {
 } satisfies Prisma.CategoryInclude;
 
 export const catalogRepository = {
+  async barcodeExists(barcode: string) {
+    const [product, variant] = await Promise.all([
+      prisma.product.findFirst({ where: { barcode }, select: { id: true } }),
+      prisma.productVariant.findFirst({ where: { barcode }, select: { id: true } }),
+    ]);
+    return Boolean(product || variant);
+  },
   listProducts: () =>
     prisma.product.findMany({
       include: productInclude,

@@ -5,7 +5,9 @@ import { toast } from "sonner";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import type { Product } from "@/lib/catalog-types";
 import { ActionButton, Modal } from "@/components/admin/primitives";
-import { Barcode } from "@/components/pos/Barcode";
+import { StickerBarcode } from "@/components/pos/StickerBarcode";
+import { encodeStickerBarcode, stickerBarcodeFits, STICKER_PADDING_MM } from "@/lib/sticker-barcode";
+import { STICKER_CSS } from "@/lib/sticker-layout";
 import { formatPrice } from "@/lib/format";
 
 type Label = Awaited<ReturnType<typeof adminCatalogApi.barcodeLabels>>["labels"][number];
@@ -44,7 +46,7 @@ export function BarcodeStickerModal({
   variantId?: string | null;
   onClose: () => void;
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ["admin", "barcode-labels", product.id, variantId ?? "all"],
     queryFn: () => adminCatalogApi.barcodeLabels({ productId: product.id, variantId }),
   });
@@ -61,6 +63,8 @@ export function BarcodeStickerModal({
   const selectedPreset = LABEL_SIZE_PRESETS.find((p) => p.id === sizePreset) ?? LABEL_SIZE_PRESETS[0];
   const widthMm = sizePreset === "custom" ? customWidth : selectedPreset.widthMm;
   const heightMm = sizePreset === "custom" ? customHeight : selectedPreset.heightMm;
+  const unsafeLabels = (labels ?? []).filter((label) => (quantities[label.variantId || label.productId] ?? 0) > 0 && !stickerBarcodeFits(label.barcode, widthMm, heightMm));
+  const requiredWidth = Math.ceil(Math.max(0, ...unsafeLabels.map((label) => (encodeStickerBarcode(label.barcode)?.widthMm ?? 0) + STICKER_PADDING_MM * 2)));
 
   useEffect(() => {
     if (!labels || labels.length === 0) return;
@@ -82,17 +86,6 @@ export function BarcodeStickerModal({
     if (!printRootRef.current) return "";
 
     const printableClone = printRootRef.current.cloneNode(true) as HTMLDivElement;
-    const sourceCanvases = Array.from(printRootRef.current.querySelectorAll("canvas"));
-    const clonedCanvases = Array.from(printableClone.querySelectorAll("canvas"));
-    sourceCanvases.forEach((canvas, index) => {
-      const clonedCanvas = clonedCanvases[index];
-      if (!clonedCanvas) return;
-      const barcodeImage = document.createElement("img");
-      barcodeImage.src = canvas.toDataURL("image/png");
-      barcodeImage.alt = canvas.getAttribute("aria-label") ?? "Barcode";
-      barcodeImage.className = canvas.className;
-      clonedCanvas.replaceWith(barcodeImage);
-    });
 
     const isRotated = rotation === 90 || rotation === 270;
     const effectiveWidth = isRotated ? heightMm : widthMm;
@@ -141,7 +134,7 @@ export function BarcodeStickerModal({
               width: ${widthMm}mm !important;
               height: ${heightMm}mm !important;
               margin: 0 !important;
-              padding: 1mm 1.2mm !important;
+              padding: 0 !important;
               display: flex !important;
               flex-direction: column !important;
               justify-content: space-between !important;
@@ -155,60 +148,7 @@ export function BarcodeStickerModal({
                   : ""
               }
             }
-            .sticker-standard-header {
-              font-size: 7.5pt !important;
-              font-weight: 900 !important;
-              letter-spacing: .04em !important;
-              line-height: 1 !important;
-              text-transform: uppercase !important;
-            }
-            .sticker-standard-title {
-              font-size: 5.5pt !important;
-              font-weight: 800 !important;
-              line-height: 1.1 !important;
-              margin-top: .3mm !important;
-              overflow: hidden !important;
-              text-overflow: ellipsis !important;
-              white-space: nowrap !important;
-              text-transform: uppercase !important;
-            }
-            .sticker-standard-row {
-              display: flex !important;
-              justify-content: space-between !important;
-              font-size: 5.5pt !important;
-              font-weight: 800 !important;
-              margin-top: .3mm !important;
-              padding: 0 .8mm !important;
-              text-transform: uppercase !important;
-            }
-            .sticker-standard-price {
-              display: flex !important;
-              justify-content: space-between !important;
-              font-size: 6.5pt !important;
-              font-weight: 900 !important;
-              margin-top: .3mm !important;
-              padding: 0 .8mm !important;
-            }
-            .sticker-standard-barcode {
-              margin-top: auto !important;
-              text-align: center !important;
-            }
-            .sticker-barcode-img {
-              display: block !important;
-              width: 95% !important;
-              height: 6.5mm !important;
-              margin: 0 auto !important;
-              object-fit: contain !important;
-            }
-            .sticker-barcode-num {
-              overflow: hidden !important;
-              color: #000000 !important;
-              font-family: "Courier New", Courier, monospace !important;
-              font-size: 5pt !important;
-              font-weight: 800 !important;
-              line-height: 1 !important;
-              margin-top: .2mm !important;
-            }
+            ${STICKER_CSS}
           </style>
         </head>
         <body>${printableClone.outerHTML}</body>
@@ -216,7 +156,7 @@ export function BarcodeStickerModal({
   };
 
   const printStickers = async () => {
-    if (!printRootRef.current || printable.length === 0) return;
+    if (!printRootRef.current || isFetching || printable.length === 0 || unsafeLabels.length > 0) return;
 
     const html = generatePrintHtml();
     if (!html) return;
@@ -254,7 +194,7 @@ export function BarcodeStickerModal({
       printWindow.focus();
       printWindow.print();
     };
-    window.setTimeout(triggerPrint, 150);
+    void printWindow.document.fonts.ready.then(() => printWindow.requestAnimationFrame(triggerPrint));
   };
 
   return (
@@ -267,13 +207,14 @@ export function BarcodeStickerModal({
           <ActionButton variant="ghost" onClick={onClose}>
             Close
           </ActionButton>
-          <ActionButton onClick={printStickers}>
+          <ActionButton onClick={printStickers} disabled={isFetching || printable.length === 0 || unsafeLabels.length > 0}>
             <Printer className="h-3.5 w-3.5" /> Print {printable.length} sticker{printable.length === 1 ? "" : "s"}
           </ActionButton>
         </>
       }
     >
       <div className="space-y-6">
+        <style>{STICKER_CSS}</style>
         {/* Printer & Calibration Controls */}
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-4">
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
@@ -324,7 +265,7 @@ export function BarcodeStickerModal({
                   <input
                     id="barcode-label-height"
                     type="number"
-                    min={15}
+                    min={25}
                     max={150}
                     value={customHeight}
                     onChange={(e) => setCustomHeight(Number(e.target.value) || 25)}
@@ -389,8 +330,12 @@ export function BarcodeStickerModal({
           </div>
 
           <div className="rounded border border-amber-400/40 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-900 dark:text-amber-300">
-            <strong>Thermal Printer Tip:</strong> If your printer prints rotated sideways (vertically along the edge), change <strong>Print Orientation to 90° Clockwise</strong> and make sure the size is set to <strong>38 × 25 mm</strong>.
+            <strong>Print at 100% / Actual size:</strong> Select the size of the actual label roll, no margins, and turn browser headers/footers off. Do not use Fit to page or Credit Card as a substitute. Barcodes need clear white space on both sides. Rotate only to match the printer feed.
           </div>
+          {unsafeLabels.length > 0 && <div role="alert" className="border border-destructive p-3 text-sm text-destructive">
+            {unsafeLabels.length} barcode(s) cannot safely fit this label. Minimum label width for these codes: {requiredWidth} mm; minimum height: 25 mm.
+            For small labels, close this window, edit the product, choose Generate short variant barcodes (or Generate short barcode), then Save and reopen stickers. Existing codes are not changed automatically. Invalid codes must be replaced before printing.
+          </div>}
         </div>
 
         {/* Variant Table & Quantities */}
@@ -460,8 +405,8 @@ export function BarcodeStickerModal({
             <div className="flex items-center justify-center rounded-lg border border-border bg-neutral-200 p-6 dark:bg-neutral-800">
               <div
                 style={{
-                  width: `${widthMm * 3.8}px`,
-                  height: `${heightMm * 3.8}px`,
+                  width: `${widthMm}mm`,
+                  height: `${heightMm}mm`,
                   transform: `rotate(${rotation}deg)`,
                   transition: "transform 0.2s ease",
                 }}
@@ -504,6 +449,8 @@ function BarcodeSticker({
   label,
   template,
   customTitle,
+  widthMm,
+  heightMm,
 }: {
   label: Label;
   template: "standard" | "compact" | "branded";
@@ -515,75 +462,68 @@ function BarcodeSticker({
   const colorText = label.color || "MIX";
   const sizeText = label.size ? `SIZE: ${label.size}` : "";
   const displayTitle = (customTitle || cleanShortTitle(label.name)).toUpperCase();
+  const barcode = <div className="sticker-barcode-wrap">
+    {stickerBarcodeFits(label.barcode, widthMm, heightMm)
+      ? <StickerBarcode value={label.barcode} />
+      : <div className="sticker-unsafe">Barcode too wide or invalid. Use a short code such as BA-1234 or a larger label.</div>}
+    <div className="sticker-barcode-value">{label.barcode}</div>
+  </div>;
 
   if (template === "standard") {
     return (
-      <article className="barcode-sticker barcode-sticker--standard flex h-full w-full flex-col justify-between overflow-hidden bg-white px-2 py-1 text-center font-sans text-black select-none">
-        <div className="sticker-standard-header text-[9px] font-black uppercase tracking-wider text-black">
+      <article className="barcode-sticker barcode-sticker--standard">
+        <div className="sticker-standard-header">
           BILAL GARMENTS
         </div>
-        <div className="sticker-standard-title truncate text-[7.5px] font-bold uppercase tracking-tight text-black">
+        <div className="sticker-standard-title">
           {displayTitle}
         </div>
-        <div className="sticker-standard-row flex justify-between px-0.5 text-[7px] font-extrabold uppercase text-black">
+        <div className="sticker-standard-row">
           <span>{colorText}</span>
           <span>{sizeText}</span>
         </div>
-        <div className="sticker-standard-price flex justify-between px-0.5 text-[8.5px] font-black text-black">
+        <div className="sticker-standard-price">
           <span>PRICE:</span>
           <span>{formattedPrice}</span>
         </div>
-        <div className="sticker-standard-barcode mt-auto text-center">
-          <Barcode value={label.barcode} height={5.5} scale={1} className="sticker-barcode-img mx-auto max-h-[7mm] max-w-full" />
-          <div className="sticker-barcode-num truncate font-mono text-[6.5px] font-bold leading-none text-black mt-0.5">
-            {label.barcode}
-          </div>
-        </div>
+        {barcode}
       </article>
     );
   }
 
   if (template === "compact") {
     return (
-      <article className="barcode-sticker barcode-sticker--compact flex h-full w-full flex-col justify-between overflow-hidden bg-white px-1.5 py-1 text-center font-sans text-black select-none">
-        <div className="sticker-title truncate text-[8px] font-black uppercase tracking-wide">{displayTitle}</div>
-        <div className="sticker-compact-meta flex justify-center gap-2 text-[6.5px] font-bold uppercase">
+      <article className="barcode-sticker barcode-sticker--compact">
+        <div className="sticker-title">{displayTitle}</div>
+        <div className="sticker-compact-meta">
           {label.size && <span>Size {label.size}</span>}
           {label.color && <span>{label.color}</span>}
         </div>
-        <div className="sticker-compact-price text-[8.5px] font-black">{formattedPrice}</div>
-        <div className="sticker-barcode-wrap mt-auto">
-          <Barcode value={label.barcode} height={6} scale={1} className="sticker-barcode mx-auto max-h-[8mm] max-w-full" />
-          <div className="sticker-barcode-value truncate font-mono text-[6px] font-bold leading-none">{label.barcode}</div>
-        </div>
+        <div className="sticker-compact-price">{formattedPrice}</div>
+        {barcode}
       </article>
     );
   }
 
   return (
-    <article className="barcode-sticker barcode-sticker--branded flex h-full w-full overflow-hidden bg-white font-sans text-black select-none">
-      <div className="sticker-brand-panel flex w-[32%] shrink-0 flex-col text-center">
-        <div className="sticker-brand-top flex h-[65%] flex-col items-center justify-center bg-[#0b3158] px-0.5 text-[#ddb34d]">
-          <div className="sticker-brand-name text-[10px] font-black tracking-[0.08em]">BALY</div>
-          <div className="sticker-brand-subtitle text-[4px] font-semibold">BILAL GARMENTS</div>
-          <div className="sticker-brand-est mt-0.5 text-[4px] tracking-widest">EST 2001</div>
+    <article className="barcode-sticker barcode-sticker--branded">
+      <div className="sticker-branded-top">
+        <div className="sticker-brand-panel">
+          <div className="sticker-brand-name">BALY</div>
+          <div className="sticker-brand-subtitle">BILAL GARMENTS</div>
+          <div className="sticker-brand-est">EST 2001</div>
         </div>
-        <div className="sticker-brand-mark flex flex-1 items-center justify-center text-[16px] font-black leading-none text-[#ad7b27]">
-          B
-        </div>
-      </div>
-      <div className="sticker-content flex min-w-0 flex-1 flex-col justify-between px-1.5 py-1 text-left">
-        <div className="sticker-title truncate border-b border-black pb-0.5 text-[7px] font-black uppercase">{displayTitle}</div>
-        <div className="sticker-details mt-0.5 grid grid-cols-[18px_2px_1fr] text-[5.5px] leading-[1.2]">
-          <span>Code</span><strong>:</strong><strong className="truncate font-mono">{label.sku || "-"}</strong>
+      <div className="sticker-content">
+        <div className="sticker-title">{displayTitle}</div>
+        <div className="sticker-details">
+          <span>Code</span><strong>:</strong><strong>{label.barcode}</strong>
           <span>Size</span><strong>:</strong><strong>{label.size || "-"}</strong>
-          <span>Price</span><strong>:</strong><strong className="font-bold">{formattedPrice}</strong>
-        </div>
-        <div className="sticker-barcode-wrap mt-auto text-center">
-          <Barcode value={label.barcode} height={5} scale={1} className="sticker-barcode mx-auto max-h-[7mm] max-w-full" />
-          <div className="sticker-barcode-value truncate font-mono text-[5px] font-bold leading-none">{label.barcode}</div>
+          <span>Color</span><strong>:</strong><strong>{colorText}</strong>
+          <span>Price</span><strong>:</strong><strong>{formattedPrice}</strong>
         </div>
       </div>
+      </div>
+      {barcode}
     </article>
   );
 }

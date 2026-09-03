@@ -86,8 +86,9 @@ export const reportService = {
         productRow.earned += amount;
       }
 
-      employeeRow.payable = employeeRow.earned + employeeRow.reversed - employeeRow.paid;
-      productRow.payable = productRow.earned + productRow.reversed - productRow.paid;
+      // EARNED excludes entries already marked PAID; do not deduct them a second time.
+      employeeRow.payable = employeeRow.earned + employeeRow.reversed;
+      productRow.payable = productRow.earned + productRow.reversed;
       employeeSummary.set(entry.employeeId, employeeRow);
       productSummary.set(productKey, productRow);
     }
@@ -264,7 +265,7 @@ export const reportService = {
         earned,
         reversed,
         paid,
-        payable: earned + reversed - paid,
+        payable: earned + reversed,
       },
       employees: Array.from(employeeSummary.values()).sort((left, right) => right.payable - left.payable),
       products: Array.from(productSummary.entries())

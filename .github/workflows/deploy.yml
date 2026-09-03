@@ -38,3 +38,6 @@ jobs:
 
       - name: Build application
         run: npm run build
+
+      - name: Test barcode and commission logic without a database
+        run: node --test scripts/tests/*.test.mjs

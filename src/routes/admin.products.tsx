@@ -27,6 +27,7 @@ import type { Brand, Category, Product, SizeChart } from "@/lib/catalog-types";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, QueryErrorState, SelectField } from "@/components/admin/primitives";
 import { formatPrice } from "@/lib/format";
 import { BarcodeStickerModal } from "@/components/admin/BarcodeStickerModal";
+import { newShortBarcode } from "@/lib/sticker-barcode";
 import { sizeCharts } from "@/config/site";
 
 export const PRESET_COLORS = [
@@ -134,6 +135,7 @@ const makeDraft = (product?: Product, defaultCategory?: string): Draft => ({
 const invalidateCatalogAfterMutation = async () => {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.products }),
+    queryClient.invalidateQueries({ queryKey: ["admin", "barcode-labels"] }),
     queryClient.invalidateQueries({ queryKey: queryKeys.catalog.bootstrap }),
     queryClient.invalidateQueries({ queryKey: queryKeys.catalog.products }),
     queryClient.invalidateQueries({ queryKey: ["catalog", "product"] }),
@@ -245,7 +247,7 @@ function AdminProducts() {
                     >
                       <Printer className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => setEditing(makeDraft(product))} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button aria-label={`Edit ${product.name}`} onClick={() => setEditing(makeDraft(product))} className="p-2 hover:bg-secondary"><Pencil className="h-3.5 w-3.5" /></button>
                     {product.isActive !== false ? (
                       <button
                         onClick={() => {
@@ -285,6 +287,7 @@ function AdminProducts() {
       {editing && (
         <ProductModal
           draft={editing}
+          products={products}
           categories={categoryOptions}
           brands={brands}
           onClose={() => setEditing(null)}
@@ -301,18 +304,25 @@ function AdminProducts() {
 
 function ProductModal({
   draft,
+  products,
   categories,
   brands,
   onClose,
   onSave,
 }: {
   draft: Draft;
+  products: Product[];
   categories: Category[];
   brands: Brand[];
   onClose: () => void;
   onSave: (product: Product) => void;
 }) {
   const [form, setForm] = useState(draft);
+  const usedBarcodeSet = () => new Set([
+    ...products.flatMap((product) => [product.barcode || "", ...product.variants.map((variant) => variant.barcode || "")]),
+    form.barcode,
+    ...form.variants.map((variant) => variant.barcode || ""),
+  ]);
   // Keep generated slugs in sync with a new product name until an operator edits it.
   const [slugEdited, setSlugEdited] = useState(Boolean(draft.slug));
   const [sizeText, setSizeText] = useState(draft.sizes.join(", "));
@@ -457,6 +467,7 @@ function ProductModal({
     const existingByKey = new Map(
       form.variants.map((variant) => [variantMatrixKey(variant.size, variant.colorName), variant]),
     );
+    const usedBarcodes = usedBarcodeSet();
     const variants = sizes.flatMap((size) =>
       form.colors.map((color) => {
         const existing = existingByKey.get(variantMatrixKey(size, color.name));
@@ -482,7 +493,7 @@ function ProductModal({
           priceOverride: null,
           costPrice: null,
           isActive: true,
-          barcode: sku,
+          barcode: newShortBarcode(usedBarcodes),
           qrCode: `QR-${sku}`,
           supplierBarcode: "",
         };
@@ -866,7 +877,7 @@ function ProductModal({
             variant="ghost"
             onClick={async () => {
               try {
-                const payload = await adminCatalogApi.generateCodes({ seed: form.slug || form.name });
+                const payload = await adminCatalogApi.generateCodes({ seed: form.slug || form.name, format: "short" });
                 setForm((current) => ({ ...current, barcode: current.barcode || payload.barcode, qrCode: current.qrCode || payload.qrCode }));
               } catch (error) {
                 toast.error(getErrorMessage(error, "Unable to generate codes"));
@@ -875,6 +886,11 @@ function ProductModal({
           >
             Generate barcode + QR
           </ActionButton>
+          <ActionButton variant="ghost" onClick={() => {
+            if (form.barcode && !window.confirm("Replace this product barcode? Previously printed barcode stickers will stop matching. Save the product and reprint its stickers.")) return;
+            const barcode = newShortBarcode(usedBarcodeSet());
+            setForm((current) => ({ ...current, barcode }));
+          }}>Generate short barcode</ActionButton>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <SelectField
@@ -1205,6 +1221,13 @@ function ProductModal({
               </div>
               <div>
                 <div className="mb-2 text-xs uppercase tracking-[0.25em] text-muted-foreground">Variant-specific details</div>
+                <ActionButton variant="ghost" onClick={() => {
+                  if (!window.confirm("Replace variant barcodes with short codes like BA-1234 for small stickers? SKUs, sizes, colors and stock stay unchanged. Previously printed barcode stickers must be replaced. Changes apply only after Save.")) return;
+                  const used = usedBarcodeSet();
+                  const variants = form.variants.map((variant) => ({ ...variant, barcode: newShortBarcode(used) }));
+                  setForm((current) => ({ ...current, variants }));
+                }}>Generate short variant barcodes</ActionButton>
+                <p className="my-2 text-xs text-muted-foreground">Short codes like BA-1234 use two letters and four digits. SKU retains the product, size and color. Save before printing.</p>
                 <div className="overflow-x-auto border border-border">
                   <table className="min-w-[1240px] w-full text-xs">
                     <thead className="bg-secondary uppercase tracking-widest">
@@ -1292,7 +1315,8 @@ function ProductModal({
                               className="underline underline-offset-2"
                               onClick={async () => {
                                 try {
-                                  const payload = await adminCatalogApi.generateCodes({ seed: variant.sku });
+                                  if (variant.barcode && !window.confirm("Replace this variant barcode? Save the product and replace previously printed stickers.")) return;
+                                  const payload = await adminCatalogApi.generateCodes({ seed: variant.sku, format: "short" });
                                   updateVariant(variant.id, variant.size, variant.colorName, { barcode: payload.barcode, qrCode: payload.qrCode });
                                 } catch (error) {
                                   toast.error(getErrorMessage(error, "Unable to generate variant codes"));
