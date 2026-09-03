@@ -1,5 +1,15 @@
 # Bilal RMS Full QA Report
 
+## 3 September 2026: Vendor Purchases Correction
+
+- The history screen dereferenced nested vendor/product fields although the API returns flat `vendorName`, `productName`, and `variantSku` fields. Both row totals and the wholesale-spend summary also referenced a nonexistent `totalCost` field. Rows and summaries now calculate quantity times unit cost; reversed purchases remain excluded from active totals.
+- Three isolated browser tests pass: flat records/filtering/reversal/zero costs, purchase submission and refreshed totals, and failed-request retry. They intercept API requests and never start or reset a database. Run with `node node_modules/@playwright/test/cli.js test --config playwright.vendor-purchases.config.ts`.
+- Frontend production build and backend TypeScript build pass. The npm 10 strict-install dry run passes; targeted `mysql2@3.24.3` and `qs@6.16.0` resolution produces zero audit findings. Express remains on version 4; the abandoned major upgrade and broad lockfile changes were removed.
+- **Local data incident:** the legacy regression harness was run before reassessment and invoked `--reset-db`, removing/recreating the local Docker MariaDB volume. The previous local contents were not captured, so data preservation cannot be claimed for that run. Production was not reset. The runner was stopped and its automatic reset flag removed. Do not run legacy write suites against retained business data; use isolated fixtures or the scoped QA wrappers.
+- Desktop version `0.3.3` includes the same page repair. Publication and live confirmation are recorded separately after completion.
+
+The release evidence below describes the earlier August run, not this correction.
+
 **Run ID:** `QA-20260831-RELEASE-VALIDATION`
 
 **Date:** 31 August 2026

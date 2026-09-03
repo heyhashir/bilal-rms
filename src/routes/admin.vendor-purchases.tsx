@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Plus, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { adminBackofficeApi } from "@/lib/admin-backoffice-api";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
@@ -91,7 +91,7 @@ function AdminVendorPurchases() {
     const list = filteredPurchases.filter((p) => !p.reversedAt);
     const count = list.length;
     const totalUnits = list.reduce((sum, p) => sum + p.quantity, 0);
-    const totalSpend = list.reduce((sum, p) => sum + p.totalCost, 0);
+    const totalSpend = list.reduce((sum, p) => sum + p.quantity * p.unitCost, 0);
     return { count, totalUnits, totalSpend };
   }, [filteredPurchases]);
 
@@ -104,9 +104,9 @@ function AdminVendorPurchases() {
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
-        <StatCard label="Total Inward Purchases" value={companyStats.count} hint="Active non-reversed invoices" />
-        <StatCard label="Total Units Received" value={`${companyStats.totalUnits} pcs`} hint="Added to live inventory" />
-        <StatCard label="Total Wholesale Spend" value={formatPrice(companyStats.totalSpend)} hint="Capital invested in stock" />
+        <StatCard label="Total Inward Purchases" value={companyStats.count} delta="Active non-reversed invoices" />
+        <StatCard label="Total Units Received" value={`${companyStats.totalUnits} pcs`} delta="Added to live inventory" />
+        <StatCard label="Total Wholesale Spend" value={formatPrice(companyStats.totalSpend)} delta="Capital invested in stock" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
@@ -150,7 +150,7 @@ function AdminVendorPurchases() {
             <Field label="Purchase Date" type="date" value={purchase.purchasedAt} onChange={(value) => setPurchase((current) => ({ ...current, purchasedAt: value }))} />
             <Field label="Note / Bill #" value={purchase.note} placeholder="e.g. Lot #, Invoice #" onChange={(value) => setPurchase((current) => ({ ...current, note: value }))} textarea />
             <ActionButton
-              disabled={isProductsError}
+              disabled={isProductsError || createPurchase.isPending}
               onClick={() => {
                 if (!purchase.vendorId) return toast.error("Select a vendor");
                 if (!purchase.productId) return toast.error("Select a product");
@@ -166,7 +166,7 @@ function AdminVendorPurchases() {
                 });
               }}
             >
-              Record Inward Purchase
+              {createPurchase.isPending ? "Recording purchase..." : "Record Inward Purchase"}
             </ActionButton>
           </div>
         </section>
@@ -179,6 +179,7 @@ function AdminVendorPurchases() {
               <div className="mt-1 text-xs text-muted-foreground">Showing {filteredPurchases.length} purchase records</div>
             </div>
             <select
+              aria-label="Filter purchases by vendor"
               value={purchaseVendorFilter}
               onChange={(e) => setPurchaseVendorFilter(e.target.value)}
               className="border border-border bg-background px-3 py-1.5 text-xs"
@@ -224,7 +225,7 @@ function AdminVendorPurchases() {
                       </td>
                       <td className="p-3 text-right font-semibold">{item.quantity}</td>
                       <td className="p-3 text-right font-mono">{formatPrice(item.unitCost)}</td>
-                      <td className="p-3 text-right font-mono font-semibold">{formatPrice(item.totalCost)}</td>
+                      <td className="p-3 text-right font-mono font-semibold">{formatPrice(item.quantity * item.unitCost)}</td>
                       <td className="p-3 text-xs text-muted-foreground font-mono">{item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString() : "-"}</td>
                       <td className="p-3">
                         {item.reversedAt ? (
@@ -274,12 +275,13 @@ function AdminVendorPurchases() {
               </ActionButton>
               <ActionButton
                 variant="danger"
+                disabled={reversePurchase.isPending}
                 onClick={() => {
                   if (!purchaseReversal.reason.trim()) return toast.error("Enter a reversal reason");
                   reversePurchase.mutate({ id: purchaseReversal.id, reason: purchaseReversal.reason });
                 }}
               >
-                Confirm Reversal
+                {reversePurchase.isPending ? "Reversing purchase..." : "Confirm Reversal"}
               </ActionButton>
             </>
           }

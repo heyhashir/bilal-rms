@@ -53,7 +53,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `node scripts/start-local-server.mjs --reset-db --port ${testPort}`,
+    command: `node scripts/start-local-server.mjs --port ${testPort}`,
     url: `${testBaseUrl}/api/v1/health`,
     reuseExistingServer: false,
     timeout: 300_000,
