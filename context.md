@@ -28,7 +28,7 @@ This is not a static fashion website. It is one retail system with:
 
 ### 3 September 2026 Update
 
-Vendor Purchases was found broken in production: the UI expected nested vendor/product relations and a `totalCost` value that the API does not return. The correction uses the flat API fields and derives quantity times unit cost for rows and active totals. Three fixture-only browser tests pass; desktop `0.3.3` is being packaged with the same correction. Targeted mysql2/qs updates remove current audit advisories without an Express major upgrade.
+Vendor Purchases was found broken in production: the UI expected nested vendor/product relations and a `totalCost` value that the API does not return. Release `b3a4bb3` uses the flat API fields and derives quantity times unit cost for rows and active totals. Three fixture-only browser tests and GitHub Build Verification pass. The live page rendered all 31 records with correct totals and no browser exceptions. Desktop `0.3.3` is published and server-verified with the same correction (105,224,288 bytes; SHA-256 `bbeb8007189cd1bd19745878d2bd61d755772a39d5d253e8a0d32ce4bb78a50b`). Targeted mysql2/qs updates remove current audit advisories without an Express major upgrade.
 
 During the initial attempt, the legacy Playwright runner reset the local Docker database volume. Its former contents were not captured. Production data was unaffected. Automatic database reset was removed from `playwright.config.ts`; use the fixture-only vendor-purchase config for this issue. See the dated incident in `docs/developer/qa-report.md`. Check Git/live state for publication completion; the August snapshot below is historical.
 
