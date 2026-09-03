@@ -38,6 +38,49 @@ test.describe("Bilal RMS regression", () => {
     await page.locator('input[type="file"][accept="image/*"]').first().setInputFiles(productImagePath);
     await saveModal(page);
 
+    await page.evaluate(async ({ vendorName, productSlug }) => {
+      const request = async (path: string, init?: RequestInit) => {
+        const response = await fetch(path, {
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            ...init?.headers,
+          },
+          ...init,
+        });
+        if (!response.ok) {
+          throw new Error(`${path} failed with ${response.status}`);
+        }
+        return response.json();
+      };
+
+      const vendors = await request("/api/v1/admin/vendors", {
+        method: "POST",
+        body: JSON.stringify({ name: vendorName, isActive: true }),
+      });
+      const products = await request("/api/v1/admin/products");
+      const product = products.data.products.find((entry: { slug: string }) => entry.slug === productSlug);
+      if (!product) {
+        throw new Error("Regression product was not returned by the admin catalog API");
+      }
+      await request("/api/v1/admin/vendor-purchases", {
+        method: "POST",
+        body: JSON.stringify({
+          vendorId: vendors.data.vendor.id,
+          productId: product.id,
+          quantity: 2,
+          unitCost: 1450,
+          purchasedAt: new Date().toISOString().slice(0, 10),
+          note: "Regression vendor intake",
+        }),
+      });
+    }, { vendorName: `${testData.brandName} Vendor`, productSlug: testData.productSlug });
+
+    await page.goto("/admin/vendor-purchases");
+    await expect(page.getByText(`${testData.brandName} Vendor`, { exact: true })).toBeVisible();
+    await expect(page.getByText(testData.productName, { exact: true })).toBeVisible();
+
     await page.evaluate(async (employeeName) => {
       const response = await fetch("/api/v1/admin/employees", {
         method: "POST",

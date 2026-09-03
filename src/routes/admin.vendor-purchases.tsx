@@ -82,7 +82,7 @@ function AdminVendorPurchases() {
   const filteredPurchases = useMemo(
     () =>
       purchaseVendorFilter
-        ? purchases.filter((item) => item.vendor.id === purchaseVendorFilter)
+        ? purchases.filter((item) => item.vendorId === purchaseVendorFilter)
         : purchases,
     [purchases, purchaseVendorFilter],
   );
@@ -213,12 +213,12 @@ function AdminVendorPurchases() {
                 <tbody>
                   {filteredPurchases.map((item) => (
                     <tr key={item.id} className={`border-t border-border hover:bg-secondary/30 transition-colors ${item.reversedAt ? "bg-muted/40 opacity-60" : ""}`}>
-                      <td className="p-3 font-medium">{item.vendor.name}</td>
+                      <td className="p-3 font-medium">{item.vendorName}</td>
                       <td className="p-3">
-                        <div>{item.product.name}</div>
-                        {item.variant ? (
+                        <div>{item.productName}</div>
+                        {item.variantSku ? (
                           <div className="text-xs text-muted-foreground uppercase font-mono">
-                            {[item.variant.sku, item.variant.size, item.variant.colorName].filter(Boolean).join(" · ")}
+                            {item.variantSku}
                           </div>
                         ) : null}
                       </td>
@@ -235,7 +235,7 @@ function AdminVendorPurchases() {
                             onClick={() =>
                               setPurchaseReversal({
                                 id: item.id,
-                                label: `${item.vendor.name} - ${item.product.name} (${item.quantity} pcs)`,
+                                label: `${item.vendorName} - ${item.productName} (${item.quantity} pcs)`,
                                 reason: "",
                               })
                             }
