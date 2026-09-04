@@ -11,7 +11,7 @@ const { reportService } = require("../../backend/dist/services/report.service.js
 
 test("paid commission is not deducted twice from remaining payable commission", async () => {
   const entries = [
-    { employeeId: "qa-employee", employee: { name: "QA Employee" }, saleItem: { productId: "qa-product", name: "QA Product" }, status: "PAID", amount: 118 },
+    { employeeId: "qa-employee", employee: { name: "QA Employee" }, saleItem: { productId: "qa-product", name: "QA Product" }, status: "PAID", amount: 118, cancelledAmount: 0 },
   ];
   for (const method of ["listDeliveredOrders", "listPosSales", "listLedgerEntries", "listVendorPurchases"]) {
     mock.method(reportRepository, method, async () => []);

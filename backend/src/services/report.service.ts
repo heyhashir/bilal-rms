@@ -72,7 +72,7 @@ export const reportService = {
           payable: 0,
         };
 
-      const cancelledAmount = Number(entry.cancelledAmount);
+      const cancelledAmount = Number(entry.cancelledAmount ?? 0);
       const payableAmount = Math.max(0, amount - cancelledAmount);
       if (entry.status === 'PAID') {
         paid += payableAmount;

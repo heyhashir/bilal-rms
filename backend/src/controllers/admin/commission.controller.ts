@@ -38,8 +38,8 @@ export const exportCommissions = async (req: Request, res: Response) => {
         totalCost: unitCost * (effectiveQty > 0 ? effectiveQty : entry.saleItem.qty),
         rate: Number(entry.rate),
         commissionAmount: Number(entry.amount),
-        cancelledAmount: Number(entry.cancelledAmount),
-        payableAmount: Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount)),
+        cancelledAmount: Number(entry.cancelledAmount ?? 0),
+        payableAmount: Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount ?? 0)),
         status: entry.status,
         note: entry.note,
       };

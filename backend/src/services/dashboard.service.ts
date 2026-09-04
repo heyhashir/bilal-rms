@@ -103,7 +103,7 @@ export const dashboardService = {
       name: employee.name,
       commissionRate: Number(employee.commissionRate),
       pendingCommission: employee.commissionEntries.reduce(
-        (sum, entry) => sum + Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount)),
+        (sum, entry) => sum + Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount ?? 0)),
         0,
       ),
     }));
@@ -120,7 +120,7 @@ export const dashboardService = {
       ),
       posSales,
       pendingCommission: pendingCommissionAggregate.reduce(
-        (sum, entry) => sum + Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount)),
+        (sum, entry) => sum + Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount ?? 0)),
         0,
       ),
       employees,
