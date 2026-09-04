@@ -31,6 +31,14 @@ export const formatInvoiceNumber = (sequence: number): string => {
   return `${sequenceLetters(prefixIndex)}${numericPart.toString().padStart(6, '0')}`;
 };
 
+export const formatReceiptLookupCode = (sequence: number): string => {
+  if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > 36 ** 4 - 1) {
+    throw new ApiError(500, 'Receipt lookup code sequence is out of range');
+  }
+
+  return `BI-${sequence.toString(36).toUpperCase().padStart(4, '0')}`;
+};
+
 const makeReceiptId = (prefix: string): string => {
   const safePrefix = prefix.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 6) || 'REC';
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -81,6 +89,7 @@ export const receiptService = {
     return {
       invoiceSequence,
       invoiceNumber: formatInvoiceNumber(invoiceSequence),
+      lookupCode: formatReceiptLookupCode(invoiceSequence),
       receiptNumber: makeReceiptId(settings.receiptPrefix),
       documentSnapshot: buildReceiptSnapshot(settings),
     };

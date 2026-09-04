@@ -18,6 +18,7 @@ import {
   ProductImage,
   ProductVariant,
   Receipt,
+  PosExchange,
   ReturnRequest,
   ShippingZone,
   StoreSetting,
@@ -51,6 +52,8 @@ type PosSaleWithRelations = PosSale & {
   returns: PosReturn[];
   receipt: Receipt | null;
   voidedBy: AdminAccount | null;
+  sourceExchanges?: Array<PosExchange & { replacementSale: PosSale & { receipt: Receipt | null } }>;
+  replacementExchange?: (PosExchange & { sourceSale: PosSale & { receipt: Receipt | null } }) | null;
 };
 
 export const decimalToNumber = (value: Prisma.Decimal | null | undefined): number | undefined => {
@@ -411,6 +414,7 @@ export const serializePosSale = (sale: PosSaleWithRelations) => ({
         receiptNumber: sale.receipt.receiptNumber,
         invoiceNumber: sale.receipt.invoiceNumber,
         invoiceSequence: sale.receipt.invoiceSequence,
+        lookupCode: sale.receipt.lookupCode ?? '',
         documentSnapshot: sale.receipt.documentSnapshot,
         reprintCount: sale.receipt.reprintCount,
         lastPrintedAt: sale.receipt.lastPrintedAt?.getTime() ?? null,
@@ -454,6 +458,36 @@ export const serializePosSale = (sale: PosSaleWithRelations) => ({
     note: entry.note,
     createdAt: entry.createdAt.getTime(),
   })),
+  exchanges: (sale.sourceExchanges ?? []).map((exchange) => ({
+    id: exchange.id,
+    exchangeNumber: exchange.exchangeNumber,
+    replacementSaleNumber: exchange.replacementSale.saleNumber,
+    replacementLookupCode: exchange.replacementSale.receipt?.lookupCode ?? '',
+    returnedValue: decimalToNumber(exchange.returnedValue) ?? 0,
+    replacementValue: decimalToNumber(exchange.replacementValue) ?? 0,
+    settlementDirection: exchange.settlementDirection.toLowerCase(),
+    settlementAmount: decimalToNumber(exchange.settlementAmount) ?? 0,
+    settlementMethod: exchange.settlementMethod?.toLowerCase() ?? '',
+    reason: exchange.reason,
+    note: exchange.note,
+    createdAt: exchange.createdAt.getTime(),
+  })),
+  sourceExchange: sale.replacementExchange
+    ? {
+        id: sale.replacementExchange.id,
+        exchangeNumber: sale.replacementExchange.exchangeNumber,
+        sourceSaleNumber: sale.replacementExchange.sourceSale.saleNumber,
+        sourceLookupCode: sale.replacementExchange.sourceSale.receipt?.lookupCode ?? '',
+        returnedValue: decimalToNumber(sale.replacementExchange.returnedValue) ?? 0,
+        replacementValue: decimalToNumber(sale.replacementExchange.replacementValue) ?? 0,
+        settlementDirection: sale.replacementExchange.settlementDirection.toLowerCase(),
+        settlementAmount: decimalToNumber(sale.replacementExchange.settlementAmount) ?? 0,
+        settlementMethod: sale.replacementExchange.settlementMethod?.toLowerCase() ?? '',
+        reason: sale.replacementExchange.reason,
+        note: sale.replacementExchange.note,
+        createdAt: sale.replacementExchange.createdAt.getTime(),
+      }
+    : null,
   createdAt: sale.createdAt.getTime(),
   updatedAt: sale.updatedAt.getTime(),
 });
@@ -483,6 +517,7 @@ export const serializeCommissionEntry = (entry: CommissionEntry & { employee: Em
     cost,
     rate: decimalToNumber(entry.rate) ?? 0,
     amount: decimalToNumber(entry.amount) ?? 0,
+    cancelledAmount: decimalToNumber(entry.cancelledAmount) ?? 0,
     status: entry.status.toLowerCase(),
     note: entry.note,
     createdAt: entry.createdAt.getTime(),
@@ -553,7 +588,7 @@ export const serializeVendorPurchase = (
   updatedAt: purchase.updatedAt.getTime(),
 });
 
-export const serializeLedgerEntry = (entry: LedgerEntry) => ({
+export const serializeLedgerEntry = (entry: LedgerEntry & { vendor?: Vendor | null }) => ({
   id: entry.id,
   type: entry.type.toLowerCase(),
   direction: entry.direction.toLowerCase(),
@@ -563,6 +598,8 @@ export const serializeLedgerEntry = (entry: LedgerEntry) => ({
   orderId: entry.orderId,
   posSaleId: entry.posSaleId,
   vendorPurchaseId: entry.vendorPurchaseId,
+  vendorId: entry.vendorId,
+  vendorName: entry.vendor?.name ?? '',
   adminAccountId: entry.adminAccountId,
   isManual: entry.isManual,
   createdAt: entry.createdAt.getTime(),

@@ -10,6 +10,16 @@ export const posSaleInclude = {
   payments: true,
   returns: true,
   receipt: true,
+  sourceExchanges: {
+    include: {
+      replacementSale: { include: { receipt: true } },
+    },
+  },
+  replacementExchange: {
+    include: {
+      sourceSale: { include: { receipt: true } },
+    },
+  },
   voidedBy: true,
   cashier: true,
 } satisfies Prisma.PosSaleInclude;
@@ -35,6 +45,7 @@ const posSaleWhere = (query?: string): Prisma.PosSaleWhereInput | undefined => {
       { customerEmail: { contains: query } },
       { receipt: { is: { receiptNumber: { contains: query } } } },
       { receipt: { is: { invoiceNumber: { contains: query } } } },
+      { receipt: { is: { lookupCode: { contains: query } } } },
     ],
   };
 };
@@ -94,6 +105,7 @@ export const posRepository = {
           { saleNumber: identifier },
           { receipt: { is: { receiptNumber: identifier } } },
           { receipt: { is: { invoiceNumber: identifier } } },
+          { receipt: { is: { lookupCode: identifier.toUpperCase() } } },
         ],
       },
       include: posSaleInclude,

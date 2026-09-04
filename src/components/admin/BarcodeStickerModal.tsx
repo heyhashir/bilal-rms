@@ -9,6 +9,8 @@ import { StickerBarcode } from "@/components/pos/StickerBarcode";
 import { encodeStickerBarcode, stickerBarcodeFits, STICKER_PADDING_MM } from "@/lib/sticker-barcode";
 import { STICKER_CSS } from "@/lib/sticker-layout";
 import { formatPrice } from "@/lib/format";
+import { getDesktopBridge } from "@/lib/desktop-bridge";
+import { PrinterProfilesModal } from "@/components/pos/PrinterProfilesModal";
 
 type Label = Awaited<ReturnType<typeof adminCatalogApi.barcodeLabels>>["labels"][number];
 
@@ -58,7 +60,21 @@ export function BarcodeStickerModal({
   const [customWidth, setCustomWidth] = useState(38);
   const [customHeight, setCustomHeight] = useState(25);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [showPrinterProfiles, setShowPrinterProfiles] = useState(false);
   const printRootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const desktopProfile = getDesktopBridge()?.getPrinterProfiles().sticker;
+    const saved = desktopProfile ?? (() => {
+      try { return JSON.parse(localStorage.getItem("bilal_rms_sticker_layout") ?? "null"); } catch { return null; }
+    })();
+    if (!saved) return;
+    setCustomWidth(saved.widthMm ?? 38);
+    setCustomHeight(saved.heightMm ?? 25);
+    setSizePreset(LABEL_SIZE_PRESETS.some((entry) => entry.id === `${saved.widthMm}x${saved.heightMm}`) ? `${saved.widthMm}x${saved.heightMm}` : "custom");
+    setRotation(saved.orientation ?? 0);
+    setTemplate(saved.design ?? "standard");
+  }, []);
 
   const selectedPreset = LABEL_SIZE_PRESETS.find((p) => p.id === sizePreset) ?? LABEL_SIZE_PRESETS[0];
   const widthMm = sizePreset === "custom" ? customWidth : selectedPreset.widthMm;
@@ -163,6 +179,16 @@ export function BarcodeStickerModal({
 
     // 1. Try native desktop electron printing if running inside desktop app
     if (window.bilalDesktop?.printStickers) {
+      const profiles = window.bilalDesktop.getPrinterProfiles();
+      if (!profiles.sticker?.printerName) {
+        setShowPrinterProfiles(true);
+        toast.error("Select and save the sticker printer first");
+        return;
+      }
+      window.bilalDesktop.savePrinterProfiles({
+        ...profiles,
+        sticker: { ...profiles.sticker, widthMm, heightMm, orientation: rotation, design: template },
+      });
       try {
         await window.bilalDesktop.printStickers({
           html,
@@ -176,6 +202,8 @@ export function BarcodeStickerModal({
         console.warn("Desktop print error, falling back to browser window:", err);
       }
     }
+
+    localStorage.setItem("bilal_rms_sticker_layout", JSON.stringify({ widthMm, heightMm, orientation: rotation, design: template }));
 
     // 2. Browser print window fallback
     const printWindow = window.open("", "_blank", "popup=yes,width=600,height=800");
@@ -207,6 +235,7 @@ export function BarcodeStickerModal({
           <ActionButton variant="ghost" onClick={onClose}>
             Close
           </ActionButton>
+          {window.bilalDesktop && <ActionButton variant="ghost" onClick={() => setShowPrinterProfiles(true)}>Change printer preset</ActionButton>}
           <ActionButton onClick={printStickers} disabled={isFetching || printable.length === 0 || unsafeLabels.length > 0}>
             <Printer className="h-3.5 w-3.5" /> Print {printable.length} sticker{printable.length === 1 ? "" : "s"}
           </ActionButton>
@@ -441,6 +470,7 @@ export function BarcodeStickerModal({
           </div>
         ))}
       </div>
+      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} />}
     </Modal>
   );
 }

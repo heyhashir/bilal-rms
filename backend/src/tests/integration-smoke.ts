@@ -915,11 +915,16 @@ const run = async () => {
     });
     assert.equal(refundedPosSale.status, 200, 'POS refund should succeed');
 
-    const commissionsAfterRefund = await adminRequest<{ commissions: Array<{ saleNumber: string; status: string }> }>('/admin/commissions');
+    const commissionsAfterRefund = await adminRequest<{
+      commissions: Array<{ saleNumber: string; status: string; amount: number; cancelledAmount: number }>;
+    }>('/admin/commissions');
     assert.equal(commissionsAfterRefund.status, 200, 'commission list should reload after refund');
+    const paidCommissionAfterRefund = commissionsAfterRefund.payload?.data.commissions.find((entry) => entry.saleNumber === posSaleNumber);
+    assert.equal(paidCommissionAfterRefund?.status, 'paid', 'refund should preserve an already-paid commission');
+    assert.equal(paidCommissionAfterRefund?.cancelledAmount, 0, 'refund should not cancel an already-paid commission');
     assert.ok(
-      commissionsAfterRefund.payload?.data.commissions.some((entry) => entry.saleNumber === posSaleNumber && entry.status === 'reversed'),
-      'POS refund should create a reversed commission entry',
+      commissionsAfterRefund.payload?.data.commissions.every((entry) => entry.amount >= 0 && entry.status !== 'reversed'),
+      'refund should not create negative or reversed commission entries',
     );
 
     const archivedAdminProduct = await adminRequest<{ ok: boolean }>(`/admin/products/${adminProductId}`, {

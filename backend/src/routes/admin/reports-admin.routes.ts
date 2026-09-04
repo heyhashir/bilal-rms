@@ -43,6 +43,7 @@ const ledgerEntrySchema = z.object({
   amount: z.coerce.number().nonnegative(),
   reference: z.string().optional().or(z.literal('')),
   note: z.string().optional().or(z.literal('')),
+  vendorId: z.string().optional().nullable().or(z.literal('')),
 });
 
 router.get('/reports/summary', asyncHandler(getReportSummary));

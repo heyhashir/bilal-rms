@@ -64,6 +64,26 @@ export const refundPosSale = async (req: Request, res: Response) => {
   res.status(200).json(ApiResponse.success('POS refund processed', { sale: serializePosSale(sale) }));
 };
 
+export const exchangePosSale = async (req: Request, res: Response) => {
+  const sale = await posService.exchangeSale({
+    saleNumber: req.params.saleNumber,
+    ...req.body,
+    operatorId: req.currentUser!.id,
+  });
+  logAdminAudit(req, {
+    action: 'pos-sale.exchanged',
+    targetType: 'pos-sale',
+    targetId: req.params.saleNumber,
+    details: {
+      replacementSaleNumber: sale.saleNumber,
+      returnedItems: req.body.returns.length,
+      replacementItems: req.body.replacements.length,
+      reason: req.body.reason,
+    },
+  });
+  res.status(201).json(ApiResponse.success('Product exchange completed', { sale: serializePosSale(sale) }));
+};
+
 export const voidPosSale = async (req: Request, res: Response) => {
   const sale = await posService.voidSale({
     saleNumber: req.params.saleNumber,

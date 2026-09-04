@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   createPosSale as createPosSaleController,
   downloadPosSalePdf as downloadPosSalePdfController,
+  exchangePosSale as exchangePosSaleController,
   exportPosSales as exportPosSalesController,
   getPosSale as getPosSaleController,
   findPosSale as findPosSaleController,
@@ -56,6 +57,22 @@ const posVoidSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
+const posExchangeSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(191),
+  reason: z.string().trim().min(3).max(500),
+  note: z.string().optional().or(z.literal('')),
+  paymentMethod: z.enum(['cash', 'card', 'jazzcash', 'easypaisa', 'bank_transfer']).optional().nullable(),
+  deviceKey: z.string().optional().or(z.literal('')),
+  deviceName: z.string().optional().or(z.literal('')),
+  returns: z.array(z.object({
+    saleItemId: z.string().min(1),
+    productId: z.string().optional(),
+    variantId: z.string().optional().nullable(),
+    qty: z.coerce.number().int().positive(),
+  })).min(1),
+  replacements: z.array(posLineSchema).min(1),
+});
+
 router.get('/pos-sales', asyncHandler(listPosSalesController));
 router.get('/pos-sales/export', asyncHandler(exportPosSalesController));
 router.get('/pos-sales-find', asyncHandler(findPosSaleController));
@@ -86,6 +103,14 @@ router.post(
   asyncHandler(async (req, res) => {
     req.body = posVoidSchema.parse(req.body);
     await voidPosSaleController(req, res);
+  }),
+);
+
+router.post(
+  '/pos-sales/:saleNumber/exchanges',
+  asyncHandler(async (req, res) => {
+    req.body = posExchangeSchema.parse(req.body);
+    await exchangePosSaleController(req, res);
   }),
 );
 

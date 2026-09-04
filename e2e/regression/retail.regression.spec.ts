@@ -8,7 +8,7 @@ import {
 } from "../helpers";
 
 test.describe("Bilal RMS regression", () => {
-  test("creates retail entities, refunds a POS sale, and reverses commission", async ({ page }) => {
+  test("creates retail entities, refunds a POS sale, and cancels unpaid commission", async ({ page }) => {
     dismissDialogs(page);
     await loginAsAdmin(page);
 
@@ -86,6 +86,6 @@ test.describe("Bilal RMS regression", () => {
     await page.getByRole("button", { name: "Close" }).click();
 
     await page.goto("/admin/commissions");
-    await expect(page.locator("tbody tr").filter({ hasText: testData.employeeName }).first()).toContainText(/reversed/i);
+    await expect(page.locator("tbody tr").filter({ hasText: testData.employeeName }).first()).toContainText(/cancelled/i);
   });
 });

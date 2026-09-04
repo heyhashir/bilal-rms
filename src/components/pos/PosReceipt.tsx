@@ -22,12 +22,15 @@ export function PosReceipt({
   const totalItems = sale.items.reduce((sum, item) => sum + item.qty, 0);
   const currency = store?.currencySymbol || settings?.currencySymbol || "Rs.";
 
+  const lookupCode = sale.receipt?.lookupCode || sale.receipt?.invoiceNumber || sale.saleNumber;
+  const exchange = sale.sourceExchange;
+
   return (
-    <article className="pos-receipt mx-auto w-full max-w-[80mm] bg-white p-[4mm] text-black">
+    <article className="pos-receipt mx-auto w-full max-w-[72mm] bg-white p-[3mm] text-black">
       <header className="text-center">
         {store?.logoPath && <img src={store.logoPath} alt="" className="mx-auto mb-2 max-h-12 max-w-32 object-contain" />}
         <h1 className="text-[17px] font-black leading-tight">
-          {store?.name || settings?.name || "BALY by Bilal Garments EST 2001"}
+          BILAL GARMENTS
         </h1>
         <div className="mx-auto my-2 h-px w-full bg-black" />
         <p className="text-[11px]">{store?.address || settings?.address}</p>
@@ -40,6 +43,7 @@ export function PosReceipt({
       <section className="my-3 grid grid-cols-2 gap-x-4 border-y border-dashed border-black py-2 text-[10px]">
         <div className="space-y-1">
           <ReceiptMeta label="Invoice No" value={sale.receipt?.invoiceNumber || "-"} strong />
+          <ReceiptMeta label="Scan Code" value={lookupCode} strong />
           <ReceiptMeta label="Receipt ID" value={sale.receipt?.receiptNumber || sale.saleNumber} strong />
           <ReceiptMeta label="Date" value={createdAt.toLocaleDateString("en-GB")} />
           <ReceiptMeta label="Time" value={createdAt.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })} />
@@ -92,6 +96,19 @@ export function PosReceipt({
         <ReceiptTotal label="Change Returned" value={`${currency} ${money(sale.changeAmount)}`} />
       </section>
 
+      {exchange && (
+        <section className="my-3 border-y border-dashed border-black py-2 text-[9px]">
+          <div className="mb-1 text-center text-[11px] font-black">EXCHANGE {exchange.exchangeNumber}</div>
+          <ReceiptTotal label="Returned credit" value={`${currency} ${money(exchange.returnedValue)}`} />
+          <ReceiptTotal label="Replacement value" value={`${currency} ${money(exchange.replacementValue)}`} />
+          <ReceiptTotal
+            label={exchange.settlementDirection === "collect" ? "Amount collected" : exchange.settlementDirection === "refund" ? "Amount refunded" : "Difference"}
+            value={`${currency} ${money(exchange.settlementAmount)}`}
+            strong
+          />
+        </section>
+      )}
+
       {sale.status === "void" && (
         <section className="my-3 border-2 border-black p-2 text-center text-sm font-black uppercase">
           Voided
@@ -101,12 +118,12 @@ export function PosReceipt({
 
       <section className="my-3 border-y border-dashed border-black py-3 text-center">
         <Barcode
-          value={sale.receipt?.receiptNumber || sale.saleNumber}
+          value={lookupCode}
           height={11}
           className="mx-auto max-w-full"
         />
         <div className="mt-1 text-[11px] font-bold tracking-wide">
-          {sale.receipt?.receiptNumber || sale.saleNumber}
+          {lookupCode}
         </div>
       </section>
 

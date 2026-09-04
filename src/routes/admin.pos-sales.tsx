@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Ban, Download, Printer, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/api";
 import { adminPosApi } from "@/lib/admin-pos-api";
 import { adminCatalogApi } from "@/lib/admin-catalog-api";
+import { adminEmployeesApi } from "@/lib/admin-employees-api";
 import type { PosSale } from "@/lib/admin-types";
 import type { Product } from "@/lib/catalog-types";
 import { syncApi } from "@/lib/sync-api";
@@ -14,6 +15,8 @@ import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { adminSettingsApi } from "@/lib/admin-settings-api";
 import { PosReceipt } from "@/components/pos/PosReceipt";
+import { PrinterProfilesModal } from "@/components/pos/PrinterProfilesModal";
+import { getDesktopBridge } from "@/lib/desktop-bridge";
 import {
   ActionButton,
   EmptyState,
@@ -40,6 +43,12 @@ function AdminPosSales() {
   const [refundVariants, setRefundVariants] = useState<Record<string, string>>({});
   const [voidReason, setVoidReason] = useState("");
   const [lookup, setLookup] = useState("");
+  const [exchangeMode, setExchangeMode] = useState(false);
+  const [replacementKey, setReplacementKey] = useState("");
+  const [replacementLines, setReplacementLines] = useState<Record<string, number>>({});
+  const [replacementEmployees, setReplacementEmployees] = useState<Record<string, string>>({});
+  const [exchangePaymentMethod, setExchangePaymentMethod] = useState<"cash" | "card" | "jazzcash" | "easypaisa" | "bank_transfer">("cash");
+  const [showPrinterProfiles, setShowPrinterProfiles] = useState(false);
 
   const { data: salesResponse, isLoading: loading } = useQuery({
     queryKey: queryKeys.admin.posSalesList({ page, query }),
@@ -53,7 +62,24 @@ function AdminPosSales() {
     queryKey: ["admin", "products"],
     queryFn: async () => (await adminCatalogApi.products()).products as Product[],
   });
-  const products = catalogData ?? [];
+  const products = useMemo(() => catalogData ?? [], [catalogData]);
+  const { data: employeesData } = useQuery({
+    queryKey: ["admin", "employees"],
+    queryFn: async () => (await adminEmployeesApi.employees()).employees,
+  });
+  const employees = useMemo(() => (employeesData ?? []).filter((employee) => employee.status === "active"), [employeesData]);
+  const replacementChoices = useMemo(
+    () => products.flatMap((product) => product.variants.length > 0
+      ? product.variants.filter((variant) => variant.isActive).map((variant) => ({
+          key: `${product.id}:${variant.id}`,
+          productId: product.id,
+          variantId: variant.id,
+          label: `${product.name} | ${[variant.size, variant.colorName].filter(Boolean).join(" / ")}`,
+          stock: variant.stock,
+        }))
+      : [{ key: product.id, productId: product.id, variantId: null, label: product.name, stock: product.stock }]),
+    [products],
+  );
 
   const { data: syncDiagnostics } = useQuery({
     queryKey: queryKeys.admin.syncDiagnostics,
@@ -91,6 +117,26 @@ function AdminPosSales() {
     onError: (error) => {
       toast.error(getErrorMessage(error, "Unable to process refund"));
     },
+  });
+  const exchangeSale = useMutation({
+    mutationFn: (payload: Parameters<typeof adminPosApi.exchangePosSale>[1] & { saleNumber: string }) =>
+      adminPosApi.exchangePosSale(payload.saleNumber, payload),
+    onSuccess: async ({ sale }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.posSales }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventorySnapshot }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.inventoryLedger }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.commissions }),
+        queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
+      ]);
+      setView(sale);
+      setExchangeMode(false);
+      setReplacementLines({});
+      setReplacementEmployees({});
+      setRefundItems({});
+      toast.success("Exchange completed");
+    },
+    onError: (error) => toast.error(getErrorMessage(error, "Unable to complete exchange")),
   });
   const voidSale = useMutation({
     mutationFn: (payload: { saleNumber: string; reason: string }) =>
@@ -321,6 +367,8 @@ function AdminPosSales() {
             setRefundNote("");
             setRefundItems({});
             setVoidReason("");
+            setExchangeMode(false);
+            setReplacementLines({});
           }}
           wide
           footer={
@@ -331,6 +379,18 @@ function AdminPosSales() {
                 onClick={async () => {
                   const payload = await adminPosApi.recordReprint(view.saleNumber);
                   setView(payload.sale);
+                  const bridge = getDesktopBridge();
+                  if (bridge) {
+                    if (!bridge.getPrinterProfiles().receipt?.printerName) {
+                      setShowPrinterProfiles(true);
+                      toast.error("Select and save the receipt printer first");
+                      return;
+                    }
+                    await bridge.printReceipt({ sale: payload.sale, settings: settingsPayload?.settings ?? null });
+                    toast.success("Receipt sent to printer");
+                    return;
+                  }
+                  localStorage.setItem("bilal_rms_receipt_layout", JSON.stringify({ rollWidthMm: 72, contentWidthMm: 66, paddingMm: 3, orientation: "portrait" }));
                   window.print();
                 }}
               >
@@ -350,6 +410,11 @@ function AdminPosSales() {
                 <Download className="h-3.5 w-3.5" /> Download PDF
               </ActionButton>
               {view.status === "finalized" && (
+                <ActionButton variant="ghost" onClick={() => setExchangeMode((current) => !current)}>
+                  <RotateCcw className="h-3.5 w-3.5" /> {exchangeMode ? "Cancel exchange" : "Exchange products"}
+                </ActionButton>
+              )}
+              {view.status === "finalized" && !exchangeMode && (
                 <ActionButton
                 onClick={() => {
                   const items = Object.entries(refundItems)
@@ -464,7 +529,7 @@ function AdminPosSales() {
                       </div>
                     )}
                     <div className={!hasVariants ? "md:col-span-2" : ""}>
-                      <label className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">Refund qty</label>
+                      <label className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">{exchangeMode ? "Exchange qty" : "Refund qty"}</label>
                       <input
                         type="number"
                         min={0}
@@ -483,6 +548,56 @@ function AdminPosSales() {
                 );
               })}
             </div>
+
+            {view.status === "finalized" && exchangeMode && (
+              <div className="space-y-4 border border-border p-4">
+                <div className="text-xs font-semibold uppercase tracking-[0.25em]">Replacement products</div>
+                <div className="flex gap-2">
+                  <select value={replacementKey} onChange={(event) => setReplacementKey(event.target.value)} className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-sm">
+                    <option value="">Select active product or variant</option>
+                    {replacementChoices.map((choice) => <option key={choice.key} value={choice.key} disabled={choice.stock <= 0}>{choice.label} ({choice.stock} in stock)</option>)}
+                  </select>
+                  <ActionButton variant="ghost" onClick={() => {
+                    if (!replacementKey) return;
+                    setReplacementLines((current) => ({ ...current, [replacementKey]: (current[replacementKey] ?? 0) + 1 }));
+                  }}>Add</ActionButton>
+                </div>
+                {Object.entries(replacementLines).map(([key, qty]) => {
+                  const choice = replacementChoices.find((entry) => entry.key === key);
+                  if (!choice) return null;
+                  return <div key={key} className="grid gap-3 border-t border-border pt-3 md:grid-cols-[1fr_100px_180px_auto] md:items-center">
+                    <span className="text-sm">{choice.label}</span>
+                    <input type="number" min={1} max={choice.stock} value={qty} onChange={(event) => setReplacementLines((current) => ({ ...current, [key]: Math.max(1, Math.min(choice.stock, Number(event.target.value) || 1)) }))} className="border border-border bg-background px-3 py-2 text-sm" />
+                    <select value={replacementEmployees[key] ?? ""} onChange={(event) => setReplacementEmployees((current) => ({ ...current, [key]: event.target.value }))} className="border border-border bg-background px-3 py-2 text-sm" aria-label={`Salesperson for ${choice.label}`}>
+                      <option value="">No salesperson</option>
+                      {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+                    </select>
+                    <button type="button" onClick={() => {
+                      setReplacementLines((current) => { const next = { ...current }; delete next[key]; return next; });
+                      setReplacementEmployees((current) => { const next = { ...current }; delete next[key]; return next; });
+                    }} className="p-2 hover:bg-secondary"><Ban className="h-3.5 w-3.5" /></button>
+                  </div>;
+                })}
+                <select value={exchangePaymentMethod} onChange={(event) => setExchangePaymentMethod(event.target.value as typeof exchangePaymentMethod)} className="w-full border border-border bg-background px-3 py-2 text-sm">
+                  <option value="cash">Cash difference</option><option value="card">Card</option><option value="jazzcash">JazzCash</option><option value="easypaisa">EasyPaisa</option><option value="bank_transfer">Bank transfer</option>
+                </select>
+                <ActionButton onClick={() => {
+                  const returns = Object.entries(refundItems).filter(([, qty]) => qty > 0).map(([saleItemId, qty]) => {
+                    const line = view.items.find((item) => item.id === saleItemId)!;
+                    return { saleItemId, productId: line.productId, variantId: line.variantId, qty };
+                  });
+                  const replacements = Object.entries(replacementLines).map(([key, qty]) => {
+                    const choice = replacementChoices.find((entry) => entry.key === key)!;
+                    return { productId: choice.productId, variantId: choice.variantId, employeeId: replacementEmployees[key] || null, qty };
+                  });
+                  if (returns.length === 0 || replacements.length === 0) {
+                    toast.error("Select returned quantities and at least one replacement product");
+                    return;
+                  }
+                  exchangeSale.mutate({ saleNumber: view.saleNumber, idempotencyKey: `admin-exchange-${crypto.randomUUID()}`, reason: refundReason || "Counter exchange", note: refundNote, paymentMethod: exchangePaymentMethod, returns, replacements });
+                }}>Complete exchange</ActionButton>
+              </div>
+            )}
 
             {view.status === "finalized" && (
               <>
@@ -508,6 +623,7 @@ function AdminPosSales() {
           </div>
         </Modal>
       )}
+      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} />}
     </div>
   );
 }

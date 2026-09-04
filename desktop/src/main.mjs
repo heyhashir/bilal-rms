@@ -216,6 +216,10 @@ const startStaticServer = async (frontendDir) =>
   });
 
 const printReceipt = async ({ sale, settings }) => {
+  const profile = store.getPrinterProfiles().receipt;
+  if (!profile?.printerName) {
+    throw new Error("Select and save a receipt printer preset before printing");
+  }
   const printWindow = new BrowserWindow({
     show: false,
     webPreferences: {
@@ -223,13 +227,34 @@ const printReceipt = async ({ sale, settings }) => {
     },
   });
 
-  const html = createReceiptHtml({ sale, settings });
+  const html = createReceiptHtml({ sale, settings, profile });
+  const snapshot = sale.receipt?.documentSnapshot ?? {};
+  const policy = snapshot.receipt ?? {};
+  const policyLineCount = [
+    policy.guaranteePolicy || settings?.guaranteePolicy,
+    policy.exchangePolicy || settings?.exchangePolicy,
+    policy.returnPolicy || settings?.returnPolicy,
+    policy.notes || settings?.receiptNotes,
+    policy.saleItemPolicy || settings?.saleItemPolicy,
+    policy.footer || settings?.thermalFooter,
+  ].filter(Boolean).length;
+  const estimatedHeightMm = Math.max(
+    100,
+    105 + sale.items.length * 12 + policyLineCount * 7 + (sale.sourceExchange ? 28 : 0),
+  );
   await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
   await new Promise((resolve, reject) => {
     printWindow.webContents.print(
       {
-        silent: false,
+        silent: true,
+        deviceName: profile.printerName,
         printBackground: true,
+        landscape: Boolean(profile.landscape),
+        copies: Math.max(1, Number(profile.copies) || 1),
+        pageSize: {
+          width: Math.round((Number(profile.rollWidthMm) || 72) * 1000),
+          height: Math.round(estimatedHeightMm * 1000),
+        },
         margins: {
           marginType: "none",
         },
@@ -248,6 +273,12 @@ const printReceipt = async ({ sale, settings }) => {
 };
 
 const printBarcodeStickers = async ({ html, widthMm = 38, heightMm = 25, landscape = false }) => {
+  const profile = store.getPrinterProfiles().sticker;
+  if (!profile?.printerName) {
+    throw new Error("Select and save a sticker printer preset before printing");
+  }
+  const profileWidth = Number(profile.widthMm) || widthMm;
+  const profileHeight = Number(profile.heightMm) || heightMm;
   const printWindow = new BrowserWindow({
     show: false,
     webPreferences: {
@@ -255,19 +286,25 @@ const printBarcodeStickers = async ({ html, widthMm = 38, heightMm = 25, landsca
     },
   });
 
-  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  const adjustedHtml = html.replace(
+    "</head>",
+    `<style>.barcode-sticker-inner{position:relative!important;left:${Number(profile.offsetXmm) || 0}mm!important;top:${Number(profile.offsetYmm) || 0}mm!important}</style></head>`,
+  );
+  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(adjustedHtml)}`);
   await new Promise((resolve, reject) => {
     printWindow.webContents.print(
       {
-        silent: false,
+        silent: true,
+        deviceName: profile.printerName,
         printBackground: true,
-        landscape: Boolean(landscape),
+        landscape: [90, 270].includes(Number(profile.orientation)) || Boolean(landscape),
+        copies: Math.max(1, Number(profile.copies) || 1),
         margins: {
           marginType: "none",
         },
         pageSize: {
-          width: Math.round(widthMm * 1000),
-          height: Math.round(heightMm * 1000),
+          width: Math.round(profileWidth * 1000),
+          height: Math.round((profileHeight + Math.max(0, Number(profile.gapMm) || 0)) * 1000),
         },
       },
       (success, failureReason) => {
@@ -342,6 +379,9 @@ const registerIpc = () => {
   ipcMain.on("bilal-desktop:load-queued-refunds", (event) => {
     event.returnValue = store.loadQueuedRefunds();
   });
+  ipcMain.on("bilal-desktop:load-queued-exchanges", (event) => {
+    event.returnValue = store.loadQueuedExchanges();
+  });
 
   ipcMain.on("bilal-desktop:queue-pos-sale", (_event, sale) => {
     store.queuePosSale(sale);
@@ -356,12 +396,21 @@ const registerIpc = () => {
   ipcMain.on("bilal-desktop:remove-queued-refund", (_event, jobKey) => {
     store.removeQueuedRefund(jobKey);
   });
+  ipcMain.on("bilal-desktop:queue-pos-exchange", (_event, exchange) => {
+    store.queuePosExchange(exchange);
+  });
+  ipcMain.on("bilal-desktop:remove-queued-exchange", (_event, jobKey) => {
+    store.removeQueuedExchange(jobKey);
+  });
 
   ipcMain.on("bilal-desktop:persist-offline-sale", (event, payload) => {
     event.returnValue = store.persistOfflineSale(payload);
   });
   ipcMain.on("bilal-desktop:persist-offline-refund", (event, payload) => {
     event.returnValue = store.persistOfflineRefund(payload);
+  });
+  ipcMain.on("bilal-desktop:persist-offline-exchange", (event, payload) => {
+    event.returnValue = store.persistOfflineExchange(payload);
   });
 
   ipcMain.on("bilal-desktop:list-offline-receipts", (event) => {
@@ -400,6 +449,20 @@ const registerIpc = () => {
   ipcMain.handle("bilal-desktop:print-stickers", async (_event, payload) => {
     await printBarcodeStickers(payload);
     return { ok: true };
+  });
+  ipcMain.handle("bilal-desktop:list-printers", async () => {
+    const printers = await mainWindow.webContents.getPrintersAsync();
+    return printers.map((printer) => ({
+      name: printer.name,
+      displayName: printer.displayName || printer.name,
+      isDefault: Boolean(printer.isDefault),
+    }));
+  });
+  ipcMain.on("bilal-desktop:get-printer-profiles", (event) => {
+    event.returnValue = store.getPrinterProfiles();
+  });
+  ipcMain.on("bilal-desktop:save-printer-profiles", (event, profiles) => {
+    event.returnValue = store.savePrinterProfiles(profiles);
   });
 
   ipcMain.handle("bilal-desktop:check-for-updates", async (_event, payload) => {

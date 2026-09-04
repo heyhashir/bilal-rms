@@ -40,11 +40,13 @@ function AdminCommissions() {
     return entries.reduce(
       (summary, entry) => {
         if (entry.status === "paid") summary.paid += entry.amount;
-        else if (entry.status === "reversed") summary.reversed += entry.amount;
-        else summary.earned += entry.amount;
+        else {
+          summary.cancelled += entry.cancelledAmount;
+          summary.earned += Math.max(0, entry.amount - entry.cancelledAmount);
+        }
         return summary;
       },
-      { earned: 0, paid: 0, reversed: 0 },
+      { earned: 0, paid: 0, cancelled: 0 },
     );
   }, [entries]);
 
@@ -53,7 +55,7 @@ function AdminCommissions() {
       <PageHeader
         eyebrow="Commission"
         title={`Commission ledger (${meta?.total ?? entries.length})`}
-        description={`Earned ${formatPrice(totals.earned)} | Paid ${formatPrice(totals.paid)} | Reversed ${formatPrice(totals.reversed)}`}
+        description={`Payable ${formatPrice(totals.earned)} | Paid ${formatPrice(totals.paid)} | Cancelled ${formatPrice(totals.cancelled)}`}
         action={
           <ActionButton variant="ghost" onClick={() => window.open(adminCommissionsApi.exportUrl({ query }), "_blank")}>
             Export CSV
@@ -108,13 +110,16 @@ function AdminCommissions() {
                         : "—"}
                   </td>
                   <td className="p-3">{entry.rate}%</td>
-                  <td className="p-3 font-semibold">{formatPrice(entry.amount)}</td>
+                  <td className="p-3 font-semibold">
+                    {formatPrice(Math.max(0, entry.amount - entry.cancelledAmount))}
+                    {entry.cancelledAmount > 0 && <div className="text-xs font-normal text-muted-foreground">Cancelled {formatPrice(entry.cancelledAmount)}</div>}
+                  </td>
                   <td className="p-3">
                     <StatusPill status={entry.status} />
                   </td>
                   <td className="p-3">
                     <div className="flex justify-end">
-                      {entry.status !== "paid" && entry.amount > 0 && (
+                      {entry.status === "earned" && entry.amount - entry.cancelledAmount > 0 && (
                         <ActionButton variant="ghost" onClick={() => markPaid.mutate(entry)}>
                           <CheckCircle2 className="h-3.5 w-3.5" /> Mark paid
                         </ActionButton>

@@ -145,7 +145,9 @@ test.describe("Bilal RMS live-safe smoke", () => {
     const saleNumber = createdSalePayload?.data?.sale?.saleNumber ?? "";
     const receiptNumber = createdSalePayload?.data?.sale?.receipt?.receiptNumber ?? "";
     const invoiceNumber = createdSalePayload?.data?.sale?.receipt?.invoiceNumber ?? "";
+    const lookupCode = createdSalePayload?.data?.sale?.receipt?.lookupCode ?? "";
     expect(invoiceNumber).toMatch(/^[A-Z]+[0-9]{6}$/);
+    expect(lookupCode).toMatch(/^BI-[0-9A-Z]{4}$/);
     await expect(page.locator(".pos-receipt")).toBeVisible();
     await expect(page.locator(".pos-receipt").getByText("Retail", { exact: true })).toBeVisible();
     await expect(page.locator(".pos-receipt").getByText("Charged", { exact: true })).toBeVisible();
@@ -197,7 +199,7 @@ test.describe("Bilal RMS live-safe smoke", () => {
 
     await page.goto("/admin/pos-sales");
     const invoiceLookup = page.getByPlaceholder("Exact invoice number, receipt ID, or scanner input");
-    await invoiceLookup.fill(invoiceNumber);
+    await invoiceLookup.fill(lookupCode);
     await invoiceLookup.press("Enter");
     await expect(page.getByRole("heading", { name: `POS sale ${saleNumber}` })).toBeVisible();
     await page.getByLabel("Administrator cancellation reason").fill("Live-safe smoke correction");
@@ -211,17 +213,18 @@ test.describe("Bilal RMS live-safe smoke", () => {
     await voidResponse;
     await expect(page.getByText(/Voided by .*Live-safe smoke correction/)).toBeVisible();
 
-    const reversalExists = await page.evaluate(async ({ employeeName, targetSale }) => {
+    const cancellationExists = await page.evaluate(async ({ employeeName, targetSale }) => {
       const response = await fetch("/api/v1/admin/commissions", { credentials: "include" });
       const payload = await response.json();
       return payload.data.commissions.some(
-        (entry: { employeeName: string; saleNumber: string; status: string; amount: number }) =>
+        (entry: { employeeName: string; saleNumber: string; status: string; amount: number; cancelledAmount: number }) =>
           entry.employeeName === employeeName &&
           entry.saleNumber === targetSale &&
-          entry.status === "reversed" &&
-          Number(entry.amount) < 0,
+          entry.status === "cancelled" &&
+          Number(entry.amount) >= 0 &&
+          Number(entry.cancelledAmount) === Number(entry.amount),
       );
     }, { employeeName: fixture.employeeName, targetSale: saleNumber });
-    expect(reversalExists).toBeTruthy();
+    expect(cancellationExists).toBeTruthy();
   });
 });

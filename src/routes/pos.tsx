@@ -9,9 +9,9 @@ import { adminCatalogApi } from "@/lib/admin-catalog-api";
 import { adminEmployeesApi } from "@/lib/admin-employees-api";
 import { adminPosApi } from "@/lib/admin-pos-api";
 import { adminSettingsApi } from "@/lib/admin-settings-api";
-import type { Employee, PosSale, PosSaleInput } from "@/lib/admin-types";
+import type { Employee, PosExchangeInput, PosSale, PosSaleInput } from "@/lib/admin-types";
 import type { DesktopUpdateManifest } from "@/lib/desktop-bridge";
-import { applySaleToCachedStock, findOfflineReceipt, getPosDeviceKey, loadPosCache, loadOfflineReceipts, loadQueuedRefunds, loadPosSyncState, loadQueuedSales, patchPosSyncState, persistOfflineSale, persistOfflineRefund, type PosRefundQueueItem, rememberReceipt, removeQueuedRefund, removeQueuedSale, savePosCache, type PosSyncState } from "@/lib/pos-local";
+import { applySaleToCachedStock, findOfflineReceipt, getPosDeviceKey, loadPosCache, loadOfflineReceipts, loadQueuedExchanges, loadQueuedRefunds, loadPosSyncState, loadQueuedSales, patchPosSyncState, persistOfflineExchange, persistOfflineSale, persistOfflineRefund, type PosRefundQueueItem, rememberReceipt, removeQueuedExchange, removeQueuedRefund, removeQueuedSale, savePosCache, type PosSyncState } from "@/lib/pos-local";
 import { getDesktopBridge } from "@/lib/desktop-bridge";
 import { formatPrice } from "@/lib/format";
 import { buildSaleChoices, matchSaleChoices, type SaleChoice } from "@/lib/pos-catalog";
@@ -20,6 +20,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { syncApi } from "@/lib/sync-api";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, SelectField, StatusPill } from "@/components/admin/primitives";
 import { PosReceipt } from "@/components/pos/PosReceipt";
+import { PrinterProfilesModal } from "@/components/pos/PrinterProfilesModal";
 
 export const Route = createFileRoute("/pos")({
   component: PosTerminal,
@@ -72,6 +73,8 @@ const paymentOptions = [
   { value: "bank_transfer", label: "Bank transfer" },
 ];
 
+const queuedJobCount = () => loadQueuedSales().length + loadQueuedRefunds().length + loadQueuedExchanges().length;
+
 function PosTerminal() {
   const { user, isPending } = useProtectedUser({ role: ["admin", "manager", "staff"] });
   const [search, setSearch] = useState("");
@@ -95,11 +98,14 @@ function PosTerminal() {
   const [refundReason, setRefundReason] = useState("Customer return");
   const [refundNote, setRefundNote] = useState("");
   const [refundQtys, setRefundQtys] = useState<Record<string, number>>({});
+  const [exchangeSource, setExchangeSource] = useState<PosSale | null>(null);
+  const [exchangeReturns, setExchangeReturns] = useState<Array<{ saleItemId: string; qty: number }>>([]);
   const [queueCount, setQueueCount] = useState(0);
   const [offlineMode, setOfflineMode] = useState(false);
   const [bootstrapError, setBootstrapError] = useState("");
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [isRefreshingCatalog, setIsRefreshingCatalog] = useState(false);
+  const [showPrinterProfiles, setShowPrinterProfiles] = useState(false);
   const bootstrapInFlight = useRef(false);
   const [initialCache] = useState(() => loadPosCache());
   const deviceKey = useMemo(() => getPosDeviceKey(), []);
@@ -114,7 +120,7 @@ function PosTerminal() {
         lastSyncError: "",
         retryCount: 0,
         failedJobs: 0,
-        queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
+        queueSize: queuedJobCount(),
       },
   );
   const canLoadPos = !isPending && Boolean(user && ["admin", "manager", "staff"].includes(user.role));
@@ -214,8 +220,9 @@ function PosTerminal() {
   const syncQueuedSales = async () => {
     const queued = loadQueuedSales();
     const queuedRefunds = loadQueuedRefunds();
+    const queuedExchanges = loadQueuedExchanges();
     const attemptedAt = Date.now();
-    if (queued.length === 0 && queuedRefunds.length === 0) {
+    if (queued.length === 0 && queuedRefunds.length === 0 && queuedExchanges.length === 0) {
       setQueueCount(0);
       updateSyncState({
         queueSize: 0,
@@ -284,7 +291,23 @@ function PosTerminal() {
       }
     }
 
-    const remaining = loadQueuedSales().length + loadQueuedRefunds().length;
+    for (const exchange of queuedExchanges) {
+      try {
+        await adminPosApi.exchangePosSale(exchange.saleNumber, exchange);
+        removeQueuedExchange(exchange.jobKey);
+        await syncApi.pushSyncEvents({
+          deviceKey,
+          cursor: syncState.lastCursor ?? undefined,
+          jobs: [{ jobKey: exchange.jobKey, direction: "push", entityType: "pos-exchange", entityId: exchange.saleNumber, payload: exchange, status: "synced" }],
+        });
+        synced += 1;
+      } catch (error) {
+        failed += 1;
+        lastError = getErrorMessage(error, "Unable to sync queued exchange");
+      }
+    }
+
+    const remaining = queuedJobCount();
     setQueueCount(remaining);
     updateSyncState({
       queueSize: remaining,
@@ -340,9 +363,9 @@ function PosTerminal() {
       setIsRefreshingCatalog(true);
       try {
         setBootstrapError("");
-        if (loadQueuedSales().length + loadQueuedRefunds().length > 0) {
+        if (queuedJobCount() > 0) {
           await syncQueuedSales();
-          if (loadQueuedSales().length + loadQueuedRefunds().length > 0) {
+          if (queuedJobCount() > 0) {
             setOfflineMode(true);
             setBootstrapError("Unable to sync queued bills and refunds. Local stock has been preserved; retry sync when connected.");
             return;
@@ -356,7 +379,7 @@ function PosTerminal() {
           });
         }
         const bootstrap = await syncApi.syncBootstrap(deviceKey, syncState.lastCursor ?? undefined);
-        if (loadQueuedSales().length + loadQueuedRefunds().length > 0) {
+        if (queuedJobCount() > 0) {
           setOfflineMode(true);
           setBootstrapError("Local bills are awaiting sync. Cached stock has been preserved.");
           return;
@@ -385,7 +408,7 @@ function PosTerminal() {
           lastCursor: bootstrap.cursor,
           lastBootstrapAt: Date.now(),
           lastSyncError: "",
-          queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
+          queueSize: queuedJobCount(),
         });
         void syncQueuedSales();
       } catch (error) {
@@ -395,12 +418,12 @@ function PosTerminal() {
         updateSyncState({
           lastSyncAttemptAt: Date.now(),
           lastSyncError: message,
-          queueSize: loadQueuedSales().length + loadQueuedRefunds().length,
+          queueSize: queuedJobCount(),
         });
       } finally {
         bootstrapInFlight.current = false;
         setIsRefreshingCatalog(false);
-        setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
+        setQueueCount(queuedJobCount());
         setStoredReceipts(loadOfflineReceipts());
         if (desktopBridge) {
           void checkDesktopUpdate();
@@ -532,6 +555,19 @@ function PosTerminal() {
   const handleScanOrSubmit = useCallback((codeToSearch: string) => {
     const target = codeToSearch.trim();
     if (!target) return;
+    if (/^BI-[0-9A-Z]{4}$/i.test(target)) {
+      setReceiptLookup(target.toUpperCase());
+      void adminPosApi.findPosSale(target).then((response) => {
+        rememberReceipt(response.sale);
+        setStoredReceipts(loadOfflineReceipts());
+        setReceipt(response.sale);
+        playScanBeep("success");
+      }).catch((error) => {
+        playScanBeep("error");
+        toast.error(getErrorMessage(error, "Invoice not found"));
+      });
+      return;
+    }
     if (isRefreshingCatalog && choices.length === 0) {
       toast.info("Catalog is loading. Please scan again when products appear.");
       return;
@@ -628,7 +664,7 @@ function PosTerminal() {
       settings,
     });
     applySaleToCachedStock(payload);
-    setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
+    setQueueCount(queuedJobCount());
     toast.success("Sale saved locally and queued for sync");
     setReceipt(offlineReceipt);
     setStoredReceipts(loadOfflineReceipts());
@@ -681,7 +717,7 @@ function PosTerminal() {
 
       setReceipt(nextReceipt);
       setStoredReceipts(loadOfflineReceipts());
-      setQueueCount(loadQueuedSales().length + loadQueuedRefunds().length);
+      setQueueCount(queuedJobCount());
       toast.success("Refund saved locally and queued for sync");
       return;
     }
@@ -722,6 +758,26 @@ function PosTerminal() {
     }
   };
 
+  const startExchange = () => {
+    if (!receipt) return;
+    const returns = receipt.items
+      .map((line) => ({ saleItemId: line.id, productId: line.productId, variantId: line.variantId, qty: Math.max(0, refundQtys[line.id] ?? 0), max: line.qty - line.refundedQty }))
+      .filter((entry) => entry.qty > 0 && entry.qty <= entry.max)
+      .map(({ saleItemId, productId, variantId, qty }) => ({ saleItemId, productId, variantId, qty }));
+    if (returns.length === 0) {
+      toast.error("Enter the quantity to exchange beside at least one item");
+      return;
+    }
+    setExchangeSource(receipt);
+    setExchangeReturns(returns);
+    setCustomerName(receipt.customerName);
+    setCustomerPhone(receipt.customerPhone);
+    setCustomerEmail(receipt.customerEmail);
+    setCart([]);
+    setReceipt(null);
+    toast.info("Select the replacement products, then finalize the exchange");
+  };
+
   const checkout = async () => {
     if (cart.length === 0) {
       toast.error("Add at least one item to the bill");
@@ -746,6 +802,41 @@ function PosTerminal() {
         unitPrice: line.unitPrice,
       })),
     };
+
+    if (exchangeSource) {
+      const jobKey = `exchange-${exchangeSource.saleNumber}-${crypto.randomUUID()}`;
+      const exchange: PosExchangeInput = {
+        jobKey,
+        idempotencyKey: jobKey,
+        saleNumber: exchangeSource.saleNumber,
+        reason: refundReason.trim() || "Customer exchange",
+        note: notes,
+        paymentMethod,
+        deviceKey,
+        deviceName: "Shop POS",
+        returns: exchangeReturns,
+        replacements: payload.lines,
+      };
+      try {
+        const replacement = offlineMode || !navigator.onLine
+          ? persistOfflineExchange({ exchange, employees, settings })
+          : (await adminPosApi.exchangePosSale(exchange.saleNumber, exchange)).sale;
+        if (!replacement) throw new Error("The original receipt is not available offline");
+        rememberReceipt(replacement);
+        setReceipt(replacement);
+        setStoredReceipts(loadOfflineReceipts());
+        setCart([]);
+        setExchangeSource(null);
+        setExchangeReturns([]);
+        setNotes("");
+        setQueueCount(queuedJobCount());
+        toast.success(offlineMode || !navigator.onLine ? "Exchange saved locally and queued" : "Exchange completed");
+        setBootstrapAttempt((current) => current + 1);
+      } catch (error) {
+        toast.error(getErrorMessage(error, "Unable to complete exchange"));
+      }
+      return;
+    }
 
     if (offlineMode || !navigator.onLine) {
       queueCurrentSale();
@@ -805,6 +896,15 @@ function PosTerminal() {
           </>
         }
       />
+
+      {exchangeSource && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-amber-500 bg-amber-50 p-4 text-sm text-black">
+          <div>
+            <strong>Exchange in progress:</strong> {exchangeSource.receipt?.lookupCode || exchangeSource.receipt?.invoiceNumber || exchangeSource.saleNumber}. Add replacement products and finalize the bill.
+          </div>
+          <ActionButton variant="ghost" onClick={() => { setExchangeSource(null); setExchangeReturns([]); setCart([]); }}>Cancel exchange</ActionButton>
+        </div>
+      )}
 
       {!settings || productsQuery.isLoading || employeesQuery.isLoading || settingsQuery.isLoading ? (
         <div className="space-y-4">
@@ -1085,6 +1185,7 @@ function PosTerminal() {
                   {desktopUpdate?.notes && <div>Release notes: {desktopUpdate.notes}</div>}
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
+                  <ActionButton variant="ghost" onClick={() => setShowPrinterProfiles(true)}>Change printer presets</ActionButton>
                   <ActionButton variant="ghost" onClick={() => void checkDesktopUpdate(true)} disabled={isCheckingUpdate || isInstallingUpdate}>
                     <RefreshCcw className={`mr-2 h-3.5 w-3.5 ${isCheckingUpdate ? "animate-spin" : ""}`} />
                     {isCheckingUpdate ? "Checking..." : "Check now"}
@@ -1156,6 +1257,11 @@ function PosTerminal() {
                   }
                   const bridge = getDesktopBridge();
                   if (bridge) {
+                    if (!bridge.getPrinterProfiles().receipt?.printerName) {
+                      setShowPrinterProfiles(true);
+                      toast.error("Select and save the receipt printer first");
+                      return;
+                    }
                     try {
                       await bridge.printReceipt({ sale: printableReceipt, settings });
                       toast.success("Receipt sent to printer");
@@ -1165,6 +1271,7 @@ function PosTerminal() {
                     return;
                   }
 
+                  localStorage.setItem("bilal_rms_receipt_layout", JSON.stringify({ rollWidthMm: 72, contentWidthMm: 66, paddingMm: 3, orientation: "portrait" }));
                   window.print();
                 }}
               >
@@ -1210,15 +1317,17 @@ function PosTerminal() {
                 <Field label="Refund reason" value={refundReason} onChange={setRefundReason} />
                 <Field label="Refund note" value={refundNote} onChange={setRefundNote} textarea />
                 <div className="flex justify-end">
-                  <ActionButton variant="ghost" onClick={() => void processRefund()}>
-                    Process refund
-                  </ActionButton>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <ActionButton variant="ghost" onClick={startExchange}>Exchange selected products</ActionButton>
+                    <ActionButton variant="ghost" onClick={() => void processRefund()}>Process refund</ActionButton>
+                  </div>
                 </div>
               </div>
             </div>}
           </div>
         </Modal>
       )}
+      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} />}
     </div>
   );
 }

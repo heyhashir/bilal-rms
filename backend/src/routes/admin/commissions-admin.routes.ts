@@ -11,7 +11,7 @@ const router = Router();
 
 
 const commissionStatusSchema = z.object({
-  status: z.enum(['earned', 'reversed', 'paid']),
+  status: z.enum(['earned', 'paid']),
   note: z.string().optional().or(z.literal('')),
 });
 

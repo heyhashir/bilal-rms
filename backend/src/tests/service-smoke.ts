@@ -16,6 +16,17 @@ import { compareVersions, newestVersion } from '../utils/versions';
 const prefix = `svc-${Date.now().toString(36)}`;
 
 const cleanup = async () => {
+  const exchangeSources = await prisma.posSale.findMany({
+    where: { saleNumber: { startsWith: prefix.toUpperCase() } },
+    select: { id: true },
+  });
+  const exchanges = await prisma.posExchange.findMany({
+    where: { sourceSaleId: { in: exchangeSources.map((sale) => sale.id) } },
+    select: { id: true, replacementSaleId: true },
+  });
+  await prisma.ledgerEntry.deleteMany({ where: { posSaleId: { in: exchanges.map((exchange) => exchange.replacementSaleId) } } });
+  await prisma.posExchange.deleteMany({ where: { id: { in: exchanges.map((exchange) => exchange.id) } } });
+  await prisma.posSale.deleteMany({ where: { id: { in: exchanges.map((exchange) => exchange.replacementSaleId) } } });
   await prisma.ledgerEntry.deleteMany({
     where: {
       OR: [
@@ -182,6 +193,7 @@ const run = async () => {
   assert.equal(sale.payments.length, 1, 'POS finalization should create a payment');
   assert.match(sale.receipt!.invoiceNumber, /^[A-Z]+[0-9]{6}$/, 'invoice should use the stable sequence format');
   assert.ok((sale.receipt!.invoiceSequence ?? 0) > 0, 'invoice should retain its numeric sequence');
+  assert.match(sale.receipt!.lookupCode ?? '', /^BI-[0-9A-Z]{4}$/, 'receipt should have a compact scanner lookup code');
   assert.equal(sale.items[0].retailPrice.toString(), '1500', 'sale item should snapshot the retail price');
   assert.equal(sale.retailSubtotal.toString(), '1500', 'sale should snapshot the retail subtotal');
 
@@ -189,6 +201,8 @@ const run = async () => {
   assert.equal(saleByInvoice.id, sale.id, 'invoice lookup should resolve the exact sale');
   const saleByReceipt = await posService.findSale(sale.receipt!.receiptNumber);
   assert.equal(saleByReceipt.id, sale.id, 'receipt lookup should resolve the exact sale');
+  const saleByLookupCode = await posService.findSale(sale.receipt!.lookupCode!);
+  assert.equal(saleByLookupCode.id, sale.id, 'short scanner code should resolve the exact sale');
   const recordsBeforeReprint = {
     movements: await prisma.inventoryMovement.count({ where: { posSaleId: sale.id } }),
     commissions: await prisma.commissionEntry.count({ where: { saleId: sale.id } }),
@@ -255,14 +269,15 @@ const run = async () => {
   });
   assert.ok(refundMovement, 'refund should create a POS refund inventory movement');
 
-  const reversedCommission = await prisma.commissionEntry.findFirst({
+  const cancelledCommission = await prisma.commissionEntry.findFirst({
     where: {
       saleId: sale.id,
       employeeId: employee.id,
-      status: 'REVERSED',
     },
   });
-  assert.ok(reversedCommission, 'refund should create a reversed commission entry');
+  assert.equal(cancelledCommission?.status, 'CANCELLED', 'refund should cancel unpaid commission without a reversal row');
+  assert.equal(Number(cancelledCommission?.cancelledAmount), Number(cancelledCommission?.amount), 'full refund should cancel the full unpaid commission');
+  assert.equal(await prisma.commissionEntry.count({ where: { saleId: sale.id, amount: { lt: 0 } } }), 0, 'refund must not create negative commission rows');
 
   await assert.rejects(
     () =>
@@ -383,9 +398,11 @@ const run = async () => {
   assert.ok(voidMovement, 'void should create a dedicated stock movement');
 
   const voidCommission = await prisma.commissionEntry.findFirst({
-    where: { saleId: voidCandidate.id, status: 'REVERSED', amount: { lt: 0 } },
+    where: { saleId: voidCandidate.id },
   });
-  assert.ok(voidCommission, 'void should reverse the earned commission');
+  assert.equal(voidCommission?.status, 'CANCELLED', 'void should cancel the unpaid earned commission');
+  assert.equal(Number(voidCommission?.cancelledAmount), Number(voidCommission?.amount), 'void should cancel the full unpaid amount');
+  assert.equal(await prisma.commissionEntry.count({ where: { saleId: voidCandidate.id, amount: { lt: 0 } } }), 0, 'void must not create negative commission rows');
 
   const voidLedger = await prisma.ledgerEntry.findFirst({
     where: {
@@ -406,6 +423,63 @@ const run = async () => {
     (error: unknown) => error instanceof ApiError && error.statusCode === 409,
     'voiding the same invoice twice should be rejected',
   );
+
+  const exchangeSource = await posService.createSale({
+    saleNumber: `${prefix.toUpperCase()}-EXCHANGE`,
+    paymentMethod: 'cash',
+    paidAmount: 3000,
+    status: 'finalized',
+    lines: [{ productId: product.id, employeeId: employee.id, qty: 2 }],
+  });
+  const stockBeforeEqualExchange = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock;
+  const equalExchange = await posService.exchangeSale({
+    saleNumber: exchangeSource.saleNumber,
+    idempotencyKey: `${prefix}-exchange-equal`,
+    reason: 'Equal value exchange',
+    paymentMethod: 'cash',
+    returns: [{ saleItemId: exchangeSource.items[0].id, qty: 1 }],
+    replacements: [{ productId: product.id, qty: 1, unitPrice: 1500, employeeId: employee.id }],
+  });
+  assert.equal(equalExchange.replacementExchange?.settlementDirection, 'EVEN', 'equal-value exchange should not collect or refund cash');
+  assert.equal((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock, stockBeforeEqualExchange, 'equal exchange should return and consume one stock unit atomically');
+  const duplicateEqualExchange = await posService.exchangeSale({
+    saleNumber: exchangeSource.saleNumber,
+    idempotencyKey: `${prefix}-exchange-equal`,
+    reason: 'Retry',
+    paymentMethod: 'cash',
+    returns: [{ saleItemId: exchangeSource.items[0].id, qty: 1 }],
+    replacements: [{ productId: product.id, qty: 1, unitPrice: 1500 }],
+  });
+  assert.equal(duplicateEqualExchange.id, equalExchange.id, 'exchange retry should return the original replacement sale exactly once');
+
+  const higherExchange = await posService.exchangeSale({
+    saleNumber: exchangeSource.saleNumber,
+    idempotencyKey: `${prefix}-exchange-higher`,
+    reason: 'Higher value exchange',
+    paymentMethod: 'card',
+    returns: [{ saleItemId: exchangeSource.items[0].id, qty: 1 }],
+    replacements: [{ productId: product.id, qty: 1, unitPrice: 1700, employeeId: employee.id }],
+  });
+  assert.equal(Number(higherExchange.replacementExchange?.settlementAmount), 200, 'higher exchange should collect only the price difference');
+  assert.equal(higherExchange.replacementExchange?.settlementDirection, 'COLLECT', 'higher exchange should be marked collect');
+
+  const lowerSource = await posService.createSale({
+    saleNumber: `${prefix.toUpperCase()}-EXCHANGE-LOWER`,
+    paymentMethod: 'cash',
+    paidAmount: 1500,
+    status: 'finalized',
+    lines: [{ productId: product.id, qty: 1 }],
+  });
+  const lowerExchange = await posService.exchangeSale({
+    saleNumber: lowerSource.saleNumber,
+    idempotencyKey: `${prefix}-exchange-lower`,
+    reason: 'Lower value exchange',
+    paymentMethod: 'cash',
+    returns: [{ saleItemId: lowerSource.items[0].id, qty: 1 }],
+    replacements: [{ productId: product.id, qty: 1, unitPrice: 1200 }],
+  });
+  assert.equal(Number(lowerExchange.replacementExchange?.settlementAmount), 300, 'lower exchange should refund only the price difference');
+  assert.equal(lowerExchange.replacementExchange?.settlementDirection, 'REFUND', 'lower exchange should be marked refund');
 
   const variantProduct = await catalogAdminService.saveProduct({
     slug: `${prefix}-variant-product`,
@@ -596,6 +670,7 @@ const run = async () => {
   assert.equal(soldVariantAfterSale.stock, 6, 'refund should restore only the returned variant');
   assert.equal(untouchedVariantAfterSale.stock, 7, 'refund should leave unrelated variants unchanged');
 
+  const stockBeforeAdjustment = (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock;
   await inventoryService.adjustInventory({
     productId: product.id,
     delta: 4,
@@ -603,7 +678,7 @@ const run = async () => {
   });
 
   refreshedProduct = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
-  assert.equal(refreshedProduct.stock, 14, 'inventory adjustment should update stock');
+  assert.equal(refreshedProduct.stock, stockBeforeAdjustment + 4, 'inventory adjustment should update stock');
 
   const adjustmentMovement = await prisma.inventoryMovement.findFirst({
     where: {
@@ -626,6 +701,9 @@ const run = async () => {
     note: `${prefix} purchase`,
     adminAccountId: admin.id,
   });
+  const purchaseLedger = await prisma.ledgerEntry.findUniqueOrThrow({ where: { vendorPurchaseId: vendorPurchase.id } });
+  assert.equal(purchaseLedger.vendorId, vendor.id, 'purchase ledger should link directly to its vendor');
+  assert.equal((await backofficeService.listLedgerEntries({ vendorId: vendor.id })).every((entry) => entry.vendorId === vendor.id), true, 'vendor ledger filtering should return only that vendor');
   assert.equal(
     (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).stock,
     stockBeforePurchase + 3,

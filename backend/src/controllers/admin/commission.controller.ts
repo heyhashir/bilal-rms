@@ -23,7 +23,7 @@ export const exportCommissions = async (req: Request, res: Response) => {
   );
 
   const csv = toCsv(
-    ['date', 'employee', 'saleNumber', 'product', 'qty', 'refundedQty', 'unitCost', 'totalCost', 'rate', 'commissionAmount', 'status', 'note'],
+    ['date', 'employee', 'saleNumber', 'product', 'qty', 'refundedQty', 'unitCost', 'totalCost', 'rate', 'commissionAmount', 'cancelledAmount', 'payableAmount', 'status', 'note'],
     commissions.map((entry) => {
       const unitCost = Number(entry.saleItem.unitCost ?? 0);
       const effectiveQty = Math.max(0, entry.saleItem.qty - entry.saleItem.refundedQty);
@@ -38,6 +38,8 @@ export const exportCommissions = async (req: Request, res: Response) => {
         totalCost: unitCost * (effectiveQty > 0 ? effectiveQty : entry.saleItem.qty),
         rate: Number(entry.rate),
         commissionAmount: Number(entry.amount),
+        cancelledAmount: Number(entry.cancelledAmount),
+        payableAmount: Math.max(0, Number(entry.amount) - Number(entry.cancelledAmount)),
         status: entry.status,
         note: entry.note,
       };

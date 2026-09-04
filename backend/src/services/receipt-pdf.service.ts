@@ -38,6 +38,7 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
   const store = snapshot.store ?? {};
   const policy = snapshot.receipt ?? {};
   const receiptId = sale.receipt.receiptNumber;
+  const lookupCode = sale.receipt.lookupCode || sale.receipt.invoiceNumber;
   const currency = store.currencySymbol || settings.currencySymbol || 'Rs.';
   const retailSubtotal =
     Number(sale.retailSubtotal) ||
@@ -55,11 +56,11 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
   ].filter(Boolean);
   const pageHeight = Math.max(520, 360 + sale.items.length * 30 + policies.length * 26);
   const doc = new PDFDocument({
-    size: [226.77, pageHeight],
-    margins: { top: 12, right: 12, bottom: 12, left: 12 },
+    size: [204.09, pageHeight],
+    margins: { top: 8.5, right: 8.5, bottom: 8.5, left: 8.5 },
     info: {
       Title: `Receipt ${sale.receipt.invoiceNumber}`,
-      Author: store.name || settings.storeName,
+      Author: 'BILAL GARMENTS',
     },
   });
   const chunks: Buffer[] = [];
@@ -82,7 +83,7 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
     doc.y = y + Math.max(10, valueHeight + 2);
   };
 
-  doc.font('Helvetica-Bold').fontSize(15).text(store.name || settings.storeName, { align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(15).text('BILAL GARMENTS', { align: 'center' });
   doc.font('Helvetica').fontSize(8).text(store.address || settings.address, { align: 'center' });
   doc.text(store.phone || settings.phone, { align: 'center' });
   if (store.taxNumber || settings.taxNumber) {
@@ -92,6 +93,7 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
 
   const createdAt = sale.finalizedAt || sale.createdAt;
   row('Invoice No', sale.receipt.invoiceNumber, true);
+  row('Scan Code', lookupCode, true);
   row('Receipt ID', receiptId, true);
   row('Date / Time', createdAt.toLocaleString('en-PK'));
   row('Associate', sale.items.map((item) => item.employee?.name).find(Boolean) || 'Admin');
@@ -100,7 +102,7 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
   row('Status', sale.status);
   divider();
 
-  const columns = [72, 16, 35, 37, 42];
+  const columns = [width * 0.33, width * 0.09, width * 0.19, width * 0.2, width * 0.19];
   const headers = ['Item', 'Qty', 'Retail', 'Charged', 'Subtotal'];
   let x = doc.page.margins.left;
   const headerY = doc.y;
@@ -150,6 +152,22 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
   row('Cash Received', `${currency} ${money(sale.paidAmount)}`);
   row('Change Returned', `${currency} ${money(sale.changeAmount)}`);
 
+  if (sale.replacementExchange) {
+    divider();
+    doc.font('Helvetica-Bold').fontSize(9).text(`EXCHANGE ${sale.replacementExchange.exchangeNumber}`, { align: 'center' });
+    row('Returned credit', `${currency} ${money(sale.replacementExchange.returnedValue)}`);
+    row('Replacement', `${currency} ${money(sale.replacementExchange.replacementValue)}`);
+    row(
+      sale.replacementExchange.settlementDirection === 'COLLECT'
+        ? 'Amount collected'
+        : sale.replacementExchange.settlementDirection === 'REFUND'
+          ? 'Amount refunded'
+          : 'Difference',
+      `${currency} ${money(sale.replacementExchange.settlementAmount)}`,
+      true,
+    );
+  }
+
   if (sale.status === 'VOID') {
     divider();
     doc.font('Helvetica-Bold').fontSize(14).text(`VOID\n${sale.voidReason || ''}`, { align: 'center' });
@@ -158,7 +176,7 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
   divider();
   const barcode = await bwipjs.toBuffer({
     bcid: 'code128',
-    text: receiptId,
+    text: lookupCode,
     scale: 2,
     height: 10,
     includetext: false,
@@ -168,7 +186,7 @@ export const buildPosReceiptPdf = async (sale: PosSale, settings: StoreSetting):
   const barcodeY = doc.y;
   doc.image(barcode, doc.page.margins.left + 20, barcodeY, { fit: [width - 40, 42], align: 'center' });
   doc.y = barcodeY + 45;
-  doc.font('Helvetica-Bold').fontSize(8).text(receiptId, doc.page.margins.left, doc.y, { width, align: 'center' });
+  doc.font('Helvetica-Bold').fontSize(8).text(lookupCode, doc.page.margins.left, doc.y, { width, align: 'center' });
   doc.moveDown(0.5);
   doc.font('Helvetica-Bold').fontSize(9).text(policy.thankYou || settings.receiptThankYou, doc.page.margins.left, doc.y, { width, align: 'center' });
   doc.font('Helvetica').fontSize(6.5);

@@ -14,6 +14,19 @@ export const adminPosApi = {
       items: Array<{ saleItemId: string; qty: number; returnVariantId?: string | null; returnVariantLabel?: string | null }>;
     },
   ) => api.post<{ sale: PosSale }>(`/admin/pos-sales/${saleNumber}/refunds`, payload),
+  exchangePosSale: (
+    saleNumber: string,
+    payload: {
+      idempotencyKey: string;
+      reason: string;
+      note?: string;
+      paymentMethod?: PosSaleInput["paymentMethod"] | null;
+      deviceKey?: string;
+      deviceName?: string;
+      returns: Array<{ saleItemId: string; productId?: string; variantId?: string | null; qty: number }>;
+      replacements: PosSaleInput["lines"];
+    },
+  ) => api.post<{ sale: PosSale }>(`/admin/pos-sales/${saleNumber}/exchanges`, payload),
   findPosSale: (identifier: string) =>
     api.get<{ sale: PosSale }>(`/admin/pos-sales-find?identifier=${encodeURIComponent(identifier)}`),
   voidPosSale: (saleNumber: string, reason: string) =>

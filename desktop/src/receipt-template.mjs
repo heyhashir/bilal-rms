@@ -34,11 +34,12 @@ const barcodeSvg = (value) => {
   }
 };
 
-export const createReceiptHtml = ({ sale, settings }) => {
+export const createReceiptHtml = ({ sale, settings, profile }) => {
   const snapshot = sale.receipt?.documentSnapshot ?? {};
   const store = snapshot.store ?? {};
   const policy = snapshot.receipt ?? {};
   const receiptId = sale.receipt?.receiptNumber ?? sale.saleNumber;
+  const lookupCode = sale.receipt?.lookupCode ?? sale.receipt?.invoiceNumber ?? sale.saleNumber;
   const createdAt = new Date(sale.finalizedAt ?? sale.createdAt ?? Date.now());
   const currency = store.currencySymbol || settings?.currencySymbol || "Rs.";
   const totalItems = sale.items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
@@ -49,6 +50,7 @@ export const createReceiptHtml = ({ sale, settings }) => {
       0,
     );
   const discountTotal = sale.discountTotal ?? Math.max(0, retailSubtotal - Number(sale.subtotal || sale.total || 0));
+  const rollWidthMm = Number(profile?.rollWidthMm) || 72;
 
   const lines = sale.items
     .map(
@@ -83,13 +85,14 @@ export const createReceiptHtml = ({ sale, settings }) => {
       <meta charset="utf-8" />
       <title>${escapeHtml(receiptId)}</title>
       <style>
-        @page { size: 72mm auto; margin: 0; }
+        @page { size: ${rollWidthMm}mm auto; margin: 0; }
         * { box-sizing: border-box; }
         body {
           font-family: "Arial Narrow", "Segoe UI", Arial, sans-serif;
-          width: 72mm;
+          width: ${rollWidthMm}mm;
           margin: 0;
-          padding: 3mm;
+          padding: ${Number(profile?.paddingMm) || 3}mm;
+          padding-top: ${(Number(profile?.paddingMm) || 3) + (Number(profile?.feedOffsetMm) || 0)}mm;
           color: #000;
           background: #fff;
           font-size: 9px;
@@ -129,7 +132,7 @@ export const createReceiptHtml = ({ sale, settings }) => {
     </head>
     <body>
       <header class="center">
-        <div class="brand">${escapeHtml(store.name || settings?.name || "BALY by Bilal Garments EST 2001")}</div>
+        <div class="brand">BILAL GARMENTS</div>
         <div class="contact">
           <div>${escapeHtml(store.address || settings?.address || "")}</div>
           <div>${escapeHtml(store.phone || settings?.phone || "")}</div>
@@ -140,6 +143,7 @@ export const createReceiptHtml = ({ sale, settings }) => {
       <section class="meta-grid">
         <div>
           ${meta("Invoice No", sale.receipt?.invoiceNumber || "-", true)}
+          ${meta("Scan Code", lookupCode, true)}
           ${meta("Receipt ID", receiptId, true)}
           ${meta("Date", createdAt.toLocaleDateString("en-GB"))}
           ${meta("Time", createdAt.toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" }))}
@@ -151,6 +155,14 @@ export const createReceiptHtml = ({ sale, settings }) => {
           ${meta("Status", String(sale.status || "").toUpperCase())}
         </div>
       </section>
+      ${sale.sourceExchange ? `
+        <section class="divider"></section>
+        <section class="totals">
+          <div class="center strong">EXCHANGE ${escapeHtml(sale.sourceExchange.exchangeNumber)}</div>
+          <div class="total-row"><span>Returned credit</span><span>${escapeHtml(currency)} ${money(sale.sourceExchange.returnedValue)}</span></div>
+          <div class="total-row"><span>Replacement value</span><span>${escapeHtml(currency)} ${money(sale.sourceExchange.replacementValue)}</span></div>
+          <div class="total-row grand"><span>${sale.sourceExchange.settlementDirection === "collect" ? "Amount collected" : sale.sourceExchange.settlementDirection === "refund" ? "Amount refunded" : "Difference"}</span><span>${escapeHtml(currency)} ${money(sale.sourceExchange.settlementAmount)}</span></div>
+        </section>` : ""}
       <div class="divider"></div>
       <table>
         <thead>
@@ -168,8 +180,8 @@ export const createReceiptHtml = ({ sale, settings }) => {
       </section>
       ${sale.status === "void" ? `<div class="void">VOID<div>${escapeHtml(sale.voidReason || "")}</div></div>` : ""}
       <section class="barcode">
-        ${barcodeSvg(receiptId)}
-        <div class="barcode-text">${escapeHtml(receiptId)}</div>
+        ${barcodeSvg(lookupCode)}
+        <div class="barcode-text">${escapeHtml(lookupCode)}</div>
       </section>
       <footer class="footer">
         <div class="thank-you">${escapeHtml(policy.thankYou || settings?.receiptThankYou || "Thank you for shopping with us!")}</div>

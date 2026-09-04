@@ -98,7 +98,8 @@ export const reverseVendorPurchase = async (req: Request, res: Response) => {
 export const listLedgerEntries = async (req: Request, res: Response) => {
   const from = typeof req.query.from === 'string' ? req.query.from : undefined;
   const to = typeof req.query.to === 'string' ? req.query.to : undefined;
-  const entries = await backofficeService.listLedgerEntries({ from, to });
+  const vendorId = typeof req.query.vendorId === 'string' ? req.query.vendorId : undefined;
+  const entries = await backofficeService.listLedgerEntries({ from, to, vendorId });
   res.status(200).json(ApiResponse.success('Ledger entries loaded', { entries: entries.map(serializeLedgerEntry) }));
 };
 

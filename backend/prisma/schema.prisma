@@ -102,6 +102,13 @@ enum CommissionStatus {
   EARNED
   REVERSED
   PAID
+  CANCELLED
+}
+
+enum ExchangeSettlementDirection {
+  COLLECT
+  REFUND
+  EVEN
 }
 
 enum SyncStatus {
@@ -161,6 +168,7 @@ model AdminAccount {
   reversedVendorPurchases VendorPurchase[] @relation("VendorPurchaseReversedBy")
   employee                Employee?        @relation("EmployeeLoginAccount")
   cashierSales            PosSale[]        @relation("PosSaleCashier")
+  posExchanges            PosExchange[]
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 
@@ -547,6 +555,8 @@ model PosSale {
   commissions    CommissionEntry[]
   inventory      InventoryMovement[]
   ledgerEntries  LedgerEntry[]
+  sourceExchanges PosExchange[]       @relation("ExchangeSourceSale")
+  replacementExchange PosExchange?    @relation("ExchangeReplacementSale")
   device         RegisterDevice?     @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   voidedBy       AdminAccount?       @relation("PosSaleVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
   cashier        AdminAccount?       @relation("PosSaleCashier", fields: [cashierAccountId], references: [id], onDelete: SetNull)
@@ -616,14 +626,43 @@ model PosReturn {
   note       String              @default("")
   qty        Int
   amount     Decimal             @db.Decimal(10, 2)
+  exchangeId String?
   sale       PosSale             @relation(fields: [saleId], references: [id], onDelete: Cascade)
   saleItem   PosSaleItem?        @relation(fields: [saleItemId], references: [id], onDelete: SetNull)
   inventory  InventoryMovement[]
+  exchange   PosExchange?        @relation(fields: [exchangeId], references: [id], onDelete: SetNull)
   createdAt  DateTime            @default(now())
 
   @@index([saleId])
   @@index([saleItemId])
+  @@index([exchangeId])
   @@map("pos_returns")
+}
+
+model PosExchange {
+  id                  String                      @id @default(cuid())
+  exchangeNumber      String                      @unique
+  idempotencyKey      String                      @unique
+  sourceSaleId        String
+  replacementSaleId   String                      @unique
+  returnedValue       Decimal                     @db.Decimal(10, 2)
+  replacementValue    Decimal                     @db.Decimal(10, 2)
+  settlementDirection ExchangeSettlementDirection
+  settlementAmount    Decimal                     @db.Decimal(10, 2)
+  settlementMethod    PosPaymentMethod?
+  reason              String
+  note                String                      @default("") @db.Text
+  operatorId          String?
+  sourceSale          PosSale                     @relation("ExchangeSourceSale", fields: [sourceSaleId], references: [id], onDelete: Restrict)
+  replacementSale     PosSale                     @relation("ExchangeReplacementSale", fields: [replacementSaleId], references: [id], onDelete: Restrict)
+  returns             PosReturn[]
+  operator            AdminAccount?               @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+  createdAt           DateTime                    @default(now())
+  updatedAt           DateTime                    @updatedAt
+
+  @@index([sourceSaleId])
+  @@index([operatorId])
+  @@map("pos_exchanges")
 }
 
 model CommissionEntry {
@@ -635,6 +674,7 @@ model CommissionEntry {
   variantId  String?
   rate       Decimal          @db.Decimal(5, 2)
   amount     Decimal          @db.Decimal(10, 2)
+  cancelledAmount Decimal     @default(0) @db.Decimal(10, 2)
   status     CommissionStatus @default(EARNED)
   note       String           @default("")
   employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -659,6 +699,7 @@ model Receipt {
   receiptNumber    String    @unique
   invoiceNumber    String    @unique
   invoiceSequence  Int?      @unique
+  lookupCode       String?   @unique
   documentSnapshot Json?
   reprintCount     Int       @default(0)
   lastPrintedAt    DateTime?
@@ -766,6 +807,7 @@ model Vendor {
   notes     String           @default("")
   isActive  Boolean          @default(true)
   purchases VendorPurchase[]
+  ledgerEntries LedgerEntry[]
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
@@ -812,11 +854,13 @@ model LedgerEntry {
   orderId          String?
   posSaleId        String?
   vendorPurchaseId String?              @unique
+  vendorId          String?
   adminAccountId   String?
   isManual         Boolean              @default(false)
   order            Order?               @relation(fields: [orderId], references: [id], onDelete: SetNull)
   posSale          PosSale?             @relation(fields: [posSaleId], references: [id], onDelete: SetNull)
   vendorPurchase   VendorPurchase?
+  vendor            Vendor?             @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   adminAccount     AdminAccount?        @relation(fields: [adminAccountId], references: [id], onDelete: SetNull)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
@@ -826,5 +870,6 @@ model LedgerEntry {
   @@index([orderId])
   @@index([posSaleId])
   @@index([adminAccountId])
+  @@index([vendorId])
   @@map("ledger_entries")
 }

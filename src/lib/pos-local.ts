@@ -1,4 +1,4 @@
-import type { Employee, PosSaleInput } from "@/lib/admin-types";
+import type { Employee, PosExchangeInput, PosSaleInput } from "@/lib/admin-types";
 import type { PosSale } from "@/lib/admin-types";
 import type { Product, StorefrontSettings } from "@/lib/catalog-types";
 import { getDesktopBridge } from "@/lib/desktop-bridge";
@@ -7,6 +7,7 @@ const DEVICE_KEY_STORAGE = "bilal_rms_pos_device_key";
 const CACHE_STORAGE = "bilal_rms_pos_cache";
 const QUEUE_STORAGE = "bilal_rms_pos_queue";
 const REFUND_QUEUE_STORAGE = "bilal_rms_pos_refund_queue";
+const EXCHANGE_QUEUE_STORAGE = "bilal_rms_pos_exchange_queue";
 const SYNC_STATE_STORAGE = "bilal_rms_pos_sync_state";
 const RECEIPTS_STORAGE = "bilal_rms_pos_receipts";
 
@@ -37,7 +38,7 @@ export type PosRefundQueueItem = {
   items: Array<{ saleItemId: string; qty: number }>;
 };
 
-const getQueuedJobCount = () => loadQueuedSales().length + loadQueuedRefunds().length;
+const getQueuedJobCount = () => loadQueuedSales().length + loadQueuedRefunds().length + loadQueuedExchanges().length;
 
 const desktopBridge = () => getDesktopBridge();
 
@@ -142,6 +143,12 @@ export const loadQueuedRefunds = () => {
   return read<PosRefundQueueItem[]>(REFUND_QUEUE_STORAGE) ?? [];
 };
 
+export const loadQueuedExchanges = () => {
+  const bridge = desktopBridge();
+  if (bridge) return bridge.loadQueuedExchanges();
+  return read<PosExchangeInput[]>(EXCHANGE_QUEUE_STORAGE) ?? [];
+};
+
 export const saveQueuedSales = (sales: PosSaleInput[]) => {
   write(QUEUE_STORAGE, sales);
 };
@@ -181,6 +188,17 @@ export const queuePosRefund = (refund: PosRefundQueueItem) => {
   if (deviceKey) {
     patchPosSyncState(deviceKey, { queueSize: getQueuedJobCount() });
   }
+};
+
+export const queuePosExchange = (exchange: PosExchangeInput) => {
+  const bridge = desktopBridge();
+  if (bridge) {
+    bridge.queuePosExchange(exchange);
+  } else {
+    write(EXCHANGE_QUEUE_STORAGE, [...loadQueuedExchanges().filter((entry) => entry.jobKey !== exchange.jobKey), exchange]);
+  }
+  const deviceKey = exchange.deviceKey ?? loadPosSyncState()?.deviceKey;
+  if (deviceKey) patchPosSyncState(deviceKey, { queueSize: getQueuedJobCount() });
 };
 
 export const removeQueuedSale = (saleNumber: string) => {
@@ -251,6 +269,14 @@ export const removeQueuedRefund = (jobKey: string) => {
   }
 };
 
+export const removeQueuedExchange = (jobKey: string) => {
+  const bridge = desktopBridge();
+  if (bridge) bridge.removeQueuedExchange(jobKey);
+  else write(EXCHANGE_QUEUE_STORAGE, loadQueuedExchanges().filter((entry) => entry.jobKey !== jobKey));
+  const deviceKey = loadPosSyncState()?.deviceKey;
+  if (deviceKey) patchPosSyncState(deviceKey, { queueSize: getQueuedJobCount() });
+};
+
 export const loadOfflineReceipts = () => {
   const bridge = desktopBridge();
   if (bridge) {
@@ -274,7 +300,8 @@ export const findOfflineReceipt = (receiptOrSaleNumber: string) => {
       (sale) =>
         sale.saleNumber.toLowerCase() === needle ||
         sale.receipt?.receiptNumber.toLowerCase() === needle ||
-        sale.receipt?.invoiceNumber.toLowerCase() === needle,
+        sale.receipt?.invoiceNumber.toLowerCase() === needle ||
+        sale.receipt?.lookupCode?.toLowerCase() === needle,
     ) ?? null
   );
 };
@@ -318,6 +345,7 @@ const buildOfflineReceipt = (
       receiptNumber: `${settings?.receiptPrefix ?? "REC"}-${saleNumber}`,
       invoiceNumber: `${settings?.invoicePrefix ?? "BG"}-${saleNumber}`,
       invoiceSequence: null,
+      lookupCode: `BI-${saleNumber.replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase().padStart(4, "0")}`,
       documentSnapshot: settings
         ? {
             version: 1,
@@ -489,4 +517,64 @@ export const persistOfflineRefund = (payload: { refund: PosRefundQueueItem }) =>
   saveOfflineReceipt(nextReceipt);
   applyRefundToCachedStock(nextReceipt, payload.refund.items);
   return nextReceipt;
+};
+
+export const persistOfflineExchange = (payload: {
+  exchange: PosExchangeInput;
+  employees: Employee[];
+  settings: StorefrontSettings | null;
+}) => {
+  const bridge = desktopBridge();
+  if (bridge) return bridge.persistOfflineExchange(payload);
+  const source = findOfflineReceipt(payload.exchange.saleNumber);
+  if (!source) return null;
+
+  const returnedValue = payload.exchange.returns.reduce((sum, entry) => {
+    const item = source.items.find((candidate) => candidate.id === entry.saleItemId);
+    return sum + Number(item?.unitPrice ?? 0) * entry.qty;
+  }, 0);
+  const sale: PosSaleInput = {
+    saleNumber: `OFF-EX-${payload.exchange.idempotencyKey.slice(-8).toUpperCase()}`,
+    customerName: source.customerName,
+    customerPhone: source.customerPhone,
+    customerEmail: source.customerEmail,
+    paymentMethod: payload.exchange.paymentMethod ?? (source.paymentMethod as PosSaleInput["paymentMethod"]) ?? "cash",
+    paidAmount: 0,
+    status: "finalized",
+    notes: `Exchange for ${source.saleNumber}`,
+    deviceKey: payload.exchange.deviceKey,
+    deviceName: payload.exchange.deviceName,
+    lines: payload.exchange.replacements,
+  };
+  const replacement = buildOfflineReceipt(sale, payload.employees, payload.settings);
+  const difference = Math.round((replacement.total - returnedValue) * 100) / 100;
+  replacement.paidAmount = Math.max(0, difference);
+  replacement.sourceExchange = {
+    id: payload.exchange.idempotencyKey,
+    exchangeNumber: `EX-${payload.exchange.idempotencyKey.slice(-8).toUpperCase()}`,
+    sourceSaleNumber: source.saleNumber,
+    sourceLookupCode: source.receipt?.lookupCode ?? "",
+    returnedValue,
+    replacementValue: replacement.total,
+    settlementDirection: difference > 0 ? "collect" : difference < 0 ? "refund" : "even",
+    settlementAmount: Math.abs(difference),
+    settlementMethod: payload.exchange.paymentMethod ?? "",
+    reason: payload.exchange.reason,
+    note: payload.exchange.note ?? "",
+    createdAt: Date.now(),
+  };
+  const nextSource = {
+    ...source,
+    items: source.items.map((item) => {
+      const returned = payload.exchange.returns.find((entry) => entry.saleItemId === item.id);
+      return returned ? { ...item, refundedQty: item.refundedQty + returned.qty } : item;
+    }),
+    updatedAt: Date.now(),
+  };
+  queuePosExchange(payload.exchange);
+  saveOfflineReceipt(nextSource);
+  saveOfflineReceipt(replacement);
+  applyRefundToCachedStock(source, payload.exchange.returns);
+  applySaleToCachedStock(sale);
+  return replacement;
 };

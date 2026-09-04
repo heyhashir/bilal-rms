@@ -1,14 +1,55 @@
 # Bilal RMS Full QA Report
 
-## 3 September 2026: Deployment In Progress
+## 4 September 2026: Exchanges, Vendor Ledgers, Bills And Printer Profiles
 
-The user explicitly authorized deployment after the local checks below. Scope: completed POS lookup/catalog fixes, short barcode generation and print layouts, and commission payable double-deduction correction. Commission reversal removal remains excluded pending clarification. Both full frontend and backend lint pass; the matching 0.3.4 installer was already built. GitHub verification now includes the two database-free backend regression tests. Live release/publication results will be recorded after verification; earlier local-only notes describe the state before this authorization.
+**Scope:** Implement the approved client billing release locally, validate it on an isolated MariaDB schema and local Electron profile, then deploy web/backend before publishing desktop `0.4.0`. The release does not modify production business records during QA.
 
-## 3 September 2026: Commission Report Calculation (Local Only; Request Incomplete)
+- Added atomic partial/full POS exchanges with higher-price collection, lower-price refund, equal-value settlement, quantity/concurrency guards, stock movements, linked source/replacement invoices, ledger entries, replacement commission attribution, and idempotency keys. Offline Electron exchanges persist in SQLite across restart and synchronize exactly once.
+- Replaced negative commission reversal creation with non-negative cancellation tracking. Unpaid earned amounts can be partially or fully cancelled; paid commission is preserved. Historical negative reversal rows are retained as zero-value cancelled audit rows and their original notes are not deleted.
+- Added nullable vendor linkage to ledger entries, automatic purchase/correction assignment, migration backfill, optional vendor selection for manual entries, and Main Ledger/Vendor Ledgers views with dates, debit, credit, balance and entry count. Foreign keys use `ON DELETE SET NULL`.
+- Standardized browser, PDF and Electron receipts to 72 mm paper, approximately 66 mm printable content and 3 mm padding. The receipt heading is exactly `BILAL GARMENTS`. New and existing receipts receive unique `BI-XXXX` Code 128 lookup codes without changing legacy invoice/receipt/sale identifiers; POS and Admin Invoice search route scans to the matching invoice rather than the product cart.
+- Added local per-PC Receipt Printer and Sticker Printer profiles with installed-printer discovery, dimensions, offsets, gap, copies, orientation and sticker design. Electron prints directly to the saved device; browser printing retains the system dialog and remembers layout values locally. Windows driver heat, speed, cutter and sensor settings remain outside application control.
+
+### Local Verification
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Fresh migration deployment | PASS | All 17 migrations applied to isolated `bilal_rms_exchange_test`; Prisma schema valid |
+| Backend service regression | PASS | Equal/higher/lower exchanges, partial quantities, idempotency, stock, lookup codes, vendor ledgers and non-negative commission cancellation |
+| Backend integration | PASS | Full authenticated API suite passed after replacing the obsolete reversal assertion; cleanup completed |
+| Client/server build | PASS | Vite production bundle and backend TypeScript compiled |
+| Frontend/backend lint | PASS | No errors or warnings |
+| Architecture/deferred routes | PASS | Both route checks passed |
+| Dependency audit | PASS | Root npm audit reports 0 vulnerabilities |
+| Desktop persistence | PASS | Offline sale 6.4 ms, refund 4.1 ms, exchange 5.3 ms; queue and printer profiles survived restart |
+| Browser smoke | PASS | 3 tests in 13.9 s; scoped records removed |
+| Retail regression | PASS | 1 test in 6.5 s; scoped records removed |
+| Receipt/invoice workflow | PASS | 1 test in 6.9 s; `BI-XXXX` lookup exercised and scoped records removed |
+| Diff integrity | PASS | No whitespace errors; only existing CRLF normalization notices |
+
+### Release Status And External Acceptance
+
+- Desktop package version is `0.4.0`. The local unsigned installer is `desktop/dist/BilalRMS-Setup-0.4.0.exe`, 105,232,149 bytes, SHA-256 `152323EEA589DF46633B95117F1335554F2CF1194F0C8B513DFA88976A1BB1D7`. Hostinger deployment, GitHub verification, update-feed verification, and live health results are pending release execution.
+- The default retained local `bilal_rms` schema contains an old failed migration record. It was not altered; all write-enabled verification used the isolated `bilal_rms_exchange_test` schema.
+- Physical scanner and printer acceptance remains open: print a real 72 mm receipt and configured sticker, verify XP-T361U feed/cutter/density, then scan both Code 128 symbols into Notepad and the correct application lookup. Screen scanning is not accepted as proof for the 1D Orbit laser scanner.
+- The Windows installer remains unsigned until a trusted signing certificate is supplied.
+
+## 3 September 2026: Deployment Results
+
+The user explicitly authorized deployment after the local checks below. Scope: completed POS lookup/catalog fixes, short barcode generation and print layouts, and commission payable double-deduction correction. Commission reversal removal remains excluded pending clarification. Earlier local-only notes describe the state before this authorization.
+
+- Application release `ad06c1c` and test-isolation correction `e38c92f` pushed to `main`.
+- GitHub [Build Verification 33763405286](https://github.com/heyhashir/bilal-rms/actions/runs/33763405286) PASS: clean install, dependency audit, frontend/backend lint, Prisma validation, full build and both database-free regression tests. Initial run 33763096956 failed only because an unused file-maintenance dependency loaded required admin environment values; stubbing that unrelated dependency removed the test's accidental reliance on local credentials. Production credential requirements were not weakened.
+- Live frontend serves the matching `/assets/index-DTquDUIv.js`. `/api/v1/health/ready` and `/api/v1/catalog/bootstrap` returned 200. Authenticated `/admin/barcodes/generate` with `format: short` returned the new two-letter/four-digit format. Generated code was not saved. No product, stock, sale, refund, employee or commission record was changed during verification.
+- Desktop 0.3.4 published and server-checksummed after the final code deployment: 105,225,988 bytes; SHA-256 `948494745534348ae1055e30dc8ecc32ed3177bcfd23860f69442a3eb8d9a457`. The update manifest offers it to 0.3.3, suppresses a repeat offer to 0.3.4, and exposes the correct file size/hash. Installer HEAD returned 200 with matching content length. Unique unregistered device keys were used for read-only manifest checks; no device was created. Actual client installation and physical scanning were not attempted; installer remains unsigned.
+- **Observed deployment risk:** The first upload passed server verification, but the overlapping follow-up Hostinger deployment removed its installer/metadata, causing `available: false`. The admin release endpoint confirmed `published: false`, `size: null`, `metadata: null`. Re-uploading after all code pushes restored availability and passed the checks above. The release directory does not survive this redeployment flow. Durable release storage needs a separate fix; until then publish after every final deployment and verify the feed.
+- Final evidence changes are intentionally local/uncommitted; another documentation push would trigger an unnecessary deployment and could remove the published installer again. Source/test changes are fully pushed. No additional deployment is pending from this task.
+
+## 3 September 2026: Commission Report Calculation (Historical; Superseded)
 
 - Confirmed paid entries were deducted twice in total, employee and product commission payable: the `earned` accumulator excludes PAID entries, but the calculation still subtracted `paid`. Changed payable to `earned + reversed` while retaining the existing reversal policy until the user's compensation-rule answer.
 - Backend build and `node --test scripts/tests/commission-summary.test.mjs` pass. Fixtures verify paid-only 118 yields payable 0, then adding unpaid 50 yields payable 50 at all three aggregation levels. No database is loaded or modified.
-- Removal of commission reversals is not yet implemented. Asked whether refunded/voided sales retain original commission, or cancel unpaid commission without deducting paid commission. Historical negative rows and reversal generation remain unchanged until clarified. No push, deployment, publication, or data deletion occurred.
+- At the time of this run, removal of commission reversals was not implemented because the compensation rule was awaiting clarification. The 4 September release above supersedes this state with unpaid cancellation and paid-commission preservation.
 
 ## 3 September 2026: Short Codes And Scannable Label Layout (Local Only)
 

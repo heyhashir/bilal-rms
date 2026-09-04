@@ -264,8 +264,9 @@
   .pos-receipt {
     position: absolute;
     inset: 0 auto auto 0;
-    width: 80mm !important;
-    max-width: 80mm !important;
+    width: 72mm !important;
+    max-width: 72mm !important;
+    padding: 3mm !important;
     min-height: 0;
     margin: 0 !important;
     box-shadow: none !important;

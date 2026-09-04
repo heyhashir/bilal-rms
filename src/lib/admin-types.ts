@@ -83,6 +83,7 @@ export type PosSale = {
     receiptNumber: string;
     invoiceNumber: string;
     invoiceSequence: number | null;
+    lookupCode?: string;
     documentSnapshot: ReceiptDocumentSnapshot | null;
     reprintCount: number;
     lastPrintedAt: number | null;
@@ -104,6 +105,34 @@ export type PosSale = {
     note: string;
     createdAt: number;
   }>;
+  exchanges?: Array<{
+    id: string;
+    exchangeNumber: string;
+    replacementSaleNumber: string;
+    replacementLookupCode: string;
+    returnedValue: number;
+    replacementValue: number;
+    settlementDirection: "collect" | "refund" | "even";
+    settlementAmount: number;
+    settlementMethod: string;
+    reason: string;
+    note: string;
+    createdAt: number;
+  }>;
+  sourceExchange?: {
+    id: string;
+    exchangeNumber: string;
+    sourceSaleNumber: string;
+    sourceLookupCode: string;
+    returnedValue: number;
+    replacementValue: number;
+    settlementDirection: "collect" | "refund" | "even";
+    settlementAmount: number;
+    settlementMethod: string;
+    reason: string;
+    note: string;
+    createdAt: number;
+  } | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -152,6 +181,7 @@ export type CommissionEntry = {
   cost?: number;
   rate: number;
   amount: number;
+  cancelledAmount: number;
   status: string;
   note: string;
   createdAt: number;
@@ -223,6 +253,7 @@ export type ReportSummary = {
   commissions: {
     earned: number;
     reversed: number;
+    cancelled: number;
     paid: number;
     payable: number;
   };
@@ -251,6 +282,7 @@ export type ReportSummary = {
     employeeName: string;
     earned: number;
     reversed: number;
+    cancelled: number;
     paid: number;
     payable: number;
   }>;
@@ -259,6 +291,7 @@ export type ReportSummary = {
     productName: string;
     earned: number;
     reversed: number;
+    cancelled: number;
     paid: number;
     payable: number;
   }>;
@@ -322,6 +355,8 @@ export type LedgerEntry = {
   orderId: string | null;
   posSaleId: string | null;
   vendorPurchaseId: string | null;
+  vendorId: string | null;
+  vendorName: string;
   adminAccountId: string | null;
   isManual: boolean;
   createdAt: number;
@@ -536,4 +571,17 @@ export type PosSaleInput = {
     qty: number;
     unitPrice?: number | null;
   }>;
+};
+
+export type PosExchangeInput = {
+  jobKey: string;
+  idempotencyKey: string;
+  saleNumber: string;
+  reason: string;
+  note?: string;
+  paymentMethod?: PosSaleInput["paymentMethod"] | null;
+  deviceKey?: string;
+  deviceName?: string;
+  returns: Array<{ saleItemId: string; productId?: string; variantId?: string | null; qty: number }>;
+  replacements: PosSaleInput["lines"];
 };

@@ -36,10 +36,11 @@ export const adminBackofficeApi = {
   }) => api.post<{ purchase: VendorPurchase }>("/admin/vendor-purchases", payload),
   reverseVendorPurchase: (id: string, reason: string) =>
     api.post<{ purchase: VendorPurchase }>(`/admin/vendor-purchases/${id}/reverse`, { reason }),
-  ledgerEntries: (params?: { from?: string; to?: string }) => {
+  ledgerEntries: (params?: { from?: string; to?: string; vendorId?: string }) => {
     const query = new URLSearchParams();
     if (params?.from) query.set("from", params.from);
     if (params?.to) query.set("to", params.to);
+    if (params?.vendorId) query.set("vendorId", params.vendorId);
     const suffix = query.size ? `?${query.toString()}` : "";
     return api.get<{ entries: LedgerEntry[] }>(`/admin/ledger${suffix}`);
   },
@@ -49,6 +50,7 @@ export const adminBackofficeApi = {
     amount: number;
     reference?: string;
     note?: string;
+    vendorId?: string | null;
   }) => api.post<{ entry: LedgerEntry }>("/admin/ledger", payload),
   updateLedgerEntry: (id: string, payload: {
     type: "expense" | "adjustment";
@@ -56,6 +58,7 @@ export const adminBackofficeApi = {
     amount: number;
     reference?: string;
     note?: string;
-  }) => api.patch<{ entry: LedgerEntry }>(`/admin/ledger/${id}`, payload),
+    vendorId?: string | null;
+  }) => api.put<{ entry: LedgerEntry }>(`/admin/ledger/${id}`, payload),
   deleteLedgerEntry: (id: string) => api.delete<{ ok: boolean }>(`/admin/ledger/${id}`),
 };

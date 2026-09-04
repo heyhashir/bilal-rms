@@ -25,6 +25,10 @@ const REQUIRED_COLUMNS = [
   ["pos_sale_items", "unitCost", "DECIMAL(10, 2) NULL"],
   ["employees", "loginAccountId", "VARCHAR(191) NULL"],
   ["pos_sales", "cashierAccountId", "VARCHAR(191) NULL"],
+  ["receipts", "lookupCode", "VARCHAR(191) NULL"],
+  ["ledger_entries", "vendorId", "VARCHAR(191) NULL"],
+  ["commission_entries", "cancelledAmount", "DECIMAL(10, 2) NOT NULL DEFAULT 0"],
+  ["pos_returns", "exchangeId", "VARCHAR(191) NULL"],
 ];
 
 const REQUIRED_INDEXES = [
@@ -34,6 +38,9 @@ const REQUIRED_INDEXES = [
   ["product_variants", "product_variants_qrCode_key", ["qrCode"], true],
   ["employees", "employees_loginAccountId_key", ["loginAccountId"], true],
   ["pos_sales", "pos_sales_cashierAccountId_idx", ["cashierAccountId"], false],
+  ["receipts", "receipts_lookupCode_key", ["lookupCode"], true],
+  ["ledger_entries", "ledger_entries_vendorId_idx", ["vendorId"], false],
+  ["pos_returns", "pos_returns_exchangeId_idx", ["exchangeId"], false],
 ];
 
 const quoteIdentifier = (value) => `\`${value.replaceAll("`", "``")}\``;

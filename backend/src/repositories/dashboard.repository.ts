@@ -62,11 +62,9 @@ export const dashboardRepository = {
     });
   },
   getPendingCommissionAggregate() {
-    return prisma.commissionEntry.aggregate({
-      where: { status: { in: ['EARNED', 'REVERSED'] } },
-      _sum: {
-        amount: true,
-      },
+    return prisma.commissionEntry.findMany({
+      where: { status: 'EARNED' },
+      select: { amount: true, cancelledAmount: true },
     });
   },
   listRecentOrders() {
@@ -108,9 +106,10 @@ export const dashboardRepository = {
         name: true,
         commissionRate: true,
         commissionEntries: {
-          where: { status: { in: ['EARNED', 'REVERSED'] } },
+          where: { status: 'EARNED' },
           select: {
             amount: true,
+            cancelledAmount: true,
           },
         },
       },

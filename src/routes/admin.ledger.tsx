@@ -24,6 +24,8 @@ function AdminLedger() {
   const today = useMemo(() => getLocalDateString(), []);
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
+  const [ledgerView, setLedgerView] = useState<"main" | "vendor">("main");
+  const [selectedVendorId, setSelectedVendorId] = useState("");
 
   const [ledgerDraft, setLedgerDraft] = useState({
     type: "expense" as "expense" | "adjustment",
@@ -31,13 +33,25 @@ function AdminLedger() {
     amount: "0",
     reference: "",
     note: "",
+    vendorId: "",
   });
   const [editingLedgerId, setEditingLedgerId] = useState<string | null>(null);
 
-  const { data: ledgerEntries = [], isLoading } = useQuery({
-    queryKey: ["admin", "ledger", { from, to }],
-    queryFn: async () => (await adminBackofficeApi.ledgerEntries({ from: from || undefined, to: to || undefined })).entries,
+  const { data: vendors = [] } = useQuery({
+    queryKey: ["admin", "vendors"],
+    queryFn: async () => (await adminBackofficeApi.vendors()).vendors,
   });
+
+  const activeVendorId = ledgerView === "vendor" ? selectedVendorId : "";
+  const { data: queriedLedgerEntries = [], isLoading } = useQuery({
+    queryKey: ["admin", "ledger", { from, to, vendorId: activeVendorId }],
+    queryFn: async () => (await adminBackofficeApi.ledgerEntries({ from: from || undefined, to: to || undefined, vendorId: activeVendorId || undefined })).entries,
+    enabled: ledgerView === "main" || Boolean(selectedVendorId),
+  });
+  const ledgerEntries = useMemo(
+    () => (ledgerView === "vendor" && !selectedVendorId ? [] : queriedLedgerEntries),
+    [ledgerView, queriedLedgerEntries, selectedVendorId],
+  );
 
   const createLedgerEntry = useMutation({
     mutationFn: adminBackofficeApi.createLedgerEntry,
@@ -52,6 +66,7 @@ function AdminLedger() {
         amount: "0",
         reference: "",
         note: "",
+        vendorId: "",
       });
       toast.success("Ledger entry saved");
     },
@@ -59,7 +74,7 @@ function AdminLedger() {
   });
 
   const updateLedgerEntry = useMutation({
-    mutationFn: ({ id, ...payload }: { id: string; type: "expense" | "adjustment"; direction: "credit" | "debit"; amount: number; reference?: string; note?: string }) =>
+    mutationFn: ({ id, ...payload }: { id: string; type: "expense" | "adjustment"; direction: "credit" | "debit"; amount: number; reference?: string; note?: string; vendorId?: string | null }) =>
       adminBackofficeApi.updateLedgerEntry(id, payload),
     onSuccess: async () => {
       await Promise.all([
@@ -67,7 +82,7 @@ function AdminLedger() {
         queryClient.invalidateQueries({ queryKey: ["admin", "reports"] }),
       ]);
       setEditingLedgerId(null);
-      setLedgerDraft({ type: "expense", direction: "debit", amount: "0", reference: "", note: "" });
+      setLedgerDraft({ type: "expense", direction: "debit", amount: "0", reference: "", note: "", vendorId: "" });
       toast.success("Ledger entry updated");
     },
     onError: (error) => toast.error(getErrorMessage(error, "Unable to update ledger entry")),
@@ -88,6 +103,16 @@ function AdminLedger() {
   const totalDebit = ledgerEntries.filter((e) => e.direction === "debit").reduce((sum, e) => sum + e.amount, 0);
   const totalCredit = ledgerEntries.filter((e) => e.direction === "credit").reduce((sum, e) => sum + e.amount, 0);
   const netExpense = totalDebit - totalCredit;
+  const balances = useMemo(() => {
+    let balance = 0;
+    return [...ledgerEntries]
+      .reverse()
+      .map((entry) => {
+        balance += entry.direction === "credit" ? entry.amount : -entry.amount;
+        return [entry.id, balance] as const;
+      })
+      .reduce<Record<string, number>>((result, [id, value]) => ({ ...result, [id]: value }), {});
+  }, [ledgerEntries]);
 
   return (
     <div>
@@ -114,6 +139,22 @@ function AdminLedger() {
           </div>
         }
       />
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        <ActionButton variant={ledgerView === "main" ? "primary" : "ghost"} onClick={() => setLedgerView("main")}>Main Ledger</ActionButton>
+        <ActionButton variant={ledgerView === "vendor" ? "primary" : "ghost"} onClick={() => setLedgerView("vendor")}>Vendor Ledgers</ActionButton>
+        {ledgerView === "vendor" && (
+          <select
+            aria-label="Select vendor ledger"
+            value={selectedVendorId}
+            onChange={(event) => setSelectedVendorId(event.target.value)}
+            className="min-w-56 border border-border bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Select a vendor</option>
+            {vendors.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
+          </select>
+        )}
+      </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Total Entries" value={ledgerEntries.length} hint="In selected range" />
@@ -150,6 +191,12 @@ function AdminLedger() {
             <Field label="Amount (PKR)" type="number" value={ledgerDraft.amount} onChange={(value) => setLedgerDraft((current) => ({ ...current, amount: value }))} />
             <Field label="Reference / Receipt #" value={ledgerDraft.reference} placeholder="e.g. Electricity Bill, Tea Bill" onChange={(value) => setLedgerDraft((current) => ({ ...current, reference: value }))} />
             <Field label="Note" value={ledgerDraft.note} placeholder="Additional details..." onChange={(value) => setLedgerDraft((current) => ({ ...current, note: value }))} textarea />
+            <SelectField
+              label="Vendor (optional)"
+              value={ledgerDraft.vendorId}
+              onChange={(value) => setLedgerDraft((current) => ({ ...current, vendorId: value }))}
+              options={[{ value: "", label: "No vendor" }, ...vendors.map((vendor) => ({ value: vendor.id, label: vendor.name }))]}
+            />
             <ActionButton
               onClick={() => {
                 const payload = {
@@ -158,6 +205,7 @@ function AdminLedger() {
                   amount: Number(ledgerDraft.amount),
                   reference: ledgerDraft.reference || undefined,
                   note: ledgerDraft.note || undefined,
+                  vendorId: ledgerDraft.vendorId || null,
                 };
                 if (editingLedgerId) {
                   updateLedgerEntry.mutate({ id: editingLedgerId, ...payload });
@@ -173,7 +221,7 @@ function AdminLedger() {
                 variant="ghost"
                 onClick={() => {
                   setEditingLedgerId(null);
-                  setLedgerDraft({ type: "expense", direction: "debit", amount: "0", reference: "", note: "" });
+                  setLedgerDraft({ type: "expense", direction: "debit", amount: "0", reference: "", note: "", vendorId: "" });
                 }}
               >
                 <X className="h-3.5 w-3.5 mr-1" /> Cancel edit
@@ -186,7 +234,7 @@ function AdminLedger() {
           <div className="border-b border-border p-4">
             <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Ledger history</div>
             <div className="mt-2 text-sm text-muted-foreground">
-              {ledgerEntries.length} entries · Total Outgoing {formatPrice(totalDebit)}
+              {ledgerEntries.length} entries · Debit {formatPrice(totalDebit)} · Credit {formatPrice(totalCredit)}
             </div>
           </div>
           {isLoading ? (
@@ -200,10 +248,12 @@ function AdminLedger() {
                   <tr>
                     <th className="p-3 text-left">Date</th>
                     <th className="p-3 text-left">Type</th>
-                    <th className="p-3 text-left">Direction</th>
+                    <th className="p-3 text-left">Vendor</th>
                     <th className="p-3 text-left">Reference</th>
                     <th className="p-3 text-left">Note</th>
-                    <th className="p-3 text-right">Amount</th>
+                    <th className="p-3 text-right">Debit</th>
+                    <th className="p-3 text-right">Credit</th>
+                    <th className="p-3 text-right">Balance</th>
                     <th className="p-3" />
                   </tr>
                 </thead>
@@ -212,14 +262,12 @@ function AdminLedger() {
                     <tr key={entry.id} className="border-t border-border hover:bg-secondary/40 transition-colors">
                       <td className="p-3 text-xs text-muted-foreground font-mono">{new Date(entry.createdAt).toLocaleString()}</td>
                       <td className="p-3 uppercase text-xs font-semibold">{entry.type}</td>
-                      <td className="p-3 uppercase text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${entry.direction === "debit" ? "bg-sale/10 text-sale" : "bg-secondary"}`}>
-                          {entry.direction}
-                        </span>
-                      </td>
+                      <td className="p-3 text-xs">{entry.vendorName || "-"}</td>
                       <td className="p-3 font-medium">{entry.reference || "-"}</td>
                       <td className="p-3 text-muted-foreground text-xs">{entry.note || "-"}</td>
-                      <td className={`p-3 text-right font-mono font-semibold ${entry.direction === "debit" ? "text-sale" : ""}`}>{formatPrice(entry.amount)}</td>
+                      <td className="p-3 text-right font-mono text-sale">{entry.direction === "debit" ? formatPrice(entry.amount) : "-"}</td>
+                      <td className="p-3 text-right font-mono">{entry.direction === "credit" ? formatPrice(entry.amount) : "-"}</td>
+                      <td className="p-3 text-right font-mono font-semibold">{formatPrice(balances[entry.id] ?? 0)}</td>
                       <td className="p-3">
                         {entry.isManual && (
                           <div className="flex justify-end gap-2">
@@ -234,6 +282,7 @@ function AdminLedger() {
                                   amount: String(entry.amount),
                                   reference: entry.reference,
                                   note: entry.note,
+                                  vendorId: entry.vendorId ?? "",
                                 });
                               }}
                               className="p-2 hover:bg-secondary"

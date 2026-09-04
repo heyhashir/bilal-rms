@@ -23,6 +23,8 @@ const parseJson = (value, fallback = null) => {
 };
 
 const escapeText = (value) => String(value ?? "");
+const offlineLookupCode = (saleNumber) =>
+  `BI-${crypto.createHash("sha1").update(String(saleNumber)).digest("hex").slice(0, 4).toUpperCase()}`;
 
 const buildReceiptFromPayload = ({ sale, employees, settings, cache }) => {
   const cachedProducts = cache?.products ?? [];
@@ -91,6 +93,7 @@ const buildReceiptFromPayload = ({ sale, employees, settings, cache }) => {
       receiptNumber: `${settings?.receiptPrefix ?? "REC"}-${saleNumber}`,
       invoiceNumber: `${settings?.invoicePrefix ?? "BG"}-${saleNumber}`,
       invoiceSequence: null,
+      lookupCode: offlineLookupCode(saleNumber),
       documentSnapshot: settings
         ? {
             version: 1,
@@ -255,6 +258,14 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
       updated_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS queued_exchanges (
+      job_key TEXT PRIMARY KEY,
+      sale_number TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS receipts (
       sale_number TEXT PRIMARY KEY,
       receipt_number TEXT,
@@ -309,6 +320,12 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
     return rows.map((row) => parseJson(row.payload_json, null)).filter(Boolean);
   };
 
+  const loadQueuedExchanges = () => {
+    const stmt = db.prepare("SELECT payload_json FROM queued_exchanges ORDER BY created_at ASC");
+    const rows = readRows(stmt);
+    return rows.map((row) => parseJson(row.payload_json, null)).filter(Boolean);
+  };
+
   const rememberReceipt = (sale) => {
     db.run(
       `
@@ -351,7 +368,7 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
         lastSyncError: "",
         retryCount: 0,
         failedJobs: 0,
-        queueSize: loadQueuedSales().length,
+        queueSize: loadQueuedSales().length + loadQueuedRefunds().length + loadQueuedExchanges().length,
       });
       const next = {
         ...current,
@@ -363,6 +380,7 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
     },
     loadQueuedSales,
     loadQueuedRefunds,
+    loadQueuedExchanges,
     queuePosSale: (sale) => {
       db.run(
         `
@@ -391,6 +409,19 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
     },
     removeQueuedRefund: (jobKey) => {
       db.run("DELETE FROM queued_refunds WHERE job_key = ?", [jobKey]);
+      persist();
+    },
+    queuePosExchange: (exchange) => {
+      db.run(
+        `INSERT INTO queued_exchanges (job_key, sale_number, payload_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(job_key) DO UPDATE SET payload_json = excluded.payload_json, updated_at = excluded.updated_at`,
+        [exchange.jobKey, exchange.saleNumber, JSON.stringify(exchange), now(), now()],
+      );
+      persist();
+    },
+    removeQueuedExchange: (jobKey) => {
+      db.run("DELETE FROM queued_exchanges WHERE job_key = ?", [jobKey]);
       persist();
     },
     persistOfflineSale: ({ sale, employees, settings }) => {
@@ -449,6 +480,61 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
       }
       return nextReceipt;
     },
+    persistOfflineExchange: ({ exchange, employees, settings }) => {
+      const source = store.getOfflineReceipt(exchange.saleNumber);
+      if (!source) return null;
+      const returnedValue = exchange.returns.reduce((sum, entry) => {
+        const item = source.items.find((candidate) => candidate.id === entry.saleItemId);
+        return sum + Number(item?.unitPrice ?? 0) * entry.qty;
+      }, 0);
+      const replacementSale = {
+        saleNumber: `OFF-EX-${exchange.idempotencyKey.slice(-8).toUpperCase()}`,
+        customerName: source.customerName,
+        customerPhone: source.customerPhone,
+        customerEmail: source.customerEmail,
+        paymentMethod: exchange.paymentMethod ?? source.paymentMethod ?? "cash",
+        paidAmount: 0,
+        status: "finalized",
+        notes: `Exchange for ${source.saleNumber}${exchange.note ? ` | ${exchange.note}` : ""}`,
+        deviceKey: exchange.deviceKey,
+        deviceName: exchange.deviceName,
+        lines: exchange.replacements,
+      };
+      const cache = getState("pos_cache", null);
+      const replacement = buildReceiptFromPayload({ sale: replacementSale, employees, settings, cache });
+      const replacementValue = replacement.total;
+      const difference = Math.round((replacementValue - returnedValue) * 100) / 100;
+      replacement.paidAmount = Math.max(0, difference);
+      replacement.sourceExchange = {
+        id: exchange.idempotencyKey,
+        exchangeNumber: `EX-${exchange.idempotencyKey.slice(-8).toUpperCase()}`,
+        sourceSaleNumber: source.saleNumber,
+        sourceLookupCode: source.receipt?.lookupCode ?? "",
+        returnedValue,
+        replacementValue,
+        settlementDirection: difference > 0 ? "collect" : difference < 0 ? "refund" : "even",
+        settlementAmount: Math.abs(difference),
+        settlementMethod: exchange.paymentMethod ?? "",
+        reason: exchange.reason,
+        note: exchange.note ?? "",
+        createdAt: now(),
+      };
+      const nextSource = {
+        ...source,
+        items: source.items.map((item) => {
+          const returned = exchange.returns.find((entry) => entry.saleItemId === item.id);
+          return returned ? { ...item, refundedQty: item.refundedQty + returned.qty } : item;
+        }),
+        updatedAt: now(),
+      };
+      store.queuePosExchange(exchange);
+      rememberReceipt(nextSource);
+      rememberReceipt(replacement);
+      let nextCache = applyRefundToCache({ cache, receipt: source, items: exchange.returns });
+      nextCache = applySaleToCache({ cache: nextCache, receipt: replacement });
+      if (nextCache) setState("pos_cache", nextCache);
+      return replacement;
+    },
     rememberReceipt,
     listOfflineReceipts: () => {
       const stmt = db.prepare("SELECT sale_json FROM receipts ORDER BY updated_at DESC");
@@ -467,10 +553,17 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
       stmt.bind([needle, needle, needle]);
       const row = stmt.step() ? stmt.getAsObject() : null;
       stmt.free();
-      return parseJson(row?.sale_json ?? null, null);
+      const direct = parseJson(row?.sale_json ?? null, null);
+      if (direct) return direct;
+      return store.listOfflineReceipts().find((sale) => sale.receipt?.lookupCode?.toLowerCase() === needle) ?? null;
     },
     cacheCurrentUser: (user) => setState("cached_current_user", user),
     getCachedCurrentUser: () => getState("cached_current_user", null),
+    getPrinterProfiles: () => getState("printer_profiles", { receipt: null, sticker: null }),
+    savePrinterProfiles: (profiles) => {
+      setState("printer_profiles", profiles);
+      return profiles;
+    },
     getDesktopContext: () => ({
       appName: "Bilal RMS POS",
       appVersion,

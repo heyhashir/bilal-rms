@@ -102,7 +102,7 @@ test.describe("Bilal RMS smoke", () => {
 
     await page.goto("/admin/commissions");
     await expect(page.getByRole("cell", { name: testData.employeeName }).first()).toBeVisible();
-    await expect(page.getByText("reversed", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("cancelled", { exact: false }).first()).toBeVisible();
 
     await page.goto("/admin/refunds");
     await expect(page.getByRole("heading", { name: "Refunds" })).toBeVisible();

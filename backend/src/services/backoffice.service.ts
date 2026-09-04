@@ -207,6 +207,7 @@ export const backofficeService = {
           reference: purchase.id,
           note: input.note ?? `Vendor purchase from ${purchase.vendor.name}`,
           vendorPurchaseId: purchase.id,
+          vendorId: purchase.vendorId,
           adminAccountId: input.adminAccountId ?? null,
         },
       });
@@ -256,6 +257,7 @@ export const backofficeService = {
           amount: Number(purchase.unitCost) * purchase.quantity,
           reference: purchase.id,
           note: `Purchase reversal: ${input.reason}`,
+          vendorId: purchase.vendorId,
           adminAccountId: input.adminAccountId,
         },
       });
@@ -275,7 +277,7 @@ export const backofficeService = {
       });
     });
   },
-  listLedgerEntries(params?: { from?: string; to?: string }) {
+  listLedgerEntries(params?: { from?: string; to?: string; vendorId?: string }) {
     const from = params?.from ? new Date(params.from) : undefined;
     const to = params?.to ? new Date(params.to) : undefined;
     if (from && /^\d{4}-\d{2}-\d{2}$/.test(params?.from ?? '')) {
@@ -287,11 +289,13 @@ export const backofficeService = {
 
     return prisma.ledgerEntry.findMany({
       where: {
+        ...(params?.vendorId ? { vendorId: params.vendorId } : {}),
         createdAt: {
           gte: from,
           lte: to,
         },
       },
+      include: { vendor: true },
       orderBy: { createdAt: 'desc' },
     });
   },
@@ -301,6 +305,7 @@ export const backofficeService = {
     amount: number;
     reference?: string;
     note?: string;
+    vendorId?: string | null;
     adminAccountId?: string | null;
   }) {
     return prisma.ledgerEntry.create({
@@ -310,6 +315,7 @@ export const backofficeService = {
         amount: input.amount,
         reference: normalizeOptional(input.reference),
         note: input.note ?? '',
+        vendorId: normalizeOptional(input.vendorId),
         adminAccountId: input.adminAccountId ?? null,
         isManual: true,
       },
@@ -322,6 +328,7 @@ export const backofficeService = {
     amount: number;
     reference?: string;
     note?: string;
+    vendorId?: string | null;
   }) {
     const existing = await prisma.ledgerEntry.findUniqueOrThrow({ where: { id: input.id } });
     if (!existing.isManual || !['EXPENSE', 'ADJUSTMENT'].includes(existing.type)) {
@@ -335,6 +342,7 @@ export const backofficeService = {
         amount: input.amount,
         reference: normalizeOptional(input.reference),
         note: input.note ?? '',
+        vendorId: normalizeOptional(input.vendorId),
       },
     });
   },

@@ -38,15 +38,15 @@ export const reportService = {
 
     const employeeSummary = new Map<
       string,
-      { employeeId: string; employeeName: string; earned: number; reversed: number; paid: number; payable: number }
+      { employeeId: string; employeeName: string; earned: number; cancelled: number; paid: number; payable: number }
     >();
     const productSummary = new Map<
       string,
-      { productName: string; earned: number; reversed: number; paid: number; payable: number }
+      { productName: string; earned: number; cancelled: number; paid: number; payable: number }
     >();
 
     let earned = 0;
-    let reversed = 0;
+    let cancelled = 0;
     let paid = 0;
 
     for (const entry of commissions) {
@@ -57,7 +57,7 @@ export const reportService = {
           employeeId: entry.employeeId,
           employeeName: entry.employee.name,
           earned: 0,
-          reversed: 0,
+          cancelled: 0,
           paid: 0,
           payable: 0,
         };
@@ -67,28 +67,28 @@ export const reportService = {
         {
           productName: entry.saleItem.name,
           earned: 0,
-          reversed: 0,
+          cancelled: 0,
           paid: 0,
           payable: 0,
         };
 
+      const cancelledAmount = Number(entry.cancelledAmount);
+      const payableAmount = Math.max(0, amount - cancelledAmount);
       if (entry.status === 'PAID') {
-        paid += amount;
-        employeeRow.paid += amount;
-        productRow.paid += amount;
-      } else if (entry.status === 'REVERSED') {
-        reversed += amount;
-        employeeRow.reversed += amount;
-        productRow.reversed += amount;
+        paid += payableAmount;
+        employeeRow.paid += payableAmount;
+        productRow.paid += payableAmount;
       } else {
-        earned += amount;
-        employeeRow.earned += amount;
-        productRow.earned += amount;
+        earned += payableAmount;
+        cancelled += cancelledAmount;
+        employeeRow.earned += payableAmount;
+        employeeRow.cancelled += cancelledAmount;
+        productRow.earned += payableAmount;
+        productRow.cancelled += cancelledAmount;
       }
 
-      // EARNED excludes entries already marked PAID; do not deduct them a second time.
-      employeeRow.payable = employeeRow.earned + employeeRow.reversed;
-      productRow.payable = productRow.earned + productRow.reversed;
+      employeeRow.payable = employeeRow.earned;
+      productRow.payable = productRow.earned;
       employeeSummary.set(entry.employeeId, employeeRow);
       productSummary.set(productKey, productRow);
     }
@@ -263,9 +263,10 @@ export const reportService = {
       },
       commissions: {
         earned,
-        reversed,
+        reversed: 0,
+        cancelled,
         paid,
-        payable: earned + reversed,
+        payable: earned,
       },
       employees: Array.from(employeeSummary.values()).sort((left, right) => right.payable - left.payable),
       products: Array.from(productSummary.entries())
