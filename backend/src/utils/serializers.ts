@@ -236,9 +236,11 @@ export const serializeSettings = (settings: StoreSetting) => ({
   barcodePrefix: settings.barcodePrefix,
   qrPrefix: settings.qrPrefix,
   barcodeLabelTemplate: settings.barcodeLabelTemplate,
+  whatsapp: settings.whatsapp ?? '',
   instagram: settings.instagram ?? '',
   facebook: settings.facebook ?? '',
   tiktok: settings.tiktok ?? '',
+  youtube: settings.youtube ?? '',
   metaTitle: settings.metaTitle,
   metaDescription: settings.metaDescription,
 });

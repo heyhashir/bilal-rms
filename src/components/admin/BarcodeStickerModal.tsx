@@ -51,7 +51,47 @@ export function BarcodeStickerModal({
 }) {
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ["admin", "barcode-labels", product.id, variantId ?? "all"],
-    queryFn: () => adminCatalogApi.barcodeLabels({ productId: product.id, variantId }),
+    queryFn: async () => {
+      try {
+        return await adminCatalogApi.barcodeLabels({ productId: product.id, variantId });
+      } catch (error) {
+        const filteredVariants = variantId ? product.variants.filter((v) => v.id === variantId) : product.variants;
+        if (filteredVariants.length > 0) {
+          return {
+            labels: filteredVariants.map((v) => ({
+              productId: product.id,
+              variantId: v.id ?? null,
+              name: product.name,
+              sku: v.sku || product.barcode || "",
+              size: v.size || "",
+              color: v.colorName || "",
+              price: v.priceOverride ?? product.salePrice ?? product.price,
+              stock: v.stock,
+              barcode: v.barcode || product.barcode || "",
+              qrCode: v.qrCode || product.qrCode || "",
+              supplierBarcode: v.supplierBarcode || product.supplierBarcode || "",
+            })),
+          };
+        }
+        return {
+          labels: [
+            {
+              productId: product.id,
+              variantId: null,
+              name: product.name,
+              sku: product.barcode || "",
+              size: product.sizes?.[0] || "",
+              color: product.colors?.[0]?.name || "",
+              price: product.salePrice ?? product.price,
+              stock: product.stock,
+              barcode: product.barcode || "",
+              qrCode: product.qrCode || "",
+              supplierBarcode: product.supplierBarcode || "",
+            },
+          ],
+        };
+      }
+    },
   });
   const labels = data?.labels;
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -61,6 +101,7 @@ export function BarcodeStickerModal({
   const [customWidth, setCustomWidth] = useState(38);
   const [customHeight, setCustomHeight] = useState(25);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [offsetY, setOffsetY] = useState(0);
   const [showPrinterProfiles, setShowPrinterProfiles] = useState(false);
   const [profileRevision, setProfileRevision] = useState(0);
   const [printing, setPrinting] = useState(false);
@@ -69,18 +110,21 @@ export function BarcodeStickerModal({
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-    const desktopProfile = hasOneClickPrinting() ? (await printingClient.getProfiles()).sticker : null;
-    const saved = desktopProfile ?? (() => {
-      try { return JSON.parse(localStorage.getItem("bilal_rms_sticker_layout") ?? "null"); } catch { return null; }
-    })();
-    if (!saved || cancelled) return;
-    setCustomWidth(saved.widthMm ?? 38);
-    setCustomHeight(saved.heightMm ?? 25);
-    setSizePreset(LABEL_SIZE_PRESETS.some((entry) => entry.id === `${saved.widthMm}x${saved.heightMm}`) ? `${saved.widthMm}x${saved.heightMm}` : "custom");
-    setRotation(saved.orientation ?? 0);
-    setTemplate(saved.design ?? "standard");
+      const desktopProfile = hasOneClickPrinting() ? (await printingClient.getProfiles().catch(() => null))?.sticker : null;
+      const saved = desktopProfile ?? (() => {
+        try { return JSON.parse(localStorage.getItem("bilal_rms_sticker_layout") ?? "null"); } catch { return null; }
+      })();
+      if (!saved || cancelled) return;
+      if (saved.widthMm) setCustomWidth(saved.widthMm);
+      if (saved.heightMm) setCustomHeight(saved.heightMm);
+      if (saved.widthMm && saved.heightMm) {
+        setSizePreset(LABEL_SIZE_PRESETS.some((entry) => entry.id === `${saved.widthMm}x${saved.heightMm}`) ? `${saved.widthMm}x${saved.heightMm}` : "custom");
+      }
+      if (saved.orientation !== undefined) setRotation(saved.orientation as 0 | 90 | 180 | 270);
+      if (saved.design) setTemplate(saved.design as "standard" | "compact" | "branded");
+      if (saved.offsetYmm !== undefined) setOffsetY(Number(saved.offsetYmm) || 0);
     };
-    void load().catch(error => toast.error(error.message));
+    void load();
     return () => { cancelled = true; };
   }, [profileRevision]);
 
@@ -89,6 +133,14 @@ export function BarcodeStickerModal({
   const heightMm = sizePreset === "custom" ? customHeight : selectedPreset.heightMm;
   const layoutWidth = rotation === 90 || rotation === 270 ? heightMm : widthMm;
   const layoutHeight = rotation === 90 || rotation === 270 ? widthMm : heightMm;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("bilal_rms_sticker_layout", JSON.stringify({ widthMm, heightMm, orientation: rotation, design: template, offsetYmm: offsetY }));
+    } catch {
+      // Ignore local storage quota or privacy restriction errors
+    }
+  }, [widthMm, heightMm, rotation, template, offsetY]);
   const unsafeLabels = (labels ?? []).filter((label) => (quantities[label.variantId || label.productId] ?? 0) > 0 && !stickerBarcodeFits(label.barcode, layoutWidth, layoutHeight));
   const requiredWidth = Math.ceil(Math.max(0, ...unsafeLabels.map((label) => (encodeStickerBarcode(label.barcode)?.widthMm ?? 0) + STICKER_PADDING_MM * 2)));
 
@@ -172,6 +224,11 @@ export function BarcodeStickerModal({
                   ? `transform: rotate(${rotation}deg); transform-origin: center center;`
                   : ""
               }
+              ${
+                offsetY !== 0
+                  ? `position: relative !important; top: ${offsetY}mm !important;`
+                  : ""
+              }
             }
             ${STICKER_CSS}
           </style>
@@ -198,7 +255,7 @@ export function BarcodeStickerModal({
       }
       await printingClient.saveProfiles({
         ...profiles,
-        sticker: { ...profiles.sticker, widthMm, heightMm, orientation: rotation, design: template },
+        sticker: { ...profiles.sticker, widthMm, heightMm, orientation: rotation, design: template, offsetYmm: offsetY },
       });
         await printingClient.stickers({
           html,
@@ -264,7 +321,7 @@ export function BarcodeStickerModal({
             <Settings2 className="h-4 w-4" /> Thermal Printer & Label Calibration
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Label Size Preset */}
             <div>
               <label htmlFor="barcode-label-roll-size" className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -339,7 +396,7 @@ export function BarcodeStickerModal({
             <div>
               <label htmlFor="barcode-print-orientation" className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <span>Print Orientation</span>
-                <span className="text-[10px] text-amber-600 font-bold">Fix Rotation</span>
+                <span className="text-[10px] text-amber-600 font-bold">Rotation</span>
               </label>
               <select
                 id="barcode-print-orientation"
@@ -352,6 +409,28 @@ export function BarcodeStickerModal({
                     {opt.name}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            {/* Vertical Alignment / Shift */}
+            <div>
+              <label htmlFor="barcode-print-offset-y" className="mb-1.5 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <span>Vertical Shift</span>
+                <span className="text-[10px] text-primary font-bold">Nudge</span>
+              </label>
+              <select
+                id="barcode-print-offset-y"
+                value={String(offsetY)}
+                onChange={(e) => setOffsetY(Number(e.target.value) || 0)}
+                className="w-full rounded border border-border bg-background px-3 py-2 text-xs font-medium outline-none focus:border-foreground"
+              >
+                <option value="-3">-3 mm (Shift Up a lot)</option>
+                <option value="-2">-2 mm (Shift Up)</option>
+                <option value="-1">-1 mm (Shift Up slightly)</option>
+                <option value="0">0 mm (Default)</option>
+                <option value="1">+1 mm (Shift Down slightly)</option>
+                <option value="2">+2 mm (Shift Down)</option>
+                <option value="3">+3 mm (Shift Down a lot)</option>
               </select>
             </div>
           </div>
@@ -435,7 +514,7 @@ export function BarcodeStickerModal({
           <div>
             <div className="mb-2.5 flex items-center justify-between">
               <span className="text-xs uppercase tracking-widest font-semibold text-muted-foreground">
-                Live Sticker Preview ({widthMm}mm × {heightMm}mm @ {rotation}°)
+                Live Sticker Preview ({widthMm}mm × {heightMm}mm @ {rotation}°{offsetY !== 0 ? ` | Shift: ${offsetY > 0 ? `+${offsetY}` : offsetY}mm` : ""})
               </span>
               <button
                 type="button"
@@ -455,13 +534,15 @@ export function BarcodeStickerModal({
                 }}
                 className="shadow-md rounded-sm overflow-hidden bg-white"
               >
-                <BarcodeSticker
-                  label={labels[0]}
-                  template={template}
-                  customTitle={customTitle}
-                  widthMm={layoutWidth}
-                  heightMm={layoutHeight}
-                />
+                <div style={{ position: "relative", top: `${offsetY}mm`, height: "100%" }}>
+                  <BarcodeSticker
+                    label={labels[0]}
+                    template={template}
+                    customTitle={customTitle}
+                    widthMm={layoutWidth}
+                    heightMm={layoutHeight}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -484,7 +565,13 @@ export function BarcodeStickerModal({
           </div>
         ))}
       </div>
-      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} onSaved={() => setProfileRevision(value => value + 1)} />}
+      {showPrinterProfiles && (
+        <PrinterProfilesModal
+          initialPreset={{ widthMm, heightMm, orientation: rotation, design: template }}
+          onClose={() => setShowPrinterProfiles(false)}
+          onSaved={() => setProfileRevision((value) => value + 1)}
+        />
+      )}
     </Modal>
   );
 }
@@ -514,6 +601,7 @@ function BarcodeSticker({
   </div>;
 
   if (template === "standard") {
+    const metaLeft = [colorText, sizeText].filter(Boolean).join(" / ") || "MIX";
     return (
       <article className="barcode-sticker barcode-sticker--standard">
         <div className="sticker-standard-header">
@@ -523,12 +611,8 @@ function BarcodeSticker({
           {displayTitle}
         </div>
         <div className="sticker-standard-row">
-          <span>{colorText}</span>
-          <span>{sizeText}</span>
-        </div>
-        <div className="sticker-standard-price">
-          <span>PRICE:</span>
-          <span>{formattedPrice}</span>
+          <span>{metaLeft}</span>
+          <span className="sticker-standard-price">{formattedPrice}</span>
         </div>
         {barcode}
       </article>

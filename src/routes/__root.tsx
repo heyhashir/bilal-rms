@@ -105,6 +105,10 @@ function RootComponent() {
     let lastHandledAt = 0;
 
     const handleAuthExpired = () => {
+      if (isDesktopWorkspace) {
+        return;
+      }
+
       const now = Date.now();
       if (now - lastHandledAt < 1000) {
         return;
@@ -123,7 +127,7 @@ function RootComponent() {
     return () => {
       window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired as EventListener);
     };
-  }, [expireSession]);
+  }, [expireSession, isDesktopWorkspace]);
 
   useEffect(() => {
     // Buy Now is a temporary checkout-only line. Clear it after the user leaves

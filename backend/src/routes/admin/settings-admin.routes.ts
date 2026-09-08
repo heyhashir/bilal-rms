@@ -46,9 +46,11 @@ const settingsSchema = z.object({
   barcodePrefix: z.string().min(1),
   qrPrefix: z.string().min(1),
   barcodeLabelTemplate: z.enum(['branded', 'compact']).default('branded'),
+  whatsapp: z.string().optional().or(z.literal('')),
   instagram: z.string().optional().or(z.literal('')),
   facebook: z.string().optional().or(z.literal('')),
   tiktok: z.string().optional().or(z.literal('')),
+  youtube: z.string().optional().or(z.literal('')),
   metaTitle: z.string().min(2),
   metaDescription: z.string().min(3),
 });

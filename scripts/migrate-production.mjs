@@ -29,6 +29,8 @@ const REQUIRED_COLUMNS = [
   ["ledger_entries", "vendorId", "VARCHAR(191) NULL"],
   ["commission_entries", "cancelledAmount", "DECIMAL(10, 2) NOT NULL DEFAULT 0"],
   ["pos_returns", "exchangeId", "VARCHAR(191) NULL"],
+  ["store_settings", "whatsapp", "VARCHAR(191) NULL"],
+  ["store_settings", "youtube", "VARCHAR(191) NULL"],
 ];
 
 const REQUIRED_INDEXES = [

@@ -9,9 +9,11 @@ export const site = {
   currency: "PKR",
   currencySymbol: "Rs.",
   social: {
+    whatsapp: "https://wa.me/923000000000",
     instagram: "https://instagram.com",
     facebook: "https://facebook.com",
     tiktok: "https://tiktok.com",
+    youtube: "https://youtube.com",
   },
   shipping: {
     flatRate: 250,

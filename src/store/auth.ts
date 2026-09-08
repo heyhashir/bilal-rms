@@ -83,10 +83,21 @@ export const useAuth = create<AuthState>((set, get) => ({
       if (get().authRequestId !== requestId) {
         return;
       }
+      const desktopUser =
+        typeof window !== "undefined" && window.bilalDesktop
+          ? window.bilalDesktop.getCachedCurrentUser()
+          : null;
+      if (desktopUser) {
+        setUserState(set, desktopUser);
+        queryClient.setQueryData(queryKeys.auth.currentUser, desktopUser);
+      }
       set({ loading: false, hydrated: true });
     }
   },
   expireSession: () => {
+    if (typeof window !== "undefined" && window.bilalDesktop) {
+      return;
+    }
     const requestId = get().authRequestId + 1;
     setUserState(set, null);
     set({ loading: false, hydrated: true, authRequestId: requestId });

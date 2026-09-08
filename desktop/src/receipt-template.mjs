@@ -85,7 +85,7 @@ export const createReceiptHtml = ({ sale, settings, profile }) => {
       <meta charset="utf-8" />
       <title>${escapeHtml(receiptId)}</title>
       <style>
-        @page { margin: 0; }
+        @page { size: ${rollWidthMm}mm auto; margin: 0; }
         * { box-sizing: border-box; }
         body {
           font-family: "Arial Narrow", "Segoe UI", Arial, sans-serif;
@@ -93,6 +93,7 @@ export const createReceiptHtml = ({ sale, settings, profile }) => {
           margin: 0;
           padding: ${profile?.paddingMm ?? 3}mm;
           padding-top: ${(profile?.paddingMm ?? 3) + (profile?.feedOffsetMm ?? 0)}mm;
+          padding-bottom: ${(profile?.paddingMm ?? 3) + 4}mm;
           color: #000;
           background: #fff;
           font-size: 9px;

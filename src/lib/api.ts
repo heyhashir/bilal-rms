@@ -87,6 +87,10 @@ const shouldEmitAuthExpired = (url: string, status: number) => {
     return false;
   }
 
+  if (typeof window !== "undefined" && window.bilalDesktop) {
+    return false;
+  }
+
   return !url.startsWith("/auth/");
 };
 

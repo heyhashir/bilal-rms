@@ -43,9 +43,11 @@ const emptySettings: StorefrontSettings = {
   barcodePrefix: "BALY",
   qrPrefix: "BALYQ",
   barcodeLabelTemplate: "branded",
+  whatsapp: "",
   instagram: "",
   facebook: "",
   tiktok: "",
+  youtube: "",
   metaTitle: "",
   metaDescription: "",
 };
@@ -131,9 +133,11 @@ function AdminSettings() {
       barcodePrefix: settings.barcodePrefix,
       qrPrefix: settings.qrPrefix,
       barcodeLabelTemplate: settings.barcodeLabelTemplate,
+      whatsapp: settings.whatsapp,
       instagram: settings.instagram,
       facebook: settings.facebook,
       tiktok: settings.tiktok,
+      youtube: settings.youtube,
       metaTitle: settings.metaTitle,
       metaDescription: settings.metaDescription,
     });
@@ -172,6 +176,46 @@ function AdminSettings() {
           <Field label="Tax number (optional)" value={settings.taxNumber} onChange={(v) => setSettings({ ...settings, taxNumber: v })} />
           <Field label="Receipt logo path (optional)" value={settings.receiptLogoPath} onChange={(v) => setSettings({ ...settings, receiptLogoPath: v })} />
         </div>
+      </section>
+
+      <section>
+        <h2 className="display mb-5 text-2xl">Social links</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field
+            label="WhatsApp (number or wa.me link)"
+            value={settings.whatsapp}
+            onChange={(v) => setSettings({ ...settings, whatsapp: v })}
+            placeholder="+92 300 0000000 or https://wa.me/923000000000"
+          />
+          <Field
+            label="Instagram URL"
+            value={settings.instagram}
+            onChange={(v) => setSettings({ ...settings, instagram: v })}
+            placeholder="https://instagram.com/bilalgarments"
+          />
+          <Field
+            label="Facebook URL"
+            value={settings.facebook}
+            onChange={(v) => setSettings({ ...settings, facebook: v })}
+            placeholder="https://facebook.com/bilalgarments"
+          />
+          <Field
+            label="TikTok URL"
+            value={settings.tiktok}
+            onChange={(v) => setSettings({ ...settings, tiktok: v })}
+            placeholder="https://tiktok.com/@bilalgarments"
+          />
+          <Field
+            label="YouTube URL (optional)"
+            value={settings.youtube}
+            onChange={(v) => setSettings({ ...settings, youtube: v })}
+            placeholder="https://youtube.com/@bilalgarments"
+            className="md:col-span-2"
+          />
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          These social and WhatsApp links are displayed in the customer care drawer, footer, and contact sections.
+        </p>
       </section>
 
       <section>

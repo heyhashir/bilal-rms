@@ -123,9 +123,11 @@ export type StorefrontSettings = {
   barcodePrefix: string;
   qrPrefix: string;
   barcodeLabelTemplate: "branded" | "compact";
+  whatsapp: string;
   instagram: string;
   facebook: string;
   tiktok: string;
+  youtube: string;
   metaTitle: string;
   metaDescription: string;
 };

@@ -170,6 +170,7 @@ export function Field({
   textarea,
   placeholder,
   autoFocus,
+  className,
 }: {
   label: string;
   value: string;
@@ -178,9 +179,10 @@ export function Field({
   textarea?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  className?: string;
 }) {
   return (
-    <label className="block">
+    <label className={`block ${className ?? ""}`}>
       <span className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground">{label}</span>
       {textarea ? (
         <textarea

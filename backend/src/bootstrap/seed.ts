@@ -91,9 +91,11 @@ export const bootstrapData = async (): Promise<void> => {
         qrPrefix: 'BALYQ',
         metaTitle: 'BALY by Bilal Garments EST 2001. - Contemporary fashion and retail',
         metaDescription: 'Shop contemporary clothing, in-store billing, and curated essentials from BALY by Bilal Garments EST 2001.',
+        whatsapp: 'https://wa.me/923000000000',
         instagram: 'https://instagram.com',
         facebook: 'https://facebook.com',
         tiktok: 'https://tiktok.com',
+        youtube: 'https://youtube.com',
       },
     });
   } else {

@@ -781,9 +781,11 @@ model StoreSetting {
   barcodeLabelTemplate String   @default("branded")
   metaTitle            String
   metaDescription      String   @db.Text
+  whatsapp             String?
   instagram            String?
   facebook             String?
   tiktok               String?
+  youtube              String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

@@ -27,6 +27,7 @@ import type { Brand, Category, Product, SizeChart } from "@/lib/catalog-types";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, QueryErrorState, SelectField } from "@/components/admin/primitives";
 import { formatPrice } from "@/lib/format";
 import { BarcodeStickerModal } from "@/components/admin/BarcodeStickerModal";
+import { loadPosCache } from "@/lib/pos-local";
 import { newShortBarcode } from "@/lib/sticker-barcode";
 import { sizeCharts } from "@/config/site";
 
@@ -145,22 +146,64 @@ const invalidateCatalogAfterMutation = async () => {
 function AdminProducts() {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [printing, setPrinting] = useState<Product | null>(null);
+  const initialProducts = useMemo(() => loadPosCache()?.products ?? [], []);
   const {
-    data: products = [],
+    data: products = initialProducts,
     isLoading: isProductsLoading,
     isError: isProductsError,
     refetch: refetchProducts,
   } = useQuery({
     queryKey: queryKeys.admin.products,
-    queryFn: async () => (await adminCatalogApi.products()).products,
+    queryFn: async () => {
+      try {
+        return (await adminCatalogApi.products()).products;
+      } catch (error) {
+        const cached = loadPosCache();
+        if (cached?.products && cached.products.length > 0) {
+          return cached.products;
+        }
+        throw error;
+      }
+    },
+    initialData: initialProducts.length > 0 ? initialProducts : undefined,
   });
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.admin.categories,
-    queryFn: async () => (await adminCatalogApi.categories()).categories,
+    queryFn: async () => {
+      try {
+        return (await adminCatalogApi.categories()).categories;
+      } catch (error) {
+        const cached = loadPosCache();
+        const pList = cached?.products || [];
+        const seen = new Set<string>();
+        const derived: Category[] = [];
+        for (const p of pList) {
+          if (p.category && !seen.has(p.category)) {
+            seen.add(p.category);
+            derived.push({
+              id: p.category,
+              name: p.categoryName || p.category.charAt(0).toUpperCase() + p.category.slice(1),
+              slug: p.category,
+              description: "",
+              parentId: null,
+              isActive: true,
+              children: [],
+            });
+          }
+        }
+        return derived;
+      }
+    },
   });
   const { data: brands = [] } = useQuery({
     queryKey: queryKeys.admin.brands,
-    queryFn: async () => (await adminCatalogApi.brands()).brands,
+    queryFn: async () => {
+      try {
+        return (await adminCatalogApi.brands()).brands;
+      } catch {
+        return [];
+      }
+    },
   });
   const categoryOptions = useMemo(
     () => categories.flatMap((category) => [category, ...category.children]),

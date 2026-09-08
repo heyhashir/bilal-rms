@@ -35,9 +35,11 @@ export const settingsRepository = {
       barcodePrefix: string;
       qrPrefix: string;
       barcodeLabelTemplate: string;
+      whatsapp?: string | null;
       instagram?: string | null;
       facebook?: string | null;
       tiktok?: string | null;
+      youtube?: string | null;
       metaTitle: string;
       metaDescription: string;
     },

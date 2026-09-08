@@ -16,27 +16,28 @@ export function useProtectedUser({ role, redirectTo = "/login", unauthorizedRedi
   const navigate = useNavigate();
   const allowedRoles = useMemo(() => (Array.isArray(role) ? role : role ? [role] : []), [role]);
 
-  const isPending = !auth.hydrated || auth.loading || userLoading;
-  const isAuthorized = !isPending && Boolean(user) && (allowedRoles.length === 0 || allowedRoles.includes(user!.role));
+  const activeUser = user ?? auth.user;
+  const isPending = (!auth.hydrated && !activeUser) || (auth.loading && !activeUser) || (userLoading && !activeUser);
+  const isAuthorized = !isPending && Boolean(activeUser) && (allowedRoles.length === 0 || allowedRoles.includes(activeUser!.role));
 
   useEffect(() => {
     if (isPending) {
       return;
     }
 
-    if (!user) {
+    if (!activeUser) {
       void navigate({ to: redirectTo });
       return;
     }
 
-    if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    if (allowedRoles.length > 0 && !allowedRoles.includes(activeUser.role)) {
       void navigate({ to: unauthorizedRedirectTo });
     }
-  }, [allowedRoles, isPending, navigate, redirectTo, unauthorizedRedirectTo, user]);
+  }, [allowedRoles, isPending, navigate, redirectTo, unauthorizedRedirectTo, activeUser]);
 
   return {
     auth,
-    user,
+    user: activeUser,
     isPending,
     isAuthorized,
   };

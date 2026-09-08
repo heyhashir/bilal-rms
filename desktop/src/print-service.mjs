@@ -4,7 +4,9 @@ import { timingSafeEqual } from "node:crypto";
 export function startPrintService({ token, origins, listPrinters, getProfiles, saveProfiles, print, port = 17841 }) {
   const server = http.createServer(async (req, res) => {
     const origin = req.headers.origin;
-    if (!origins.includes(origin) || req.headers.host !== `127.0.0.1:${server.address().port}`) {
+    const host = req.headers.host || "";
+    const port = server.address().port;
+    if (!origins.includes(origin) || (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`)) {
       res.writeHead(403).end(); return;
     }
     res.setHeader("Access-Control-Allow-Origin", origin);

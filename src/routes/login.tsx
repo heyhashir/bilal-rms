@@ -24,7 +24,7 @@ function Login() {
     toast.success(mode === "login" ? "Welcome back" : "Account created");
     const u = useAuth.getState().user;
     const isDesktopOperator = isDesktopRuntime() && ["admin", "manager", "staff"].includes(u?.role ?? "");
-    nav({ to: isDesktopOperator ? "/admin" : u?.role === "admin" ? "/admin" : "/account" });
+    nav({ to: isDesktopOperator ? "/pos" : u?.role === "admin" ? "/admin" : "/account" });
   };
 
   return (

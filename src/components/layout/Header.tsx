@@ -13,6 +13,8 @@ import {
   Phone,
   MessageCircle,
   Instagram,
+  Facebook,
+  Youtube,
   Shirt,
   Sparkles,
   Tag,
@@ -70,12 +72,36 @@ const fallbackSettings: StorefrontSettings = {
   barcodePrefix: "BALY",
   qrPrefix: "BALYQ",
   barcodeLabelTemplate: "branded",
+  whatsapp: site.social.whatsapp,
   instagram: site.social.instagram,
   facebook: site.social.facebook,
   tiktok: site.social.tiktok,
+  youtube: site.social.youtube,
   metaTitle: site.name,
   metaDescription: site.description,
 };
+
+function getWhatsAppUrl(val?: string) {
+  if (!val) return "";
+  const trimmed = val.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  const digits = trimmed.replace(/[^0-9]/g, "");
+  return digits ? `https://wa.me/${digits}` : "";
+}
+
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64c.298-.002.595.042.88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 3 15.67 6.34 6.34 0 0 0 9.34 22a6.34 6.34 0 0 0 6.34-6.33V9.05a8.16 8.16 0 0 0 4.91 1.63V7.23a4.71 4.71 0 0 1-1-.54z" />
+    </svg>
+  );
+}
+
 
 type MenuCategoryItem = {
   label: string;
@@ -400,40 +426,94 @@ export function Header() {
             </div>
 
             {/* Customer Care Section */}
-            <div className="border-t border-border/80 bg-secondary/30 px-4 py-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                  Customer Care
-                </span>
-                <div className="flex items-center gap-3">
-                  <a
-                    href="https://wa.me/923000000000"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
-                    aria-label="WhatsApp Support"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                  </a>
-                  <a
-                    href="tel:080000000"
-                    className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
-                    aria-label="Phone Support"
-                  >
-                    <Phone className="h-3.5 w-3.5" />
-                  </a>
-                  <a
-                    href="https://instagram.com"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
-                    aria-label="Instagram"
-                  >
-                    <Instagram className="h-3.5 w-3.5" />
-                  </a>
+            {Boolean(
+              settings.whatsapp ||
+              settings.phone ||
+              settings.instagram ||
+              settings.facebook ||
+              settings.tiktok ||
+              settings.youtube
+            ) && (
+              <div className="border-t border-border/80 bg-secondary/30 px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    Customer Care
+                  </span>
+                  <div className="flex items-center gap-2.5">
+                    {getWhatsAppUrl(settings.whatsapp) && (
+                      <a
+                        href={getWhatsAppUrl(settings.whatsapp)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                        aria-label="WhatsApp Support"
+                        title="WhatsApp"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    {settings.phone && (
+                      <a
+                        href={`tel:${settings.phone.replace(/[^0-9+]/g, "")}`}
+                        className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                        aria-label="Phone Support"
+                        title="Call us"
+                      >
+                        <Phone className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    {settings.instagram && (
+                      <a
+                        href={settings.instagram}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                        aria-label="Instagram"
+                        title="Instagram"
+                      >
+                        <Instagram className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    {settings.facebook && (
+                      <a
+                        href={settings.facebook}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                        aria-label="Facebook"
+                        title="Facebook"
+                      >
+                        <Facebook className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    {settings.tiktok && (
+                      <a
+                        href={settings.tiktok}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                        aria-label="TikTok"
+                        title="TikTok"
+                      >
+                        <TikTokIcon className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                    {settings.youtube && (
+                      <a
+                        href={settings.youtube}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="grid h-7 w-7 place-items-center rounded-full bg-background border border-border text-foreground hover:text-accent transition-colors"
+                        aria-label="YouTube"
+                        title="YouTube"
+                      >
+                        <Youtube className="h-3.5 w-3.5" />
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Bottom 3-Button Utility Bar: Stores | Tracking | Contact */}
             <div className="grid grid-cols-3 border-t border-border bg-secondary/80 text-center">
@@ -542,6 +622,68 @@ export function Footer() {
         <div>
           <BrandMark settings={settings} variant="footer" />
           <p className="mt-4 max-w-xs text-sm text-muted-foreground">{settings.description}</p>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            {getWhatsAppUrl(settings.whatsapp) && (
+              <a
+                href={getWhatsAppUrl(settings.whatsapp)}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-8 w-8 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                aria-label="WhatsApp"
+                title="WhatsApp"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </a>
+            )}
+            {settings.instagram && (
+              <a
+                href={settings.instagram}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-8 w-8 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                aria-label="Instagram"
+                title="Instagram"
+              >
+                <Instagram className="h-4 w-4" />
+              </a>
+            )}
+            {settings.facebook && (
+              <a
+                href={settings.facebook}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-8 w-8 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                aria-label="Facebook"
+                title="Facebook"
+              >
+                <Facebook className="h-4 w-4" />
+              </a>
+            )}
+            {settings.tiktok && (
+              <a
+                href={settings.tiktok}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-8 w-8 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                aria-label="TikTok"
+                title="TikTok"
+              >
+                <TikTokIcon className="h-4 w-4" />
+              </a>
+            )}
+            {settings.youtube && (
+              <a
+                href={settings.youtube}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-8 w-8 place-items-center rounded-full border border-border bg-background text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+                aria-label="YouTube"
+                title="YouTube"
+              >
+                <Youtube className="h-4 w-4" />
+              </a>
+            )}
+          </div>
         </div>
         <FooterCol
           title="Shop"

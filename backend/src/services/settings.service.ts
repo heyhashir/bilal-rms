@@ -36,9 +36,11 @@ export const settingsService = {
     barcodePrefix: string;
     qrPrefix: string;
     barcodeLabelTemplate: 'branded' | 'compact';
+    whatsapp?: string;
     instagram?: string;
     facebook?: string;
     tiktok?: string;
+    youtube?: string;
     metaTitle: string;
     metaDescription: string;
   }) {
@@ -70,9 +72,11 @@ export const settingsService = {
         barcodePrefix: input.barcodePrefix,
         qrPrefix: input.qrPrefix,
         barcodeLabelTemplate: input.barcodeLabelTemplate,
+        whatsapp: input.whatsapp || null,
         instagram: input.instagram || null,
         facebook: input.facebook || null,
         tiktok: input.tiktok || null,
+        youtube: input.youtube || null,
         metaTitle: input.metaTitle,
         metaDescription: input.metaDescription,
     });

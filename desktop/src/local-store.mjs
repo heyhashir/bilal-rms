@@ -561,8 +561,17 @@ export const createLocalStore = async ({ userDataPath, cloudApiBaseUrl, appVersi
     getCachedCurrentUser: () => getState("cached_current_user", null),
     getPrinterProfiles: () => getState("printer_profiles", { receipt: null, sticker: null }),
     savePrinterProfiles: (profiles) => {
-      setState("printer_profiles", profiles);
-      return profiles;
+      const existing = getState("printer_profiles", { receipt: null, sticker: null }) || { receipt: null, sticker: null };
+      const merged = {
+        receipt: profiles?.receipt !== undefined
+          ? (profiles.receipt ? { ...(existing.receipt || {}), ...profiles.receipt } : null)
+          : (existing.receipt || null),
+        sticker: profiles?.sticker !== undefined
+          ? (profiles.sticker ? { ...(existing.sticker || {}), ...profiles.sticker } : null)
+          : (existing.sticker || null),
+      };
+      setState("printer_profiles", merged);
+      return merged;
     },
     getDesktopContext: () => ({
       appName: "Bilal RMS POS",
