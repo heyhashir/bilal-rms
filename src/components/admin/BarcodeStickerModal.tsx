@@ -11,6 +11,7 @@ import { STICKER_CSS } from "@/lib/sticker-layout";
 import { formatPrice } from "@/lib/format";
 import { getDesktopBridge } from "@/lib/desktop-bridge";
 import { PrinterProfilesModal } from "@/components/pos/PrinterProfilesModal";
+import { hasOneClickPrinting, printingClient } from "@/lib/printing-client";
 
 type Label = Awaited<ReturnType<typeof adminCatalogApi.barcodeLabels>>["labels"][number];
 
@@ -61,25 +62,34 @@ export function BarcodeStickerModal({
   const [customHeight, setCustomHeight] = useState(25);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [showPrinterProfiles, setShowPrinterProfiles] = useState(false);
+  const [profileRevision, setProfileRevision] = useState(0);
+  const [printing, setPrinting] = useState(false);
   const printRootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const desktopProfile = getDesktopBridge()?.getPrinterProfiles().sticker;
+    let cancelled = false;
+    const load = async () => {
+    const desktopProfile = hasOneClickPrinting() ? (await printingClient.getProfiles()).sticker : null;
     const saved = desktopProfile ?? (() => {
       try { return JSON.parse(localStorage.getItem("bilal_rms_sticker_layout") ?? "null"); } catch { return null; }
     })();
-    if (!saved) return;
+    if (!saved || cancelled) return;
     setCustomWidth(saved.widthMm ?? 38);
     setCustomHeight(saved.heightMm ?? 25);
     setSizePreset(LABEL_SIZE_PRESETS.some((entry) => entry.id === `${saved.widthMm}x${saved.heightMm}`) ? `${saved.widthMm}x${saved.heightMm}` : "custom");
     setRotation(saved.orientation ?? 0);
     setTemplate(saved.design ?? "standard");
-  }, []);
+    };
+    void load().catch(error => toast.error(error.message));
+    return () => { cancelled = true; };
+  }, [profileRevision]);
 
   const selectedPreset = LABEL_SIZE_PRESETS.find((p) => p.id === sizePreset) ?? LABEL_SIZE_PRESETS[0];
   const widthMm = sizePreset === "custom" ? customWidth : selectedPreset.widthMm;
   const heightMm = sizePreset === "custom" ? customHeight : selectedPreset.heightMm;
-  const unsafeLabels = (labels ?? []).filter((label) => (quantities[label.variantId || label.productId] ?? 0) > 0 && !stickerBarcodeFits(label.barcode, widthMm, heightMm));
+  const layoutWidth = rotation === 90 || rotation === 270 ? heightMm : widthMm;
+  const layoutHeight = rotation === 90 || rotation === 270 ? widthMm : heightMm;
+  const unsafeLabels = (labels ?? []).filter((label) => (quantities[label.variantId || label.productId] ?? 0) > 0 && !stickerBarcodeFits(label.barcode, layoutWidth, layoutHeight));
   const requiredWidth = Math.ceil(Math.max(0, ...unsafeLabels.map((label) => (encodeStickerBarcode(label.barcode)?.widthMm ?? 0) + STICKER_PADDING_MM * 2)));
 
   useEffect(() => {
@@ -103,9 +113,8 @@ export function BarcodeStickerModal({
 
     const printableClone = printRootRef.current.cloneNode(true) as HTMLDivElement;
 
-    const isRotated = rotation === 90 || rotation === 270;
-    const effectiveWidth = isRotated ? heightMm : widthMm;
-    const effectiveHeight = isRotated ? widthMm : heightMm;
+    const effectiveWidth = widthMm;
+    const effectiveHeight = heightMm;
 
     return `<!doctype html>
       <html>
@@ -119,7 +128,6 @@ export function BarcodeStickerModal({
             }
             html, body {
               width: ${effectiveWidth}mm;
-              height: ${effectiveHeight}mm;
               margin: 0 !important;
               padding: 0 !important;
               background: #ffffff !important;
@@ -147,8 +155,9 @@ export function BarcodeStickerModal({
               page-break-after: auto !important;
             }
             .barcode-sticker-inner {
-              width: ${widthMm}mm !important;
-              height: ${heightMm}mm !important;
+              flex-shrink: 0 !important;
+              width: ${layoutWidth}mm !important;
+              height: ${layoutHeight}mm !important;
               margin: 0 !important;
               padding: 0 !important;
               display: flex !important;
@@ -171,36 +180,40 @@ export function BarcodeStickerModal({
       </html>`;
   };
 
-  const printStickers = async () => {
-    if (!printRootRef.current || isFetching || printable.length === 0 || unsafeLabels.length > 0) return;
+  const printStickers = async (browserDialog = false) => {
+    if (printing || !printRootRef.current || isFetching || printable.length === 0 || unsafeLabels.length > 0) return;
 
     const html = generatePrintHtml();
     if (!html) return;
 
-    // 1. Try native desktop electron printing if running inside desktop app
-    if (window.bilalDesktop?.printStickers) {
-      const profiles = window.bilalDesktop.getPrinterProfiles();
+    if (!browserDialog) {
+      if (!hasOneClickPrinting()) { setShowPrinterProfiles(true); return; }
+      setPrinting(true);
+      try {
+      const profiles = await printingClient.getProfiles();
       if (!profiles.sticker?.printerName) {
         setShowPrinterProfiles(true);
         toast.error("Select and save the sticker printer first");
         return;
       }
-      window.bilalDesktop.savePrinterProfiles({
+      await printingClient.saveProfiles({
         ...profiles,
         sticker: { ...profiles.sticker, widthMm, heightMm, orientation: rotation, design: template },
       });
-      try {
-        await window.bilalDesktop.printStickers({
+        await printingClient.stickers({
           html,
           widthMm,
           heightMm,
-          landscape: rotation === 90 || rotation === 270,
+          orientation: rotation,
         });
         toast.success(`Sent ${printable.length} stickers to desktop thermal printer`);
         return;
       } catch (err) {
-        console.warn("Desktop print error, falling back to browser window:", err);
+        toast.error(err instanceof Error ? err.message : "Unable to print stickers");
+      } finally {
+        setPrinting(false);
       }
+      return;
     }
 
     localStorage.setItem("bilal_rms_sticker_layout", JSON.stringify({ widthMm, heightMm, orientation: rotation, design: template }));
@@ -235,9 +248,10 @@ export function BarcodeStickerModal({
           <ActionButton variant="ghost" onClick={onClose}>
             Close
           </ActionButton>
-          {window.bilalDesktop && <ActionButton variant="ghost" onClick={() => setShowPrinterProfiles(true)}>Change printer preset</ActionButton>}
-          <ActionButton onClick={printStickers} disabled={isFetching || printable.length === 0 || unsafeLabels.length > 0}>
-            <Printer className="h-3.5 w-3.5" /> Print {printable.length} sticker{printable.length === 1 ? "" : "s"}
+          <ActionButton variant="ghost" onClick={() => setShowPrinterProfiles(true)}>Change printer preset</ActionButton>
+          {!getDesktopBridge() && <ActionButton variant="ghost" onClick={() => printStickers(true)} disabled={printing || isFetching || printable.length === 0 || unsafeLabels.length > 0}>Browser print dialog</ActionButton>}
+          <ActionButton onClick={() => printStickers()} disabled={printing || isFetching || printable.length === 0 || unsafeLabels.length > 0}>
+            <Printer className="h-3.5 w-3.5" /> {printing ? "Sending..." : `Print ${printable.length} sticker${printable.length === 1 ? "" : "s"}`}
           </ActionButton>
         </>
       }
@@ -359,7 +373,7 @@ export function BarcodeStickerModal({
           </div>
 
           <div className="rounded border border-amber-400/40 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-900 dark:text-amber-300">
-            <strong>Print at 100% / Actual size:</strong> Select the size of the actual label roll, no margins, and turn browser headers/footers off. Do not use Fit to page or Credit Card as a substitute. Barcodes need clear white space on both sides. Rotate only to match the printer feed.
+            <strong>One-click printing:</strong> Save the actual roll size and sticker printer once in Change printer preset. Print uses that printer at 100%, without headers or footers. Rotation changes the design, not the physical roll size. For the optional browser dialog, select actual size, no margins and no headers/footers.
           </div>
           {unsafeLabels.length > 0 && <div role="alert" className="border border-destructive p-3 text-sm text-destructive">
             {unsafeLabels.length} barcode(s) cannot safely fit this label. Minimum label width for these codes: {requiredWidth} mm; minimum height: 25 mm.
@@ -434,8 +448,8 @@ export function BarcodeStickerModal({
             <div className="flex items-center justify-center rounded-lg border border-border bg-neutral-200 p-6 dark:bg-neutral-800">
               <div
                 style={{
-                  width: `${widthMm}mm`,
-                  height: `${heightMm}mm`,
+                  width: `${layoutWidth}mm`,
+                  height: `${layoutHeight}mm`,
                   transform: `rotate(${rotation}deg)`,
                   transition: "transform 0.2s ease",
                 }}
@@ -445,8 +459,8 @@ export function BarcodeStickerModal({
                   label={labels[0]}
                   template={template}
                   customTitle={customTitle}
-                  widthMm={widthMm}
-                  heightMm={heightMm}
+                  widthMm={layoutWidth}
+                  heightMm={layoutHeight}
                 />
               </div>
             </div>
@@ -463,14 +477,14 @@ export function BarcodeStickerModal({
                 label={label}
                 template={template}
                 customTitle={customTitle}
-                widthMm={widthMm}
-                heightMm={heightMm}
+                widthMm={layoutWidth}
+                heightMm={layoutHeight}
               />
             </div>
           </div>
         ))}
       </div>
-      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} />}
+      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} onSaved={() => setProfileRevision(value => value + 1)} />}
     </Modal>
   );
 }

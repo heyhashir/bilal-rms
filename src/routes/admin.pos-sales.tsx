@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Ban, Download, Printer, RotateCcw, Search } from "lucide-react";
+import { Ban, Download, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/api";
 import { adminPosApi } from "@/lib/admin-pos-api";
@@ -15,8 +15,7 @@ import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
 import { adminSettingsApi } from "@/lib/admin-settings-api";
 import { PosReceipt } from "@/components/pos/PosReceipt";
-import { PrinterProfilesModal } from "@/components/pos/PrinterProfilesModal";
-import { getDesktopBridge } from "@/lib/desktop-bridge";
+import { ReceiptPrintButton } from "@/components/pos/ReceiptPrintButton";
 import {
   ActionButton,
   EmptyState,
@@ -48,7 +47,6 @@ function AdminPosSales() {
   const [replacementLines, setReplacementLines] = useState<Record<string, number>>({});
   const [replacementEmployees, setReplacementEmployees] = useState<Record<string, string>>({});
   const [exchangePaymentMethod, setExchangePaymentMethod] = useState<"cash" | "card" | "jazzcash" | "easypaisa" | "bank_transfer">("cash");
-  const [showPrinterProfiles, setShowPrinterProfiles] = useState(false);
 
   const { data: salesResponse, isLoading: loading } = useQuery({
     queryKey: queryKeys.admin.posSalesList({ page, query }),
@@ -374,28 +372,7 @@ function AdminPosSales() {
           footer={
             <>
               <ActionButton variant="ghost" onClick={() => setView(null)}>Close</ActionButton>
-              <ActionButton
-                variant="ghost"
-                onClick={async () => {
-                  const payload = await adminPosApi.recordReprint(view.saleNumber);
-                  setView(payload.sale);
-                  const bridge = getDesktopBridge();
-                  if (bridge) {
-                    if (!bridge.getPrinterProfiles().receipt?.printerName) {
-                      setShowPrinterProfiles(true);
-                      toast.error("Select and save the receipt printer first");
-                      return;
-                    }
-                    await bridge.printReceipt({ sale: payload.sale, settings: settingsPayload?.settings ?? null });
-                    toast.success("Receipt sent to printer");
-                    return;
-                  }
-                  localStorage.setItem("bilal_rms_receipt_layout", JSON.stringify({ rollWidthMm: 72, contentWidthMm: 66, paddingMm: 3, orientation: "portrait" }));
-                  window.print();
-                }}
-              >
-                <Printer className="h-3.5 w-3.5" /> Print
-              </ActionButton>
+              <ReceiptPrintButton sale={view} settings={settingsPayload?.settings ?? null} onReprint={setView} />
               <ActionButton
                 variant="ghost"
                 onClick={() => {
@@ -623,7 +600,6 @@ function AdminPosSales() {
           </div>
         </Modal>
       )}
-      {showPrinterProfiles && <PrinterProfilesModal onClose={() => setShowPrinterProfiles(false)} />}
     </div>
   );
 }

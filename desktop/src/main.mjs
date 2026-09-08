@@ -1,14 +1,15 @@
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { createLocalStore } from "./local-store.mjs";
-import { createReceiptHtml } from "./receipt-template.mjs";
+import { createPrinter, validatePrinterProfiles } from "./printing.mjs";
+import { startPrintService } from "./print-service.mjs";
 
 // Electron GPU compositing can leave a permanently white window on Windows RDP
 // sessions. The POS UI is lightweight, so software rendering is the safer default.
@@ -58,6 +59,11 @@ let mainWindow = null;
 let localServer = null;
 let localOrigin = "";
 let store = null;
+let printService = null;
+let printServiceError = null;
+let printPairingToken = "";
+const listPrinters = () => mainWindow.webContents.getPrintersAsync();
+const nativePrint = createPrinter({ BrowserWindow, getProfiles: () => store.getPrinterProfiles(), listPrinters });
 
 let startupLogPath = process.env.BILAL_RMS_STARTUP_LOG?.trim() || "";
 const startupStartedAt = Date.now();
@@ -215,110 +221,8 @@ const startStaticServer = async (frontendDir) =>
     });
   });
 
-const printReceipt = async ({ sale, settings }) => {
-  const profile = store.getPrinterProfiles().receipt;
-  if (!profile?.printerName) {
-    throw new Error("Select and save a receipt printer preset before printing");
-  }
-  const printWindow = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      sandbox: false,
-    },
-  });
-
-  const html = createReceiptHtml({ sale, settings, profile });
-  const snapshot = sale.receipt?.documentSnapshot ?? {};
-  const policy = snapshot.receipt ?? {};
-  const policyLineCount = [
-    policy.guaranteePolicy || settings?.guaranteePolicy,
-    policy.exchangePolicy || settings?.exchangePolicy,
-    policy.returnPolicy || settings?.returnPolicy,
-    policy.notes || settings?.receiptNotes,
-    policy.saleItemPolicy || settings?.saleItemPolicy,
-    policy.footer || settings?.thermalFooter,
-  ].filter(Boolean).length;
-  const estimatedHeightMm = Math.max(
-    100,
-    105 + sale.items.length * 12 + policyLineCount * 7 + (sale.sourceExchange ? 28 : 0),
-  );
-  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-  await new Promise((resolve, reject) => {
-    printWindow.webContents.print(
-      {
-        silent: true,
-        deviceName: profile.printerName,
-        printBackground: true,
-        landscape: Boolean(profile.landscape),
-        copies: Math.max(1, Number(profile.copies) || 1),
-        pageSize: {
-          width: Math.round((Number(profile.rollWidthMm) || 72) * 1000),
-          height: Math.round(estimatedHeightMm * 1000),
-        },
-        margins: {
-          marginType: "none",
-        },
-      },
-      (success, failureReason) => {
-        printWindow.close();
-        if (!success) {
-          reject(new Error(failureReason || "Print failed"));
-          return;
-        }
-
-        resolve();
-      },
-    );
-  });
-};
-
-const printBarcodeStickers = async ({ html, widthMm = 38, heightMm = 25, landscape = false }) => {
-  const profile = store.getPrinterProfiles().sticker;
-  if (!profile?.printerName) {
-    throw new Error("Select and save a sticker printer preset before printing");
-  }
-  const profileWidth = Number(profile.widthMm) || widthMm;
-  const profileHeight = Number(profile.heightMm) || heightMm;
-  const printWindow = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      sandbox: false,
-    },
-  });
-
-  const adjustedHtml = html.replace(
-    "</head>",
-    `<style>.barcode-sticker-inner{position:relative!important;left:${Number(profile.offsetXmm) || 0}mm!important;top:${Number(profile.offsetYmm) || 0}mm!important}</style></head>`,
-  );
-  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(adjustedHtml)}`);
-  await new Promise((resolve, reject) => {
-    printWindow.webContents.print(
-      {
-        silent: true,
-        deviceName: profile.printerName,
-        printBackground: true,
-        landscape: [90, 270].includes(Number(profile.orientation)) || Boolean(landscape),
-        copies: Math.max(1, Number(profile.copies) || 1),
-        margins: {
-          marginType: "none",
-        },
-        pageSize: {
-          width: Math.round(profileWidth * 1000),
-          height: Math.round((profileHeight + Math.max(0, Number(profile.gapMm) || 0)) * 1000),
-        },
-      },
-      (success, failureReason) => {
-        printWindow.close();
-        if (!success) {
-          reject(new Error(failureReason || "Sticker print failed"));
-          return;
-        }
-
-        resolve();
-      },
-    );
-  });
-};
+const printReceipt = (payload) => nativePrint("receipt", payload);
+const printBarcodeStickers = (payload) => nativePrint("sticker", payload);
 
 const downloadUpdateInstaller = async (installerUrl) => {
   const response = await fetch(installerUrl, {
@@ -462,8 +366,10 @@ const registerIpc = () => {
     event.returnValue = store.getPrinterProfiles();
   });
   ipcMain.on("bilal-desktop:save-printer-profiles", (event, profiles) => {
-    event.returnValue = store.savePrinterProfiles(profiles);
+    try { event.returnValue = store.savePrinterProfiles(validatePrinterProfiles(profiles)); }
+    catch (error) { event.returnValue = { error: error.message }; }
   });
+  ipcMain.handle("bilal-desktop:print-pairing", () => ({ token: printPairingToken, error: printServiceError }));
 
   ipcMain.handle("bilal-desktop:check-for-updates", async (_event, payload) => {
     const baseUrl = payload?.baseUrl?.trim() || store.cloudApiBaseUrl || remoteBaseUrl;
@@ -610,6 +516,16 @@ app.whenReady().then(async () => {
   registerIpc();
   logStartupStage("ipc-ready");
   await createMainWindow();
+  const tokenFile = path.join(app.getPath("userData"), "runtime", "print-pairing-token");
+  printPairingToken = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8").trim() : randomBytes(32).toString("hex");
+  fs.writeFileSync(tokenFile, printPairingToken);
+  try {
+    printService = await startPrintService({ token: printPairingToken,
+      origins: [remoteUrl.origin], listPrinters, getProfiles: () => store.getPrinterProfiles(),
+      saveProfiles: profiles => store.savePrinterProfiles(validatePrinterProfiles(profiles)), print: nativePrint });
+  } catch (error) {
+    printServiceError = `Browser print helper unavailable: ${error.message}. Close other desktop instances and reopen this app.`;
+  }
 
   app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -625,6 +541,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  printService?.close();
   if (localServer) {
     localServer.close();
   }

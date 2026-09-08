@@ -85,14 +85,14 @@ export const createReceiptHtml = ({ sale, settings, profile }) => {
       <meta charset="utf-8" />
       <title>${escapeHtml(receiptId)}</title>
       <style>
-        @page { size: ${rollWidthMm}mm auto; margin: 0; }
+        @page { margin: 0; }
         * { box-sizing: border-box; }
         body {
           font-family: "Arial Narrow", "Segoe UI", Arial, sans-serif;
           width: ${rollWidthMm}mm;
           margin: 0;
-          padding: ${Number(profile?.paddingMm) || 3}mm;
-          padding-top: ${(Number(profile?.paddingMm) || 3) + (Number(profile?.feedOffsetMm) || 0)}mm;
+          padding: ${profile?.paddingMm ?? 3}mm;
+          padding-top: ${(profile?.paddingMm ?? 3) + (profile?.feedOffsetMm ?? 0)}mm;
           color: #000;
           background: #fff;
           font-size: 9px;
@@ -104,7 +104,7 @@ export const createReceiptHtml = ({ sale, settings, profile }) => {
         .contact { margin-top: 4px; font-size: 10px; line-height: 1.4; }
         .divider { border-top: 1px dashed #000; margin: 7px 0; }
         .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .meta-row { display: grid; grid-template-columns: 54px 1fr; gap: 2px; margin: 2px 0; }
+        .meta-row { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 2px; margin: 2px 0; overflow-wrap: anywhere; }
         .strong { font-weight: 800; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         th { background: #000; color: #fff; padding: 4px 2px; font-size: 7px; }

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Printer, RefreshCcw, ScanLine, Trash2, Wifi, WifiOff } from "lucide-react";
+import { ArrowLeft, RefreshCcw, ScanLine, Trash2, Wifi, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/api";
 import { useProtectedUser } from "@/hooks/use-protected-user";
@@ -21,6 +21,7 @@ import { syncApi } from "@/lib/sync-api";
 import { ActionButton, EmptyState, Field, Modal, PageHeader, SelectField, StatusPill } from "@/components/admin/primitives";
 import { PosReceipt } from "@/components/pos/PosReceipt";
 import { PrinterProfilesModal } from "@/components/pos/PrinterProfilesModal";
+import { ReceiptPrintButton } from "@/components/pos/ReceiptPrintButton";
 
 export const Route = createFileRoute("/pos")({
   component: PosTerminal,
@@ -1244,39 +1245,7 @@ function PosTerminal() {
               <ActionButton variant="ghost" onClick={() => setReceipt(null)}>
                 Close
               </ActionButton>
-              <ActionButton
-                onClick={async () => {
-                  let printableReceipt = receipt;
-                  if (receipt.syncedStatus === "synced") {
-                    try {
-                      printableReceipt = (await adminPosApi.recordReprint(receipt.saleNumber)).sale;
-                      setReceipt(printableReceipt);
-                    } catch {
-                      // Printing remains available if audit tracking is temporarily offline.
-                    }
-                  }
-                  const bridge = getDesktopBridge();
-                  if (bridge) {
-                    if (!bridge.getPrinterProfiles().receipt?.printerName) {
-                      setShowPrinterProfiles(true);
-                      toast.error("Select and save the receipt printer first");
-                      return;
-                    }
-                    try {
-                      await bridge.printReceipt({ sale: printableReceipt, settings });
-                      toast.success("Receipt sent to printer");
-                    } catch (error) {
-                      toast.error(getErrorMessage(error, "Unable to print receipt"));
-                    }
-                    return;
-                  }
-
-                  localStorage.setItem("bilal_rms_receipt_layout", JSON.stringify({ rollWidthMm: 72, contentWidthMm: 66, paddingMm: 3, orientation: "portrait" }));
-                  window.print();
-                }}
-              >
-                <Printer className="h-3.5 w-3.5" /> Print
-              </ActionButton>
+              <ReceiptPrintButton sale={receipt} settings={settings} onReprint={setReceipt} />
             </>
           }
         >

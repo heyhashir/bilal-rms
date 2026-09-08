@@ -30,7 +30,12 @@ contextBridge.exposeInMainWorld("bilalDesktop", {
   printStickers: (payload) => ipcRenderer.invoke("bilal-desktop:print-stickers", payload),
   listPrinters: () => ipcRenderer.invoke("bilal-desktop:list-printers"),
   getPrinterProfiles: () => ipcRenderer.sendSync("bilal-desktop:get-printer-profiles"),
-  savePrinterProfiles: (profiles) => ipcRenderer.sendSync("bilal-desktop:save-printer-profiles", profiles),
+  savePrinterProfiles: (profiles) => {
+    const result = ipcRenderer.sendSync("bilal-desktop:save-printer-profiles", profiles);
+    if (result.error) throw new Error(result.error);
+    return result;
+  },
+  getPrintPairing: () => ipcRenderer.invoke("bilal-desktop:print-pairing"),
   checkForUpdates: (payload) => ipcRenderer.invoke("bilal-desktop:check-for-updates", payload),
   installUpdate: (payload) => ipcRenderer.invoke("bilal-desktop:install-update", payload),
   openUrl: (url) => ipcRenderer.invoke("bilal-desktop:open-url", url),

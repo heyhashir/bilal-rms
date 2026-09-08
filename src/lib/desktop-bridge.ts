@@ -83,9 +83,11 @@ export type DesktopBridge = {
     widthMm?: number;
     heightMm?: number;
     landscape?: boolean;
+    orientation?: 0 | 90 | 180 | 270;
   }) => Promise<{ ok: true }>;
   listPrinters: () => Promise<Array<{ name: string; displayName: string; isDefault: boolean }>>;
   getPrinterProfiles: () => PrinterProfiles;
+  getPrintPairing?: () => Promise<{ token: string; error: string | null }>;
   savePrinterProfiles: (profiles: PrinterProfiles) => PrinterProfiles;
   checkForUpdates: (payload: { deviceKey: string; currentVersion?: string | null; baseUrl?: string | null }) => Promise<DesktopUpdateManifest>;
   installUpdate: (payload: {

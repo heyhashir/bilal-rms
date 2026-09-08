@@ -1,5 +1,14 @@
 # Bilal RMS Full QA Report
 
+## 8 September 2026: One-Click Receipt And Sticker Printing
+
+- Added a localhost-only, origin-allowlisted and token-paired desktop print helper for website printing. Both UI paths share the same native printer engine and separate persisted printer profiles. Setup is one-time per printer/PC/browser; the desktop app must stay open for website printing.
+- Fixed guessed receipt height, duplicated sticker rotation, gap incorrectly enlarging pages, stale preview dimensions after preset changes, zero-padding rejection, mandatory two-printer setup, and silent fallback to a browser/default printer after failures.
+- Native helper tests: 5 passed (measured dimensions, exact sticker paper size, failures/cleanup, input/clipping validation, origin/authenticated helper routing). Focused Playwright: 4 passed; the pairing case also passes from a mocked HTTPS production origin under production CSP after granting local-network access. The denied-permission case correctly fails without sending a print job.
+- Actual Electron renderer exported a 30-line receipt as one 72 x 408 mm PDF and a generated label as one 50 x 25 mm PDF (Chromium rounds PDF points slightly). Rendered PNGs visually inspected. Evidence: `test-results/printing/receipt.pdf`, `sticker.pdf`, PNGs and `dimensions.json`.
+- `npm run build`, frontend lint, and diff whitespace checks passed. The standalone frontend typecheck remains failing on pre-existing report/catalog interface mismatches; no new printing-module type errors were reported. Physical printers are absent on this PC (only Microsoft Print to PDF and OneNote), so print density, feed/cutter, driver page-size compliance and scanner acceptance are not certified.
+- Release candidate is desktop 0.4.1; deployment/publish evidence is pending. Installer remains unsigned. No production-data QA writes are needed for printing verification.
+
 ## 4 September 2026: Exchanges, Vendor Ledgers, Bills And Printer Profiles
 
 **Scope:** Implement the approved client billing release locally, validate it on an isolated MariaDB schema and local Electron profile, then deploy web/backend before publishing desktop `0.4.0`. The release does not modify production business records during QA.
@@ -29,7 +38,10 @@
 
 ### Release Status And External Acceptance
 
-- Desktop package version is `0.4.0`. The local unsigned installer is `desktop/dist/BilalRMS-Setup-0.4.0.exe`, 105,232,149 bytes, SHA-256 `152323EEA589DF46633B95117F1335554F2CF1194F0C8B513DFA88976A1BB1D7`. Hostinger deployment, GitHub verification, update-feed verification, and live health results are pending release execution.
+- **Release completed:** feature commit `5b96a89` and CI-fixture hardening commit `ec03aa5` are pushed to `main`. GitHub Build Verification run `33847671872` passed install, audit, lint, Prisma validation, build and database-free tests. The initial run `33847053727` exposed only a stale mock missing the new `cancelledAmount` default; runtime calculations and the fixture were hardened before the successful release run.
+- Hostinger serves the matching `/assets/index-CRWIgZj1.js`; readiness returned HTTP 200. The production read-only Playwright smoke passed without mutating requests. Login plus authenticated GET-only probes confirmed that ledger rows expose `vendorId`, receipts expose `lookupCode`, and commission rows expose `cancelledAmount`.
+- Desktop `0.4.0` is published after the completed Hostinger deployment. The update feed offers `0.4.0` to `0.3.4` and does not offer it to an existing `0.4.0` client. Installer HEAD returned 200; a complete independent download matched 105,232,149 bytes and SHA-256 `152323EEA589DF46633B95117F1335554F2CF1194F0C8B513DFA88976A1BB1D7`. The installer remains unsigned.
+- These final evidence edits remain local and intentionally uncommitted because a documentation push would trigger Hostinger and can remove the published release directory.
 - The default retained local `bilal_rms` schema contains an old failed migration record. It was not altered; all write-enabled verification used the isolated `bilal_rms_exchange_test` schema.
 - Physical scanner and printer acceptance remains open: print a real 72 mm receipt and configured sticker, verify XP-T361U feed/cutter/density, then scan both Code 128 symbols into Notepad and the correct application lookup. Screen scanning is not accepted as proof for the 1D Orbit laser scanner.
 - The Windows installer remains unsigned until a trusted signing certificate is supplied.

@@ -26,6 +26,15 @@ This is not a static fashion website. It is one retail system with:
 
 ## 2. Current State Snapshot
 
+### 8 September 2026 One-Click Printing (0.4.1)
+
+- Receipt and sticker Print buttons use independent saved Windows printer profiles. Receipt width defaults to 72 mm, padding to 3 mm, and page height is measured after rendering, not guessed. Labels print at their configured physical dimensions, without adding the sensor gap to page height or rotating twice.
+- The desktop app now runs a paired print helper at `http://127.0.0.1:17841`. It accepts only its configured cloud origin, requires a private per-PC pairing token, and never listens on the LAN. The website can print silently through this helper after one-time pairing in Printer presets. The desktop app must remain open; Chrome/Edge may require local-network permission. Browser-dialog printing remains an explicit fallback, never an automatic retry after a failed native job.
+- Setup allows either printer independently. Changed sticker presets reload into the preview. Print submissions are guarded against concurrent duplicate clicks; missing printers, invalid dimensions and clipped barcodes are rejected. Printed HTML has a restrictive CSP and cannot execute scripts, navigate or load network resources.
+- Windows controls thermal density, feed sensor/gap calibration and cutter behavior. Saved gap is calibration metadata, not an extra printed page margin. PDF/OneNote drivers can still show their own save dialogs. No physical thermal printer is connected on the development PC; actual XP-T361U and label roll acceptance remains required.
+- Verification: 5 isolated native/helper tests, 4 focused sticker Playwright tests, HTTPS-to-loopback with local-network permission, and real Electron PDF rendering (72 x 408 mm long receipt; 50 x 25 mm label). Production build and frontend lint passed. Standalone frontend `tsc --noEmit` still reports pre-existing catalog/report typing problems outside this scope. No production business records were created or modified.
+- Desktop version is 0.4.1. Deployment/publication status must be recorded after release; publish the installer after the final Hostinger rollout, because redeployment removes desktop release storage. The installer is unsigned.
+
 ### 4 September 2026 Billing And Printer Release
 
 **Release target:** Web/backend changes and desktop `0.4.0` are approved for deployment. The application now supports atomic POS exchanges, vendor-specific ledger views, 72 mm receipts headed `BILAL GARMENTS`, `BI-XXXX` invoice lookup barcodes, and separate per-PC receipt/sticker printer profiles. This section supersedes the older notes below that say commission reversal removal was awaiting clarification.
@@ -37,7 +46,7 @@ This is not a static fashion website. It is one retail system with:
 - Electron stores separate Receipt Printer and Sticker Printer profiles locally on each PC. First print requires both printers to be selected; subsequent printing uses the remembered Windows devices and app-controlled dimensions/offsets. Driver-specific heat, speed, cutter and sensor calibration remain external settings.
 - Local verification passed: migration deployment on an isolated MariaDB schema, backend service and integration suites, web/backend lint, production build, Prisma validation, architecture checks, zero-vulnerability npm audit, desktop offline sale/refund/exchange restart persistence, and scoped Playwright smoke/regression/invoice workflows. All browser and integration records were removed by their cleanup routines.
 - Physical XP-T361U receipt printing, sticker-printer calibration, scanner decode of a printed `BI-XXXX` receipt, clean-client installation, and Windows code signing remain external acceptance checks. The installer is not signed.
-- The local unsigned `desktop/dist/BilalRMS-Setup-0.4.0.exe` is 105,232,149 bytes with SHA-256 `152323EEA589DF46633B95117F1335554F2CF1194F0C8B513DFA88976A1BB1D7`. Hostinger deployment and desktop publication evidence must be recorded after release. Publish the desktop installer only after the final Hostinger deployment because redeployment can remove `storage/desktop`.
+- **Deployment complete:** application commits `5b96a89` and `ec03aa5` are on `main`; GitHub Build Verification `33847671872` passed. Hostinger serves `/assets/index-CRWIgZj1.js`, readiness is HTTP 200, the read-only production browser smoke passed, and authenticated GET checks confirmed vendor ledger, receipt lookup-code and commission cancellation fields. Desktop `0.4.0` was published only after deployment. A `0.3.4` client receives the update while `0.4.0` does not; installer HEAD and a complete independent download matched 105,232,149 bytes and SHA-256 `152323EEA589DF46633B95117F1335554F2CF1194F0C8B513DFA88976A1BB1D7`. This final evidence line is intentionally local/uncommitted because another Hostinger deployment can remove `storage/desktop`.
 
 ### 3 September 2026 Update
 

@@ -62,6 +62,7 @@ export const createApp = (): Application => {
         directives: {
           connectSrc: [
             "'self'",
+            'http://127.0.0.1:17841', // Paired desktop print helper on this PC only.
             'https://open.er-api.com',
             'https://api.exchangerate-api.com',
           ],

@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import fs from "node:fs/promises";
+import { startPrintService } from "../../desktop/src/print-service.mjs";
 
 async function fixtures(page: Page, code: string) {
   const state = {
@@ -48,6 +50,51 @@ async function fixtures(page: Page, code: string) {
   return state;
 }
 
+test("paired website prints directly, reloads calibration and retains separate profiles", async ({ page }) => {
+  await fixtures(page, "BA-1234");
+  let profiles = {
+    receipt: null,
+    sticker: { printerName: "QA Labels", widthMm: 38, heightMm: 25, orientation: 0, offsetXmm: 0, offsetYmm: 0, gapMm: 2, copies: 1, design: "standard" },
+  };
+  const jobs: Array<{ kind: string; payload: { html: string; widthMm: number; heightMm: number } }> = [];
+  const helper = await startPrintService({ token: "qa-pairing-code", origins: ["http://127.0.0.1:5012", "https://balybybilalgarments.com"],
+    listPrinters: async () => [{ name: "QA Labels", displayName: "QA Labels", isDefault: false }],
+    getProfiles: () => profiles, saveProfiles: (next: typeof profiles) => (profiles = next),
+    print: async (kind: string, payload: typeof jobs[number]["payload"]) => { jobs.push({ kind, payload }); return { ok: true }; } });
+  try {
+    await page.goto("/admin/products");
+    await page.getByTitle("Print barcode stickers").click();
+    await page.getByRole("button", { name: "Print 1 sticker", exact: true }).click();
+    await page.getByLabel("Desktop pairing code").fill("qa-pairing-code");
+    await page.getByRole("button", { name: "Connect desktop printer helper" }).click();
+    await page.getByRole("button", { name: "Save presets" }).click();
+    await expect(page.getByText("Printer presets saved on this PC")).toBeVisible();
+    await page.getByRole("button", { name: "Print 1 sticker", exact: true }).click();
+    await expect.poll(() => jobs.length).toBe(1);
+    expect(page.context().pages()).toHaveLength(1);
+    expect(jobs[0].payload.widthMm).toBe(38);
+    await page.getByRole("button", { name: "Change printer preset" }).click();
+    await page.getByLabel("Width (mm)", { exact: true }).fill("50");
+    await page.getByRole("button", { name: "Save presets" }).click();
+    await expect(page.getByText(/Live Sticker Preview \(50mm/)).toBeVisible();
+    await page.getByRole("button", { name: "Print 1 sticker", exact: true }).click();
+    await expect.poll(() => jobs.length).toBe(2);
+    expect(jobs[1].payload.widthMm).toBe(50);
+    expect(profiles.receipt).toBeNull();
+    await fs.mkdir("test-results/printing", { recursive: true });
+    await fs.writeFile("test-results/printing/sticker.html", jobs[1].payload.html);
+    // Exercise HTTPS -> loopback under production CSP without touching the live site.
+    await page.route("https://balybybilalgarments.com/qa-print-bridge", route => route.fulfill({
+      contentType: "text/html", body: "<!doctype html><title>Local print bridge fixture</title>",
+      headers: { "Content-Security-Policy": "default-src 'self'; connect-src 'self' http://127.0.0.1:17841; upgrade-insecure-requests" },
+    }));
+    await page.context().grantPermissions(["local-network-access"], { origin: "https://balybybilalgarments.com" });
+    await page.goto("https://balybybilalgarments.com/qa-print-bridge");
+    const secureProfiles = await page.evaluate(async () => (await fetch("http://127.0.0.1:17841/profiles", { headers: { Authorization: "Bearer qa-pairing-code" } })).json());
+    expect(secureProfiles.sticker.widthMm).toBe(50);
+  } finally { await new Promise<void>(resolve => helper.close(resolve)); }
+});
+
 test("short barcode print output keeps physical size, quiet zones and all template layouts", async ({ page }, info) => {
   const state = await fixtures(page, "BA-1234");
   await page.goto("/admin/products");
@@ -56,7 +103,7 @@ test("short barcode print output keeps physical size, quiet zones and all templa
     await page.getByLabel("Sticker Design").selectOption(template);
     await expect(page.getByRole("button", { name: "Print 1 sticker", exact: true })).toBeEnabled();
     const popupPromise = page.waitForEvent("popup");
-    await page.getByRole("button", { name: "Print 1 sticker", exact: true }).click();
+    await page.getByRole("button", { name: "Browser print dialog", exact: true }).click();
     const popup = await popupPromise;
     const label = popup.locator(".barcode-sticker-sheet");
     await expect(label).toHaveCount(1);
