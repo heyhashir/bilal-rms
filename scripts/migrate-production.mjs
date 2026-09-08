@@ -51,7 +51,7 @@ const reconcileSchema = async (connection, databaseName) => {
   const tableNames = [...new Set(REQUIRED_COLUMNS.map(([table]) => table))];
   const placeholders = tableNames.map(() => "?").join(", ");
   const [columnRows] = await connection.query(
-    `SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (${placeholders})`,
+    `SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_NAME IN (${placeholders})`,
     [databaseName, ...tableNames],
   );
   const existingColumns = new Set(
@@ -63,14 +63,25 @@ const reconcileSchema = async (connection, databaseName) => {
       continue;
     }
 
-    await connection.query(
-      `ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${quoteIdentifier(column)} ${definition}`,
-    );
-    console.log(`Repaired missing production column ${table}.${column}.`);
+    try {
+      await connection.query(
+        `ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${quoteIdentifier(column)} ${definition}`,
+      );
+      console.log(`Repaired missing production column ${table}.${column}.`);
+      existingColumns.add(`${table.toLowerCase()}.${column.toLowerCase()}`);
+    } catch (err) {
+      if (String(err).includes("Duplicate column name")) {
+        console.log(`Column ${table}.${column} already existed.`);
+        existingColumns.add(`${table.toLowerCase()}.${column.toLowerCase()}`);
+      } else {
+        console.error(`Failed to add column ${table}.${column}:`, err);
+        throw err;
+      }
+    }
   }
 
   const [indexRows] = await connection.query(
-    `SELECT TABLE_NAME, INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (${placeholders})`,
+    `SELECT TABLE_NAME, INDEX_NAME FROM information_schema.STATISTICS WHERE (TABLE_SCHEMA = ? OR TABLE_SCHEMA = DATABASE()) AND TABLE_NAME IN (${placeholders})`,
     [databaseName, ...tableNames],
   );
   const existingIndexes = new Set(
@@ -82,11 +93,22 @@ const reconcileSchema = async (connection, databaseName) => {
       continue;
     }
 
-    const indexedColumns = columns.map(quoteIdentifier).join(", ");
-    await connection.query(
-      `CREATE ${unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(indexName)} ON ${quoteIdentifier(table)} (${indexedColumns})`,
-    );
-    console.log(`Repaired missing production index ${table}.${indexName}.`);
+    try {
+      const indexedColumns = columns.map(quoteIdentifier).join(", ");
+      await connection.query(
+        `CREATE ${unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(indexName)} ON ${quoteIdentifier(table)} (${indexedColumns})`,
+      );
+      console.log(`Repaired missing production index ${table}.${indexName}.`);
+      existingIndexes.add(`${table.toLowerCase()}.${indexName.toLowerCase()}`);
+    } catch (err) {
+      if (String(err).includes("Duplicate key name")) {
+        console.log(`Index ${table}.${indexName} already existed.`);
+        existingIndexes.add(`${table.toLowerCase()}.${indexName.toLowerCase()}`);
+      } else {
+        console.error(`Failed to create index ${table}.${indexName}:`, err);
+        throw err;
+      }
+    }
   }
 };
 
@@ -98,16 +120,24 @@ if (process.env.NODE_ENV !== "production") {
   }
 
   const databaseUrl = new URL(process.env.DATABASE_URL);
+  const databaseName = decodeURIComponent(databaseUrl.pathname.slice(1));
   const connection = await mysql.createConnection({
     host: databaseUrl.hostname,
     port: Number(databaseUrl.port || 3306),
     user: decodeURIComponent(databaseUrl.username),
     password: decodeURIComponent(databaseUrl.password),
-    database: decodeURIComponent(databaseUrl.pathname.slice(1)),
+    database: databaseName,
     multipleStatements: true,
   });
 
   try {
+    // 1. Reconcile critical required columns FIRST so database is immediately compatible
+    try {
+      await reconcileSchema(connection, databaseName);
+    } catch (reconcileErr) {
+      console.warn("Initial reconcileSchema warning:", reconcileErr);
+    }
+
     await connection.query(`
       CREATE TABLE IF NOT EXISTS \`_prisma_migrations\` (
         \`id\` VARCHAR(36) NOT NULL,
@@ -156,15 +186,26 @@ if (process.env.NODE_ENV !== "production") {
         );
         console.log(`Applied migration ${migrationName}.`);
       } catch (error) {
-        await connection.query("UPDATE `_prisma_migrations` SET logs = ? WHERE id = ?", [String(error), migrationId]);
-        throw error;
+        const errMsg = String(error);
+        if (
+          errMsg.includes("Duplicate column name") ||
+          errMsg.includes("already exists") ||
+          errMsg.includes("Duplicate key name")
+        ) {
+          console.warn(`Migration ${migrationName} notice (already present in schema):`, errMsg);
+          await connection.query(
+            "UPDATE `_prisma_migrations` SET finished_at = CURRENT_TIMESTAMP(3), applied_steps_count = 1, logs = ? WHERE id = ?",
+            [errMsg, migrationId],
+          );
+        } else {
+          await connection.query("UPDATE `_prisma_migrations` SET logs = ? WHERE id = ?", [errMsg, migrationId]);
+          throw error;
+        }
       }
     }
 
-    // Some shared-hosting restores retain migration history while omitting later
-    // additive columns. Reconcile those known-safe additions after migrations so
-    // recorded-but-incomplete schemas cannot leave catalog and POS reads broken.
-    await reconcileSchema(connection, decodeURIComponent(databaseUrl.pathname.slice(1)));
+    // 2. Re-run reconcileSchema to ensure any trailing changes are aligned
+    await reconcileSchema(connection, databaseName);
 
     console.log("Production database migrations are current.");
   } finally {

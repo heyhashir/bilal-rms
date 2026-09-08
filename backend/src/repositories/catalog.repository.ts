@@ -114,8 +114,27 @@ export const catalogRepository = {
       where: { isActive: true },
       orderBy: { name: 'asc' },
     }),
-  findStoreSettings: () =>
-    prisma.storeSetting.findFirstOrThrow(),
+  findStoreSettings: async () => {
+    try {
+      return await prisma.storeSetting.findFirstOrThrow();
+    } catch (err: unknown) {
+      if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2022') {
+        const rows = await prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT * FROM store_settings LIMIT 1`;
+        if (rows.length > 0) {
+          const row = rows[0];
+          return {
+            ...row,
+            whatsapp: (row.whatsapp as string) ?? null,
+            youtube: (row.youtube as string) ?? null,
+            instagram: (row.instagram as string) ?? null,
+            facebook: (row.facebook as string) ?? null,
+            tiktok: (row.tiktok as string) ?? null,
+          } as unknown as Awaited<ReturnType<typeof prisma.storeSetting.findFirstOrThrow>>;
+        }
+      }
+      throw err;
+    }
+  },
   listActiveShippingZones: () =>
     prisma.shippingZone.findMany({
       where: { isActive: true },

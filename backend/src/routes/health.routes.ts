@@ -40,6 +40,7 @@ router.get(
     await prisma.$queryRaw`SELECT vendorId FROM ledger_entries LIMIT 0`;
     await prisma.$queryRaw`SELECT cancelledAmount FROM commission_entries LIMIT 0`;
     await prisma.$queryRaw`SELECT id FROM pos_exchanges LIMIT 0`;
+    await prisma.$queryRaw`SELECT whatsapp, youtube FROM store_settings LIMIT 0`;
     res.status(200).json(
       ApiResponse.success('Bilal RMS is ready', {
         status: 'ready',

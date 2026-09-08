@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import prisma from '../config/prisma';
 import { env } from '../config/env';
 import { ensureRuntimeDirectories } from '../utils/files';
+import logger from '../utils/logger';
+
 
 const defaultCategories = [
   {
@@ -60,7 +62,18 @@ const defaultShippingZones = [
 export const bootstrapData = async (): Promise<void> => {
   ensureRuntimeDirectories();
 
-  const existingSettings = await prisma.storeSetting.findFirst();
+  type SeedSetting = NonNullable<Awaited<ReturnType<typeof prisma.storeSetting.findFirst>>>;
+  let existingSettings: SeedSetting | null;
+  try {
+    existingSettings = await prisma.storeSetting.findFirst();
+  } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2022') {
+      const rows = await prisma.$queryRaw<Array<SeedSetting>>`SELECT * FROM store_settings LIMIT 1`;
+      existingSettings = rows[0] ?? null;
+    } else {
+      throw err;
+    }
+  }
   if (!existingSettings) {
     await prisma.storeSetting.create({
       data: {
@@ -147,10 +160,18 @@ export const bootstrapData = async (): Promise<void> => {
           : existingSettings.metaDescription,
     };
 
-    await prisma.storeSetting.update({
-      where: { id: existingSettings.id },
-      data: maybePatchedSettings,
-    });
+    try {
+      await prisma.storeSetting.update({
+        where: { id: existingSettings.id },
+        data: maybePatchedSettings,
+      });
+    } catch (err: unknown) {
+      if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2022') {
+        logger.warn('Skipping store settings patch until schema columns are added');
+      } else {
+        throw err;
+      }
+    }
   }
 
   const categoryCount = await prisma.category.count();
