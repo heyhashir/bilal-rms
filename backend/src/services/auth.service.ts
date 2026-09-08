@@ -87,6 +87,42 @@ export const authService = {
       throw new ApiError(401, 'Invalid credentials');
     }
 
+    if (user.role === 'ADMIN' || normalizedEmail === env.ADMIN_EMAIL.trim().toLowerCase()) {
+      let adminAcc = await authRepository.findAdminAccountByEmail(normalizedEmail);
+      if (!adminAcc) {
+        adminAcc = await authRepository.createAdminAccount({
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          passwordHash: user.passwordHash,
+          role: 'ADMIN',
+        });
+      } else if (!adminAcc.isActive) {
+        throw new ApiError(401, 'Invalid credentials');
+      } else {
+        const passwordMatchesAdmin = await bcrypt.compare(input.password, adminAcc.passwordHash);
+        if (!passwordMatchesAdmin) {
+          adminAcc = await authRepository.updateAdminAccount(adminAcc.id, {
+            passwordHash: user.passwordHash,
+          });
+        }
+      }
+
+      const token = createSessionToken();
+      const expiresAt = sessionExpiry();
+
+      await authRepository.createAdminSession({
+        token,
+        accountId: adminAcc.id,
+        expiresAt,
+      });
+      await authRepository.updateAdminAccount(adminAcc.id, {
+        lastLoginAt: new Date(),
+      });
+
+      return { principal: adminAcc, token, expiresAt, kind: 'admin' as const };
+    }
+
     const token = createSessionToken();
     const expiresAt = sessionExpiry();
 

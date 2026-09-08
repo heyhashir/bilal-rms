@@ -181,7 +181,7 @@ const proxyCloudRequest = (req, res, requestUrl, bodyBuffer = null) => {
       }
       delete responseHeaders["content-security-policy"];
       let statusCode = upstreamResponse.statusCode ?? 502;
-      if (statusCode === 401 && (req.headers.cookie?.includes("bilal_rms_session=local-admin-session") || Boolean(store?.getCachedCurrentUser()))) {
+      if (statusCode === 401 && req.headers.cookie?.includes("bilal_rms_session=local-admin-session")) {
         statusCode = 403;
       }
 
@@ -222,6 +222,250 @@ const proxyCloudRequest = (req, res, requestUrl, bodyBuffer = null) => {
   }
 };
 
+const proxyCloudLogin = (req, res, requestUrl, bodyBuffer) => {
+  const target = new URL(`${requestUrl.pathname}${requestUrl.search}`, remoteUrl);
+  const transport = target.protocol === "https:" ? https : http;
+  const headers = {
+    ...req.headers,
+    host: target.host,
+    origin: remoteUrl.origin,
+    referer: `${remoteUrl.origin}/`,
+    "x-forwarded-host": remoteUrl.host,
+    "x-forwarded-proto": remoteUrl.protocol.slice(0, -1),
+  };
+
+  delete headers.connection;
+  if (bodyBuffer) {
+    headers["content-length"] = String(bodyBuffer.length);
+  }
+
+  const upstream = transport.request(
+    target,
+    {
+      method: "POST",
+      headers,
+      timeout: 30_000,
+    },
+    (upstreamResponse) => {
+      const responseHeaders = { ...upstreamResponse.headers };
+      const proxyCookies = normalizeProxyCookies(upstreamResponse.headers["set-cookie"]);
+      if (proxyCookies) {
+        responseHeaders["set-cookie"] = proxyCookies;
+      }
+      delete responseHeaders["content-security-policy"];
+
+      const chunks = [];
+      upstreamResponse.on("data", (chunk) => chunks.push(chunk));
+      upstreamResponse.on("end", () => {
+        const responseBuffer = Buffer.concat(chunks);
+        if (upstreamResponse.statusCode === 200) {
+          try {
+            const body = JSON.parse(responseBuffer.toString("utf8"));
+            if (body.data?.user) {
+              store.cacheCurrentUser(body.data.user);
+              writeRuntimeLog(`cloud-login-success cached-user="${body.data.user.email}"`);
+            }
+          } catch (e) {
+            writeRuntimeLog(`cloud-login-parse-error ${e.message}`);
+          }
+        }
+        res.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders);
+        res.end(responseBuffer);
+      });
+    },
+  );
+
+  upstream.on("timeout", () => {
+    upstream.destroy(new Error("Cloud login timed out"));
+  });
+  upstream.on("error", (error) => {
+    writeRuntimeLog(`cloud-login-error: ${error.message}`);
+    res.writeHead(503, {
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    res.end(
+      JSON.stringify({
+        success: false,
+        message: "Cloud authentication service unavailable. Check your internet connection.",
+        data: null,
+      }),
+    );
+  });
+
+  if (bodyBuffer) {
+    upstream.end(bodyBuffer);
+  } else {
+    req.pipe(upstream);
+  }
+};
+
+const proxyAndSyncProduct = (req, res, requestUrl, bodyBuffer, action = "save") => {
+  const target = new URL(`${requestUrl.pathname}${requestUrl.search}`, remoteUrl);
+  const transport = target.protocol === "https:" ? https : http;
+  const headers = {
+    ...req.headers,
+    host: target.host,
+    origin: remoteUrl.origin,
+    referer: `${remoteUrl.origin}/`,
+    "x-forwarded-host": remoteUrl.host,
+    "x-forwarded-proto": remoteUrl.protocol.slice(0, -1),
+  };
+
+  delete headers.connection;
+  if (bodyBuffer) {
+    headers["content-length"] = String(bodyBuffer.length);
+  }
+
+  const upstream = transport.request(
+    target,
+    {
+      method: req.method,
+      headers,
+      timeout: 30_000,
+    },
+    (upstreamResponse) => {
+      const responseHeaders = { ...upstreamResponse.headers };
+      const proxyCookies = normalizeProxyCookies(upstreamResponse.headers["set-cookie"]);
+      if (proxyCookies) {
+        responseHeaders["set-cookie"] = proxyCookies;
+      }
+      delete responseHeaders["content-security-policy"];
+
+      const chunks = [];
+      upstreamResponse.on("data", (chunk) => chunks.push(chunk));
+      upstreamResponse.on("end", () => {
+        const responseBuffer = Buffer.concat(chunks);
+        if (upstreamResponse.statusCode >= 200 && upstreamResponse.statusCode < 300) {
+          try {
+            const body = JSON.parse(responseBuffer.toString("utf8"));
+            const product = body.data?.product;
+            if (product) {
+              const currentCache = store.loadPosCache() || { products: [], categories: [], brands: [], settings: null, employees: [] };
+              const existingIndex = (currentCache.products || []).findIndex((p) => p.id === product.id);
+              let nextProducts;
+              if (action === "delete") {
+                nextProducts = (currentCache.products || []).filter((p) => p.id !== product.id);
+              } else if (existingIndex >= 0) {
+                nextProducts = [...currentCache.products];
+                nextProducts[existingIndex] = product;
+              } else {
+                nextProducts = [product, ...(currentCache.products || [])];
+              }
+              store.savePosCache({ ...currentCache, products: nextProducts, updatedAt: Date.now() });
+              writeRuntimeLog(`product-${action}-synced id="${product.id}"`);
+            }
+          } catch (e) {
+            writeRuntimeLog(`product-sync-parse-error: ${e.message}`);
+          }
+        }
+        res.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders);
+        res.end(responseBuffer);
+      });
+    },
+  );
+
+  upstream.on("timeout", () => {
+    upstream.destroy(new Error("Cloud request timed out"));
+  });
+  upstream.on("error", (error) => {
+    writeRuntimeLog(`product-proxy-error: ${error.message}`);
+    // Offline local fallback for product creation/update
+    if (bodyBuffer && (req.method === "POST" || req.method === "PUT")) {
+      try {
+        const payload = JSON.parse(bodyBuffer.toString("utf8"));
+        const currentCache = store.loadPosCache() || { products: [], categories: [], brands: [], settings: null, employees: [] };
+        const id = payload.id || `local_${Date.now().toString(36)}`;
+        const localProduct = {
+          ...payload,
+          id,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        const existingIndex = (currentCache.products || []).findIndex((p) => p.id === id);
+        let nextProducts;
+        if (existingIndex >= 0) {
+          nextProducts = [...currentCache.products];
+          nextProducts[existingIndex] = localProduct;
+        } else {
+          nextProducts = [localProduct, ...(currentCache.products || [])];
+        }
+        store.savePosCache({ ...currentCache, products: nextProducts, updatedAt: Date.now() });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ success: true, message: "Product saved to local register (offline)", data: { product: localProduct } }));
+        return;
+      } catch {}
+    }
+    res.writeHead(503, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ success: false, message: "Could not connect to cloud server" }));
+  });
+
+  if (bodyBuffer) {
+    upstream.end(bodyBuffer);
+  } else {
+    req.pipe(upstream);
+  }
+};
+
+const proxyCloudProductsList = (req, res, requestUrl, fallbackProducts = []) => {
+  const target = new URL(`${requestUrl.pathname}${requestUrl.search}`, remoteUrl);
+  const transport = target.protocol === "https:" ? https : http;
+  const headers = {
+    ...req.headers,
+    host: target.host,
+    origin: remoteUrl.origin,
+    referer: `${remoteUrl.origin}/`,
+    "x-forwarded-host": remoteUrl.host,
+    "x-forwarded-proto": remoteUrl.protocol.slice(0, -1),
+  };
+  delete headers.connection;
+
+  const upstream = transport.request(
+    target,
+    {
+      method: "GET",
+      headers,
+      timeout: 10_000,
+    },
+    (upstreamResponse) => {
+      const responseHeaders = { ...upstreamResponse.headers };
+      delete responseHeaders["content-security-policy"];
+
+      if (upstreamResponse.statusCode === 200) {
+        const chunks = [];
+        upstreamResponse.on("data", (chunk) => chunks.push(chunk));
+        upstreamResponse.on("end", () => {
+          const responseBuffer = Buffer.concat(chunks);
+          try {
+            const body = JSON.parse(responseBuffer.toString("utf8"));
+            if (Array.isArray(body.data?.products)) {
+              const currentCache = store.loadPosCache() || { products: [], categories: [], brands: [], settings: null, employees: [] };
+              store.savePosCache({ ...currentCache, products: body.data.products, updatedAt: Date.now() });
+            }
+          } catch {}
+          res.writeHead(200, responseHeaders);
+          res.end(responseBuffer);
+        });
+      } else {
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify({ success: true, data: { products: fallbackProducts } }));
+      }
+    },
+  );
+
+  upstream.on("timeout", () => {
+    upstream.destroy();
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ success: true, data: { products: fallbackProducts } }));
+  });
+
+  upstream.on("error", () => {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ success: true, data: { products: fallbackProducts } }));
+  });
+
+  upstream.end();
+};
+
 const startStaticServer = async (frontendDir) =>
   await new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
@@ -240,26 +484,21 @@ const startStaticServer = async (frontendDir) =>
         const expectedEmail = String(localCreds.email || "").trim().toLowerCase();
         const expectedPass = String(localCreds.password || "").trim();
 
-        // Check if matching any admin pattern for local desktop testing
-        const isLocalAdminEmail =
+        // Match only explicit local offline dev test accounts
+        const isExplicitLocalAccount =
           inputEmail === "admin" ||
-          inputEmail.includes("admin") ||
-          inputEmail === expectedEmail ||
           inputEmail === "admin@admin.pk" ||
-          inputEmail === "admin@admin.com";
+          inputEmail === "admin@admin.com" ||
+          (expectedEmail && inputEmail === expectedEmail);
 
-        const isLocalAdminPass =
+        const isExplicitLocalPass =
           inputPass.length > 0 &&
           (inputPass === "admin" ||
            inputPass === "admin123" ||
-           inputPass === expectedPass ||
-           inputPass.trim() === "admin" ||
-           inputPass.trim() === "admin123" ||
-           inputPass.trim() === expectedPass ||
-           isLocalAdminEmail);
+           (expectedPass && inputPass === expectedPass));
 
-        const matchesLocal = isLocalAdminEmail && isLocalAdminPass;
-        writeRuntimeLog(`login-attempt email="${inputEmail}" matches=${matchesLocal}`);
+        const matchesLocal = isExplicitLocalAccount && isExplicitLocalPass;
+        writeRuntimeLog(`login-attempt email="${inputEmail}" matchesLocal=${matchesLocal}`);
 
         if (matchesLocal) {
           const user = {
@@ -286,7 +525,7 @@ const startStaticServer = async (frontendDir) =>
         }
 
         writeRuntimeLog(`forwarding-to-cloud email="${inputEmail}"`);
-        proxyCloudRequest(req, res, requestUrl, bodyBuffer);
+        proxyCloudLogin(req, res, requestUrl, bodyBuffer);
         return;
       }
 
@@ -346,9 +585,28 @@ const startStaticServer = async (frontendDir) =>
 
       if (req.method === "GET" && normalizedPath === "/api/v1/admin/products") {
         const cached = store.loadPosCache();
-        const products = cached?.products || [];
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-        res.end(JSON.stringify({ success: true, data: { products } }));
+        proxyCloudProductsList(req, res, requestUrl, cached?.products || []);
+        return;
+      }
+
+      if (req.method === "POST" && normalizedPath === "/api/v1/admin/products") {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const bodyBuffer = Buffer.concat(chunks);
+        proxyAndSyncProduct(req, res, requestUrl, bodyBuffer, "create");
+        return;
+      }
+
+      if (req.method === "PUT" && /^\/api\/v1\/admin\/products\/[^/]+$/.test(normalizedPath)) {
+        const chunks = [];
+        for await (const chunk of req) chunks.push(chunk);
+        const bodyBuffer = Buffer.concat(chunks);
+        proxyAndSyncProduct(req, res, requestUrl, bodyBuffer, "update");
+        return;
+      }
+
+      if (req.method === "DELETE" && /^\/api\/v1\/admin\/products\/[^/]+$/.test(normalizedPath)) {
+        proxyAndSyncProduct(req, res, requestUrl, null, "delete");
         return;
       }
 

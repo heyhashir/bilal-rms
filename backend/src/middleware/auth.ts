@@ -57,6 +57,29 @@ export const attachSession = (req: Request, res: Response, next: NextFunction): 
       return;
     }
 
+    if (customerSession.user.role === 'ADMIN' || customerSession.user.email.toLowerCase() === env.ADMIN_EMAIL.trim().toLowerCase()) {
+      let adminAccount = await authRepository.findAdminAccountByEmail(customerSession.user.email);
+      if (!adminAccount) {
+        adminAccount = await authRepository.createAdminAccount({
+          email: customerSession.user.email,
+          name: customerSession.user.name,
+          phone: customerSession.user.phone,
+          passwordHash: customerSession.user.passwordHash,
+          role: 'ADMIN',
+        });
+      }
+      req.currentUser = {
+        id: adminAccount.id,
+        email: adminAccount.email,
+        name: adminAccount.name,
+        role: adminAccount.role,
+        kind: 'admin',
+        isActive: adminAccount.isActive,
+      };
+      next();
+      return;
+    }
+
     req.currentUser = {
       id: customerSession.user.id,
       email: customerSession.user.email,
@@ -80,7 +103,7 @@ export const requireAuth = (req: Request, _res: Response, next: NextFunction): v
 };
 
 export const requireCustomerAuth = (req: Request, _res: Response, next: NextFunction): void => {
-  if (!req.currentUser || req.currentUser.kind !== 'customer') {
+  if (!req.currentUser) {
     next(new ApiError(401, 'Customer authentication required'));
     return;
   }

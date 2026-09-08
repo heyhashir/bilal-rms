@@ -28,6 +28,23 @@ const serializeAddress = (address: {
 });
 
 export const getProfile = async (req: Request, res: Response) => {
+  if (req.currentUser?.kind === 'admin') {
+    res.status(200).json(
+      ApiResponse.success('Profile loaded', {
+        user: {
+          id: req.currentUser.id,
+          email: req.currentUser.email,
+          name: req.currentUser.name,
+          phone: null,
+          role: 'admin',
+          addresses: [],
+          createdAt: Date.now(),
+        },
+      }),
+    );
+    return;
+  }
+
   const user = await accountService.getProfile(req.currentUser!.id);
   res.status(200).json(ApiResponse.success('Profile loaded', { user: serializeUser(user) }));
 };
@@ -45,6 +62,11 @@ export const updatePassword = async (req: Request, res: Response) => {
 };
 
 export const listAddresses = async (req: Request, res: Response) => {
+  if (req.currentUser?.kind === 'admin') {
+    res.status(200).json(ApiResponse.success('Addresses loaded', { addresses: [] }));
+    return;
+  }
+
   const addresses = await accountService.listAddresses(req.currentUser!.id);
   res.status(200).json(
     ApiResponse.success('Addresses loaded', {
@@ -74,6 +96,11 @@ export const markDefaultAddress = async (req: Request, res: Response) => {
 };
 
 export const listAccountOrders = async (req: Request, res: Response) => {
+  if (req.currentUser?.kind === 'admin') {
+    res.status(200).json(ApiResponse.success('Orders loaded', { orders: [] }));
+    return;
+  }
+
   const orders = await accountService.listOrders(req.currentUser!.id);
   res.status(200).json(ApiResponse.success('Orders loaded', { orders: orders.map(serializeOrder) }));
 };
