@@ -26,6 +26,26 @@ This is not a static fashion website. It is one retail system with:
 
 ## 2. Current State Snapshot
 
+### 5 October 2026 Printer Routing and Brand Fixes (Local Verification Complete, No Push)
+
+- **Printer routing:**
+  - Removed automatic sticker modal popup on product save in `src/routes/admin.products.tsx`. Saving a product now gives an explicit toast action button ("Print stickers"), preventing unexpected sticker printing on bill printers.
+  - Added "None (not configured)" option for printers in `src/components/pos/PrinterProfilesModal.tsx`.
+  - Added clear warning banner in Printer Profiles when the same physical printer is assigned to both receipt and sticker roles.
+- **Brand consistency:**
+  - `upsertBrand` in `backend/src/repositories/catalog.repository.ts` now supports updating by `id`, preventing duplicate brand records and orphaned products on edits.
+  - Added `id: z.string().optional()` to `brandSchema` and passed `id` through frontend mutation and backend repository calls.
+  - In `backend/src/services/catalog-admin.service.ts`, brand lookups resolve by slug or name using `findBrandBySlugOrName`. If an invalid brand is provided, an explicit 400 error is returned rather than silently losing the brand.
+  - Added Brand column to Admin Products table (`src/routes/admin.products.tsx`).
+  - Added brand display on storefront product cards and product detail view.
+  - Included `brandName` on barcode sticker generation/reprints; templates display `label.brandName || "BILAL GARMENTS"`.
+  - Added active brands to POS bootstrap sync (`syncRepository`, `syncService`, `syncController`, `pos.tsx`, `pos-local.ts`).
+- **CI and Dependency Security:**
+  - Updated dependency overrides in `package.json` to resolve newly flagged audit vulnerabilities (`npm audit --audit-level=high` reports 0 vulnerabilities).
+- **Local Verification:**
+  - Zero audit vulnerabilities, zero lint errors, Prisma schema validated, production build passed, all unit and desktop printing test suites passed (100% pass rate).
+  - No database changes or data loss. Work remains strictly local and unpushed.
+
 ### 8 September 2026 One-Click Printing (0.4.1)
 
 - Receipt and sticker Print buttons use independent saved Windows printer profiles. Receipt width defaults to 72 mm, padding to 3 mm, and page height is measured after rendering, not guessed. Labels print at their configured physical dimensions, without adding the sensor gap to page height or rotating twice.
@@ -33,7 +53,7 @@ This is not a static fashion website. It is one retail system with:
 - Setup allows either printer independently. Changed sticker presets reload into the preview. Print submissions are guarded against concurrent duplicate clicks; missing printers, invalid dimensions and clipped barcodes are rejected. Printed HTML has a restrictive CSP and cannot execute scripts, navigate or load network resources.
 - Windows controls thermal density, feed sensor/gap calibration and cutter behavior. Saved gap is calibration metadata, not an extra printed page margin. PDF/OneNote drivers can still show their own save dialogs. No physical thermal printer is connected on the development PC; actual XP-T361U and label roll acceptance remains required.
 - Verification: 5 isolated native/helper tests, 4 focused sticker Playwright tests, HTTPS-to-loopback with local-network permission, and real Electron PDF rendering (72 x 408 mm long receipt; 50 x 25 mm label). Production build and frontend lint passed. Standalone frontend `tsc --noEmit` still reports pre-existing catalog/report typing problems outside this scope. No production business records were created or modified.
-- Desktop version is 0.4.1. Deployment/publication status must be recorded after release; publish the installer after the final Hostinger rollout, because redeployment removes desktop release storage. The installer is unsigned.
+- **Release completed:** commit `bc24a33` is pushed to `main`; GitHub Build Verification `34193015813` passed. Hostinger serves `/assets/index-Q-YTccoM.js`; readiness returned HTTP 200. Desktop 0.4.1 was published after rollout. The update feed offers it to 0.4.0 but not to 0.4.1. An independent full download matched 105,237,643 bytes and SHA-256 `1CA83D931A39E547D37679D79D7EAF176C0C0D5323EA61CD4B0276CDD9879291`. Installer: `desktop/dist/BilalRMS-Setup-0.4.1.exe`, signature `NotSigned`. These final evidence edits are intentionally local/uncommitted to avoid another deployment removing desktop release storage. No client installation or physical printer acceptance was performed.
 
 ### 4 September 2026 Billing And Printer Release
 

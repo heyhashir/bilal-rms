@@ -605,7 +605,7 @@ function BarcodeSticker({
     return (
       <article className="barcode-sticker barcode-sticker--standard">
         <div className="sticker-standard-header">
-          BILAL GARMENTS
+          {label.brandName || "BILAL GARMENTS"}
         </div>
         <div className="sticker-standard-title">
           {displayTitle}
@@ -637,7 +637,7 @@ function BarcodeSticker({
     <article className="barcode-sticker barcode-sticker--branded">
       <div className="sticker-branded-top">
         <div className="sticker-brand-panel">
-          <div className="sticker-brand-name">BALY</div>
+          <div className="sticker-brand-name">{label.brandName || "BALY"}</div>
           <div className="sticker-brand-subtitle">BILAL GARMENTS</div>
           <div className="sticker-brand-est">EST 2001</div>
         </div>

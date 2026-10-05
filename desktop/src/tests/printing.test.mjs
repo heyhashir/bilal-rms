@@ -25,7 +25,7 @@ function fixture({ success = true, clipped = false } = {}) {
 }
 test("receipt uses actual measured height, 72 mm width and no driver scaling", async () => {
   const f = fixture(); await f.print("receipt", { sale });
-  assert.deepEqual(f.windows[0].options.pageSize, { width: 72000, height: 213000 });
+  assert.deepEqual(f.windows[0].options.pageSize, { width: 72000, height: 215000 });
   assert.equal(f.windows[0].options.scaleFactor, 100);
   assert.equal(f.windows[0].options.silent, true);
   assert.equal(f.windows[0].options.deviceName, "Receipt");

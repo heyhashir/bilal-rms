@@ -1,6 +1,6 @@
 import type { Employee, PosExchangeInput, PosSaleInput } from "@/lib/admin-types";
 import type { PosSale } from "@/lib/admin-types";
-import type { Product, StorefrontSettings } from "@/lib/catalog-types";
+import type { Brand, Product, StorefrontSettings } from "@/lib/catalog-types";
 import { getDesktopBridge } from "@/lib/desktop-bridge";
 
 const DEVICE_KEY_STORAGE = "bilal_rms_pos_device_key";
@@ -15,6 +15,7 @@ export type PosCache = {
   settings: StorefrontSettings;
   products: Product[];
   employees: Employee[];
+  brands?: Brand[];
   updatedAt: number;
 };
 

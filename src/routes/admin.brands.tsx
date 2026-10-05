@@ -71,7 +71,7 @@ function AdminBrands() {
             </thead>
             <tbody>
               {filtered.map((brand) => (
-                <tr key={brand.slug} className="border-t border-border">
+                <tr key={brand.id || brand.slug} className="border-t border-border">
                   <td className="p-3 font-medium">{brand.name}<div className="text-xs text-muted-foreground">/{brand.slug}</div></td>
                   <td className="p-3">{brand.country}</td>
                   <td className="max-w-[220px] truncate p-3 text-muted-foreground">{brand.website}</td>
@@ -108,7 +108,7 @@ function AdminBrands() {
               <ActionButton onClick={async () => {
                 if (!editing.name) return toast.error("Name is required");
                 const slug = editing.slug || editing.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-");
-                saveBrand.mutate({ ...editing, slug });
+                saveBrand.mutate({ ...editing, id: editing.id || undefined, slug });
               }}>Save</ActionButton>
             </>
           }

@@ -8,7 +8,7 @@ export const adminCatalogApi = {
   saveCategory: (payload: { name: string; slug: string; description?: string; parentId?: string | null; isActive?: boolean }) =>
     api.post<{ category: Category }>("/admin/categories", payload),
   deleteCategory: (slug: string) => api.delete<{ ok: boolean }>(`/admin/categories/${slug}`),
-  saveBrand: (payload: { name: string; slug: string; country?: string; website?: string; status: "active" | "inactive" }) =>
+  saveBrand: (payload: { id?: string; name: string; slug: string; country?: string; website?: string; status: "active" | "inactive" }) =>
     api.post<{ brand: Brand }>("/admin/brands", payload),
   deleteBrand: (slug: string) => api.delete<{ ok: boolean }>(`/admin/brands/${slug}`),
   saveProduct: (payload: Record<string, unknown>, productId?: string) =>
@@ -52,6 +52,7 @@ export const adminCatalogApi = {
         productId: string;
         variantId: string | null;
         name: string;
+        brandName?: string;
         sku: string;
         size: string;
         color: string;

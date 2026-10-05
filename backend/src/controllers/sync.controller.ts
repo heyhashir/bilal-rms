@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ApiResponse } from '../utils/ApiResponse';
-import { serializeEmployee, serializeProduct, serializeSettings } from '../utils/serializers';
+import { serializeBrand, serializeEmployee, serializeProduct, serializeSettings } from '../utils/serializers';
 import { syncService } from '../services/sync.service';
 
 export const registerSyncDevice = async (req: Request, res: Response) => {
@@ -34,6 +34,7 @@ export const bootstrapSync = async (req: Request, res: Response) => {
       settings: serializeSettings(payload.settings),
       products: payload.products.map(serializeProduct),
       employees: payload.employees.map(serializeEmployee),
+      brands: payload.brands.map(serializeBrand),
       cursor: payload.cursor,
       requestedCursor: payload.requestedCursor,
       changed: payload.changed,

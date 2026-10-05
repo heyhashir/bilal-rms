@@ -257,6 +257,7 @@ function AdminProducts() {
             <tr>
               <th className="p-3 text-left">Product</th>
               <th className="p-3 text-left">Category</th>
+              <th className="p-3 text-left">Brand</th>
               <th className="p-3 text-left">Price</th>
               <th className="p-3 text-left">Stock</th>
               <th className="p-3 text-left">Mode</th>
@@ -278,6 +279,7 @@ function AdminProducts() {
                   </div>
                 </td>
                 <td className="p-3 capitalize">{product.category}</td>
+                <td className="p-3">{product.brandName || "—"}</td>
                 <td className="p-3">{product.salePrice ? <span><span className="text-muted-foreground line-through">{formatPrice(product.price)}</span> {formatPrice(product.salePrice)}</span> : formatPrice(product.price)}</td>
                 <td className="p-3">{product.stock}</td>
                 <td className="p-3 uppercase">{product.stockMode ?? "simple"}</td>
@@ -336,7 +338,12 @@ function AdminProducts() {
           onClose={() => setEditing(null)}
           onSave={(product) => {
             setEditing(null);
-            setPrinting(product);
+            toast.success(`Product "${product.name}" saved`, {
+              action: {
+                label: "Print stickers",
+                onClick: () => setPrinting(product),
+              },
+            });
           }}
         />
       )}

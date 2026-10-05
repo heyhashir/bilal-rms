@@ -214,8 +214,28 @@ function PosTerminal() {
     },
   });
 
+  const brandsQuery = useQuery({
+    queryKey: queryKeys.pos.brands,
+    enabled: false,
+    initialData: initialCache?.brands ? { brands: initialCache.brands, source: "cache" as PosQuerySource } : undefined,
+    queryFn: async () => {
+      try {
+        const payload = await adminCatalogApi.brands();
+        return { brands: payload.brands, source: "live" as PosQuerySource };
+      } catch (error) {
+        const cached = loadPosCache();
+        if (cached?.brands) {
+          return { brands: cached.brands, source: "cache" as PosQuerySource };
+        }
+
+        throw error;
+      }
+    },
+  });
+
   const products = useMemo(() => (productsQuery.data?.products ?? []).filter((product) => product.isActive !== false), [productsQuery.data]);
   const employees = useMemo(() => (employeesQuery.data?.employees ?? []).filter((employee) => employee.status === "active"), [employeesQuery.data]);
+  const brands = useMemo(() => (brandsQuery.data?.brands ?? []).filter((brand) => brand.status === "active"), [brandsQuery.data]);
   const settings = settingsQuery.data?.settings ?? null;
 
   const syncQueuedSales = async () => {
@@ -389,6 +409,7 @@ function PosTerminal() {
           products: bootstrap.products,
           employees: bootstrap.employees,
           settings: bootstrap.settings,
+          brands: bootstrap.brands,
           updatedAt: Date.now(),
         };
         savePosCache(nextCache);
@@ -404,6 +425,11 @@ function PosTerminal() {
           settings: bootstrap.settings,
           source: "live" as PosQuerySource,
         });
+        queryClient.setQueryData(queryKeys.pos.brands, {
+          brands: bootstrap.brands,
+          source: "live" as PosQuerySource,
+        });
+        queryClient.setQueryData(queryKeys.admin.brands, bootstrap.brands);
         setOfflineMode(false);
         updateSyncState({
           lastCursor: bootstrap.cursor,

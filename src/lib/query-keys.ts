@@ -42,6 +42,7 @@ export const queryKeys = {
     products: ["pos", "products"] as const,
     employees: ["pos", "employees"] as const,
     settings: ["pos", "settings"] as const,
+    brands: ["pos", "brands"] as const,
   },
   account: {
     profile: ["account", "profile"] as const,

@@ -1,6 +1,6 @@
 import { api } from "@/lib/api";
 import type { Employee, SyncDiagnostics } from "@/lib/admin-types";
-import type { Product, StorefrontSettings } from "@/lib/catalog-types";
+import type { Brand, Product, StorefrontSettings } from "@/lib/catalog-types";
 
 export const syncApi = {
   syncBootstrap: (deviceKey: string, cursor?: string) =>
@@ -8,6 +8,7 @@ export const syncApi = {
       settings: StorefrontSettings;
       products: Product[];
       employees: Employee[];
+      brands: Brand[];
       cursor: string;
       requestedCursor: string | null;
       changed: boolean;

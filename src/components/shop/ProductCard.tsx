@@ -62,6 +62,9 @@ export function ProductCard({ product, variant = "grid" }: { product: Product; v
           )}
         </div>
         <div className="flex-1 min-w-0">
+          {product.brandName ? (
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">{product.brandName}</p>
+          ) : null}
           <h3 className="font-medium">{product.name}</h3>
           <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
           <Price price={product.price} salePrice={product.salePrice} className="mt-3" />
@@ -178,6 +181,11 @@ export function ProductCard({ product, variant = "grid" }: { product: Product; v
           )}
         </div>
         <div className="pt-4 space-y-1.5">
+          {product.brandName ? (
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {product.brandName}
+            </p>
+          ) : null}
           <h3 className="text-[13px] font-medium tracking-tight line-clamp-1 group-hover:text-accent transition-colors">
             {product.name}
           </h3>

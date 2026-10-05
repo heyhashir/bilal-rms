@@ -1,5 +1,12 @@
 # Bilal RMS Full QA Report
 
+## 5 October 2026: Printer Routing Separation, Brand Consistency And Dependency Audit
+
+- Resolved printer routing issue: replaced auto-opening sticker print modal upon saving product with explicit action button; added "None (not configured)" and duplicate device warning in Printer Profiles.
+- Fixed brand inconsistencies: updated brand upsert to support ID-based updates to eliminate duplicate brands; implemented resilient brand lookup by slug or name in product creation and imports; synced brands in POS offline cache; rendered brand names in barcode sticker templates and storefront.
+- Security and CI: resolved npm audit vulnerabilities via package overrides, with 0 high/critical vulnerabilities.
+- Verification: npm audit (0 vulnerabilities), ESLint (0 errors), Prisma validate, full build, node unit tests (4/4), and desktop printing test suite (5/5) passed with 100% success.
+
 ## 8 September 2026: One-Click Receipt And Sticker Printing
 
 - Added a localhost-only, origin-allowlisted and token-paired desktop print helper for website printing. Both UI paths share the same native printer engine and separate persisted printer profiles. Setup is one-time per printer/PC/browser; the desktop app must stay open for website printing.
@@ -7,7 +14,7 @@
 - Native helper tests: 5 passed (measured dimensions, exact sticker paper size, failures/cleanup, input/clipping validation, origin/authenticated helper routing). Focused Playwright: 4 passed; the pairing case also passes from a mocked HTTPS production origin under production CSP after granting local-network access. The denied-permission case correctly fails without sending a print job.
 - Actual Electron renderer exported a 30-line receipt as one 72 x 408 mm PDF and a generated label as one 50 x 25 mm PDF (Chromium rounds PDF points slightly). Rendered PNGs visually inspected. Evidence: `test-results/printing/receipt.pdf`, `sticker.pdf`, PNGs and `dimensions.json`.
 - `npm run build`, frontend lint, and diff whitespace checks passed. The standalone frontend typecheck remains failing on pre-existing report/catalog interface mismatches; no new printing-module type errors were reported. Physical printers are absent on this PC (only Microsoft Print to PDF and OneNote), so print density, feed/cutter, driver page-size compliance and scanner acceptance are not certified.
-- Release candidate is desktop 0.4.1; deployment/publish evidence is pending. Installer remains unsigned. No production-data QA writes are needed for printing verification.
+- **Released:** `bc24a33` is on `main`; GitHub Build Verification `34193015813` passed. Hostinger serves `/assets/index-Q-YTccoM.js`, readiness HTTP 200. Desktop 0.4.1 was uploaded afterward, and the public update feed correctly offers it to 0.4.0 while reporting no update for 0.4.1. The full installer download independently matched 105,237,643 bytes and SHA-256 `1CA83D931A39E547D37679D79D7EAF176C0C0D5323EA61CD4B0276CDD9879291`. Signature remains `NotSigned`. No production business records were changed; no client installation was performed. Final evidence stays local/uncommitted to avoid redeployment removing release files.
 
 ## 4 September 2026: Exchanges, Vendor Ledgers, Bills And Printer Profiles
 

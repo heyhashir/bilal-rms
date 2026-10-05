@@ -7,7 +7,15 @@ process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "mysql://qa:qa@127.0.0.1:1/qa_never_connect";
 const require = createRequire(import.meta.url);
 // Inject before loading the service: Prisma's runtime proxy cannot be patched with mock.method.
-const prisma = { $transaction: async operation => operation({}) };
+const prisma = {
+  $transaction: async operation => operation({}),
+  brand: {
+    findUnique: async () => null,
+    findFirst: async () => null,
+    update: async () => ({}),
+    upsert: async () => ({}),
+  },
+};
 const prismaPath = require.resolve("../../backend/dist/config/prisma.js");
 require.cache[prismaPath] = { id: prismaPath, filename: prismaPath, loaded: true, exports: { __esModule: true, default: prisma } };
 // Barcode operations must not load local credentials or touch managed uploads.
@@ -49,6 +57,50 @@ test("short barcode generation and reprints preserve stored identities and varia
     product.variants[0].barcode = assigned.barcode;
     assert.equal((await catalogAdminService.reprintCodes({ productId: product.id, variantId: "qa-variant" })).barcode, assigned.barcode);
     assert.equal(product.barcode, "PARENT-EXISTING");
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test("reprintCodes includes brandName when product has a brand", async () => {
+  const productWithBrand = {
+    id: "qa-branded-product",
+    slug: "qa-shirt",
+    name: "QA Shirt",
+    barcode: "SHIRT-1",
+    qrCode: "SHIRT-QR",
+    price: 1500,
+    stock: 5,
+    brand: { id: "brand-1", name: "Baly Studio", slug: "baly-studio" },
+    variants: [],
+  };
+  mock.method(catalogRepository, "findStoreSettings", async () => ({ barcodePrefix: "BALY", qrPrefix: "BALYQ", barcodeLabelTemplate: "standard" }));
+  mock.method(catalogRepository, "findProductById", async () => productWithBrand);
+  mock.method(catalogRepository, "updateProductCodes", async () => {});
+  try {
+    const label = await catalogAdminService.reprintCodes({ productId: productWithBrand.id });
+    assert.equal(label.brandName, "Baly Studio");
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test("brand upsert updates existing brand when id is provided", async () => {
+  const brandWrites = [];
+  mock.method(prisma.brand, "findUnique", async ({ where }) => (where.id === "brand-existing" ? { id: "brand-existing", slug: "old-slug", name: "Old Name" } : null));
+  mock.method(prisma.brand, "update", async (args) => { brandWrites.push({ action: "update", ...args }); return args.data; });
+  mock.method(prisma.brand, "upsert", async (args) => { brandWrites.push({ action: "upsert", ...args }); return args.create; });
+  try {
+    await catalogAdminService.saveBrand({
+      id: "brand-existing",
+      name: "New Name",
+      slug: "new-slug",
+      status: "active",
+    });
+    assert.equal(brandWrites.length, 1);
+    assert.equal(brandWrites[0].action, "update");
+    assert.equal(brandWrites[0].where.id, "brand-existing");
+    assert.equal(brandWrites[0].data.name, "New Name");
   } finally {
     mock.restoreAll();
   }

@@ -83,7 +83,7 @@ export function PrinterProfilesModal({
         onChange={(event) => onChange(event.target.value)}
         className="border border-border bg-background px-3 py-2 text-sm normal-case font-normal"
       >
-        <option value="">Select installed printer</option>
+        <option value="">None (not configured)</option>
         {value && !printers.some(p => (p.name && p.name.toLowerCase() === value.toLowerCase()) || (p.displayName && p.displayName.toLowerCase() === value.toLowerCase())) && (
           <option value={value}>{value} (Configured)</option>
         )}
@@ -130,6 +130,11 @@ export function PrinterProfilesModal({
         </>}
         {helperError && <p role="alert" className="text-destructive">{helperError}</p>}
       </section>
+      {receipt.printerName && sticker.printerName && receipt.printerName === sticker.printerName && (
+        <div className="mb-4 rounded border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <strong>Notice:</strong> Both Receipt printer and Sticker printer are set to the same physical device ("{receipt.printerName}"). If you have a separate thermal bill printer and barcode sticker printer, ensure each profile selects its respective device.
+        </div>
+      )}
       <div className="grid gap-6 md:grid-cols-2">
         <section className="space-y-3 border border-border p-4">
           <div><div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Receipt printer</div><p className="mt-1 text-sm">Thermal bill printer. Dimensions are stored separately from the sticker printer.</p></div>
@@ -198,6 +203,11 @@ export function PrinterProfilesModal({
           </div>
         </section>
       </div>
+      {receipt.printerName && sticker.printerName && receipt.printerName === sticker.printerName && (
+        <div className="mt-4 border border-sale bg-sale/10 p-3 text-xs text-foreground">
+          <strong>Notice:</strong> Both Receipt (Bill) and Sticker presets are set to <strong>"{receipt.printerName}"</strong>. If this printer is loaded with receipt roll paper, barcode sticker jobs will print directly onto the bill roll. Verify that each preset matches its dedicated physical printer.
+        </div>
+      )}
       <p className="mt-4 text-xs text-muted-foreground">Set the actual roll dimensions once. Label gap is a driver/sensor calibration value, not extra page height. Set the same gap in the Windows driver; heat density, speed and cutter also remain driver settings. PDF/OneNote printers may still ask where to save.</p>
     </Modal>
   );

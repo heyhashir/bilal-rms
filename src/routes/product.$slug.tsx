@@ -201,7 +201,15 @@ function ProductPage() {
         </div>
 
         <div>
-          <div className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{product.category}</div>
+          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
+            {product.brandName ? (
+              <>
+                <span className="font-semibold text-foreground tracking-wider">{product.brandName}</span>
+                <span>/</span>
+              </>
+            ) : null}
+            <span>{product.category}</span>
+          </div>
           <h1 className="display mt-2 text-4xl md:text-5xl">{product.name}</h1>
           <Price price={product.price} salePrice={product.salePrice} className="mt-4 text-base" />
 

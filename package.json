@@ -17,7 +17,10 @@
     "deepmerge-ts": "8.0.2",
     "@prisma/adapter-mariadb": {
       "mariadb": "$mariadb"
-    }
+    },
+    "brace-expansion": "^5.0.12",
+    "fast-uri": "^3.1.8",
+    "multer": "^2.4.0"
   },
   "optionalDependencies": {
     "@emnapi/core": "^1.11.3",

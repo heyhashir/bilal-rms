@@ -9,12 +9,14 @@ const computeCursor = (input: {
   settingsUpdatedAt: Date;
   employeeUpdatedAts: Date[];
   productUpdatedAts: Date[];
+  brandUpdatedAts?: Date[];
 }) =>
   String(
     [
       input.settingsUpdatedAt.getTime(),
       ...input.employeeUpdatedAts.map((value) => value.getTime()),
       ...input.productUpdatedAts.map((value) => value.getTime()),
+      ...(input.brandUpdatedAts ?? []).map((value) => value.getTime()),
     ].reduce((max, value) => Math.max(max, value), 0),
   );
 
@@ -39,17 +41,19 @@ export const syncService = {
     return syncRepository.registerDevice(deviceKey, name, notes);
   },
   async bootstrap(deviceKey: string, requestedCursor?: string) {
-    const [device, settings, employees, detailedProducts] = await Promise.all([
+    const [device, settings, employees, detailedProducts, brands] = await Promise.all([
       deviceKey ? syncRepository.touchDevice(deviceKey) : Promise.resolve(null),
       settingsRepository.getSettings(),
       syncRepository.listActiveEmployees(),
       syncRepository.listBootstrapProducts(),
+      syncRepository.listActiveBrands(),
     ]);
 
     const cursor = computeCursor({
       settingsUpdatedAt: settings.updatedAt,
       employeeUpdatedAts: employees.map((employee) => employee.updatedAt),
       productUpdatedAts: detailedProducts.map((product) => product.updatedAt),
+      brandUpdatedAts: brands.map((brand) => brand.updatedAt),
     });
 
     if (device) {
@@ -66,6 +70,7 @@ export const syncService = {
       settings,
       products: detailedProducts,
       employees,
+      brands,
       cursor,
       requestedCursor: requestedCursor ?? null,
       changed: requestedCursor ? requestedCursor !== cursor : true,

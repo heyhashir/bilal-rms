@@ -105,6 +105,11 @@ export const syncRepository = {
       include: productInclude,
       orderBy: { updatedAt: 'desc' },
     }),
+  listActiveBrands: () =>
+    prisma.brand.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    }),
   createSyncJob: (input: {
     deviceId?: string | null;
     jobKey?: string | null;

@@ -18,7 +18,13 @@ export const catalogAdminService = {
     if (!category) {
       throw new ApiError(400, `Category "${input.categorySlug}" was not found. Please select a valid category.`);
     }
-    const brand = input.brandSlug ? await catalogRepository.findBrandBySlug(input.brandSlug) : null;
+    const requestedBrand = input.brandSlug?.trim() || null;
+    const brand = requestedBrand
+      ? await catalogRepository.findBrandBySlugOrName(requestedBrand)
+      : null;
+    if (requestedBrand && !brand) {
+      throw new ApiError(400, `Brand "${requestedBrand}" was not found. Please select a valid brand or create it first.`);
+    }
     const normalizedSizeChart = input.sizeChart === 'auto' ? inferSizeChart(input.categorySlug) : input.sizeChart;
     const hasSizeChart = normalizedSizeChart !== 'none';
     const normalizedSizes = !hasSizeChart
@@ -335,6 +341,7 @@ export const catalogAdminService = {
       productId: product.id,
       variantId: variant?.id ?? null,
       name: product.name,
+      brandName: product.brand?.name ?? '',
       sku: variant?.sku ?? '',
       size: variant?.size ?? '',
       color: variant?.colorName ?? '',
@@ -385,6 +392,7 @@ export const catalogAdminService = {
   },
   saveBrand: (input: BrandInput) =>
     catalogRepository.upsertBrand({
+      id: input.id,
       slug: input.slug,
       name: input.name,
       country: input.country,

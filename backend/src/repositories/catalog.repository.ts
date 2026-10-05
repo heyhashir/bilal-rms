@@ -160,6 +160,19 @@ export const catalogRepository = {
     prisma.brand.findUnique({
       where: { slug },
     }),
+  findBrandById: (id: string) =>
+    prisma.brand.findUnique({
+      where: { id },
+    }),
+  findBrandBySlugOrName: (slugOrName: string) =>
+    prisma.brand.findFirst({
+      where: {
+        OR: [
+          { slug: slugOrName },
+          { name: { equals: slugOrName } },
+        ],
+      },
+    }),
   findProductsByIds: (ids: string[]) =>
     prisma.product.findMany({
       where: { id: { in: ids } },
@@ -312,14 +325,30 @@ export const catalogRepository = {
       where: { slug },
       data: { isActive: false },
     }),
-  upsertBrand: (input: {
+  upsertBrand: async (input: {
+    id?: string;
     slug: string;
     name: string;
     country?: string;
     website?: string;
     isActive: boolean;
-  }) =>
-    prisma.brand.upsert({
+  }) => {
+    if (input.id) {
+      const existing = await prisma.brand.findUnique({ where: { id: input.id } });
+      if (existing) {
+        return prisma.brand.update({
+          where: { id: input.id },
+          data: {
+            slug: input.slug,
+            name: input.name,
+            country: input.country || null,
+            website: input.website || null,
+            isActive: input.isActive,
+          },
+        });
+      }
+    }
+    return prisma.brand.upsert({
       where: { slug: input.slug },
       update: {
         name: input.name,
@@ -328,13 +357,15 @@ export const catalogRepository = {
         isActive: input.isActive,
       },
       create: {
+        ...(input.id ? { id: input.id } : {}),
         slug: input.slug,
         name: input.name,
         country: input.country || null,
         website: input.website || null,
         isActive: input.isActive,
       },
-    }),
+    });
+  },
   archiveBrandBySlug: (slug: string) =>
     prisma.brand.update({
       where: { slug },

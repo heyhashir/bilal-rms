@@ -126,6 +126,7 @@ export const categorySchema = z.object({
 });
 
 export const brandSchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(2),
   slug: z.string().min(1),
   country: z.string().optional().or(z.literal('')),
